@@ -1,5 +1,20 @@
-/node_modules
-/.next
-/out
-.env*
+# dependencies
+node_modules/
+.pnp.*
+# env
+.env
+.env.*
+!.env.example
+# build
+.next/
+out/
+dist/
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+# editor/OS
 .DS_Store
+.vscode/
+.idea/
