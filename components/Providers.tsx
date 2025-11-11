@@ -1,56 +1,62 @@
 'use client'
-import { PropsWithChildren } from 'react'
-import { WagmiConfig, configureChains, createConfig } from 'wagmi'
-import { base, baseSepolia } from 'wagmi/chains'
-import { publicProvider } from 'wagmi/providers/public'
-import { jsonRpcProvider } from 'wagmi/providers/jsonRpc'
+
+import { ReactNode, useMemo } from 'react'
 import {
-  getDefaultWallets,
-  RainbowKitProvider,
-  darkTheme,
-} from '@rainbow-me/rainbowkit'
+  WagmiConfig,
+  createConfig,
+  http,
+} from 'wagmi'
+import { RainbowKitProvider, getDefaultWallets, darkTheme } from '@rainbow-me/rainbowkit'
+import '@rainbow-me/rainbowkit/styles.css'
 
-// Read your existing env var, with a fallback to the alt name
-const projectId =
-  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ??
-  process.env.NEXT_PUBLIC_WC_PROJECT_ID ??
-  ''
+// Inline chain defs to avoid wagmi/chains import
+const base = {
+  id: 8453,
+  name: 'Base',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://mainnet.base.org'] }, public: { http: ['https://mainnet.base.org'] } },
+  blockExplorers: { default: { name: 'BaseScan', url: 'https://basescan.org' } },
+} as const
 
-// Prefer explicit RPCs; falls back to each chain's default
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [baseSepolia, base],
-  [
-    jsonRpcProvider({
-      rpc: (chain) => ({ http: chain.rpcUrls.default.http[0] }),
-    }),
-    publicProvider(),
-  ]
-)
+const baseSepolia = {
+  id: 84532,
+  name: 'Base Sepolia',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://sepolia.base.org'] }, public: { http: ['https://sepolia.base.org'] } },
+  blockExplorers: { default: { name: 'BaseScan', url: 'https://sepolia.basescan.org' } },
+} as const
 
-const { connectors } = getDefaultWallets({
-  appName: process.env.NEXT_PUBLIC_PROJECT_NAME || 'Base Gold Rush',
-  projectId,
-  chains,
-})
+const CHAINS = [base, baseSepolia] as const
 
-const wagmiConfig = createConfig({
-  autoConnect: true,
-  connectors,
-  publicClient,
-  webSocketPublicClient,
-})
+export default function Providers({ children }: { children: ReactNode }) {
+  const transports = useMemo(() => ({
+    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC || 'https://mainnet.base.org'),
+    [baseSepolia.id]: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || 'https://sepolia.base.org'),
+  }), [])
 
-export default function Providers({ children }: PropsWithChildren) {
+  const { connectors } = getDefaultWallets({
+    appName: 'Base Gold Rush',
+    projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'demo', // WalletConnect v2
+    chains: CHAINS as any,
+  })
+
+  const config = useMemo(() => createConfig({
+    chains: CHAINS as any,
+    connectors,
+    transports,
+    ssr: true,
+  }), [connectors, transports])
+
   return (
-    <WagmiConfig config={wagmiConfig}>
+    <WagmiConfig config={config}>
       <RainbowKitProvider
-        chains={chains}
+        chains={CHAINS as any}
         theme={darkTheme({
           accentColor: '#FFD700',
           accentColorForeground: '#000',
           borderRadius: 'large',
-          overlayBlur: 'small',
         })}
+        modalSize="compact"
       >
         {children}
       </RainbowKitProvider>
