@@ -40,13 +40,14 @@ export default function FaucetButton() {
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={onMint10k}
-        disabled={isLoading}
-        className="px-3 py-1 rounded bg-cyan-400/90 hover:bg-cyan-300 text-black font-semibold"
-        title="Mint 10,000 test BGLD (no cooldown)"
-      >
-        {isLoading ? 'Minting…' : 'Mint 10,000 BGLD (test)'}
-      </button>
+  onClick={onMint10k}
+  disabled={isLoading}
+  className="px-3 py-1 rounded bg-[#FFD700] text-black font-semibold hover:bg-[#FFE34F] border border-[#FFD700] shadow-md"
+>
+  {isLoading ? 'Minting…' : 'Mint 10,000 BGLD (test)'}
+</button>
+
+
       {txHash && <span className="text-xs text-cyan-300">Tx {txHash.slice(0,10)}…</span>}
       {wait.isSuccess && <span className="text-xs text-green-400">✓</span>}
       {error && <span className="text-xs text-red-400">{(error as any)?.shortMessage || String(error)}</span>}
