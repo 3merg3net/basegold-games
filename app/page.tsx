@@ -28,11 +28,11 @@ export default function Page() {
         {/* hero art (kept modest) */}
         <div className="absolute inset-0 z-0 opacity-[0.35]">
     <Image
-      src="/images/hero-slot-hightech.png"
+      src="/images/bg-vegas-circuit.png"
       alt="Base Gold Rush background"
       fill
       priority
-      className="object-cover object-right-top"
+      className="object-contain object-right-top"
     />
   </div>
 
