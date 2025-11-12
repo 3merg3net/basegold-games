@@ -1,57 +1,94 @@
 'use client'
 
-import { ReactNode, useMemo } from 'react'
-import { WagmiConfig, createConfig } from 'wagmi'
-import { RainbowKitProvider, getDefaultWallets, darkTheme } from '@rainbow-me/rainbowkit'
-import { http } from 'viem'                    // ← from viem
-import '@rainbow-me/rainbowkit/styles.css'
+import { ReactNode, useEffect, useState } from 'react'
+import { WagmiConfig, createConfig, configureChains } from 'wagmi'
+import { jsonRpcProvider } from 'wagmi/providers/jsonRpc'
+import {
+  RainbowKitProvider,
+  getDefaultWallets,
+  darkTheme,
+} from '@rainbow-me/rainbowkit'
 
-// Inline chain defs (avoid wagmi/chains export issues)
-const base = {
+// ---- ENV ----
+const WC_PROJECT_ID =
+  process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? '00000000000000000000000000000000'
+const BASE_RPC = process.env.NEXT_PUBLIC_BASE_RPC || 'https://mainnet.base.org'
+const BASE_SEPOLIA_RPC =
+  process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || 'https://sepolia.base.org'
+
+// ---- Chain objects (compatible with wagmi v1) ----
+const baseChain = {
   id: 8453,
   name: 'Base',
+  network: 'base',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: { default: { http: ['https://mainnet.base.org'] } },
-  blockExplorers: { default: { name: 'BaseScan', url: 'https://basescan.org' } },
+  rpcUrls: {
+    default: { http: [BASE_RPC] },
+    public: { http: [BASE_RPC] },
+  },
+  blockExplorers: {
+    default: { name: 'Basescan', url: 'https://basescan.org' },
+  },
+  testnet: false,
 } as const
 
-const baseSepolia = {
+const baseSepoliaChain = {
   id: 84532,
   name: 'Base Sepolia',
-  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: { default: { http: ['https://sepolia.base.org'] } },
-  blockExplorers: { default: { name: 'BaseScan', url: 'https://sepolia.basescan.org' } },
+  network: 'base-sepolia',
+  nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: {
+    default: { http: [BASE_SEPOLIA_RPC] },
+    public: { http: [BASE_SEPOLIA_RPC] },
+  },
+  blockExplorers: {
+    default: { name: 'BaseSepoliaScan', url: 'https://sepolia.basescan.org' },
+  },
+  testnet: true,
 } as const
 
-const CHAINS = [base, baseSepolia] as const
+// ---- wagmi v1 wiring (configureChains + jsonRpcProvider) ----
+const { chains, publicClient, webSocketPublicClient } = configureChains(
+  [baseSepoliaChain, baseChain],
+  [
+    jsonRpcProvider({
+      rpc: (chain) => {
+        if (chain.id === baseChain.id) return { http: BASE_RPC }
+        if (chain.id === baseSepoliaChain.id) return { http: BASE_SEPOLIA_RPC }
+        return null
+      },
+    }),
+  ],
+)
+
+// ---- RainbowKit v1 connectors ----
+const { connectors } = getDefaultWallets({
+  appName: 'BaseGold Games',
+  projectId: WC_PROJECT_ID,
+  chains,
+})
+
+// ---- wagmi v1 config (no `chains` prop here) ----
+const wagmiConfig = createConfig({
+  autoConnect: true,
+  connectors,
+  publicClient,
+  webSocketPublicClient,
+})
 
 export default function Providers({ children }: { children: ReactNode }) {
-  const transports = useMemo(() => ({
-    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC || 'https://mainnet.base.org'),
-    [baseSepolia.id]: http(process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || 'https://sepolia.base.org'),
-  }), [])
-
-  const { connectors } = getDefaultWallets({
-    appName: 'Base Gold Rush',
-    projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'demo',
-    chains: CHAINS as any,
-  })
-
-  const config = useMemo(() => createConfig({
-    chains: CHAINS as any,
-    connectors,
-    transports,
-    ssr: true,
-  }), [connectors, transports])
+  // small SSR hydration guard to avoid “text content did not match”
+  const [ready, setReady] = useState(false)
+  useEffect(() => setReady(true), [])
 
   return (
-    <WagmiConfig config={config}>
+    <WagmiConfig config={wagmiConfig}>
       <RainbowKitProvider
-        chains={CHAINS as any}
-        theme={darkTheme({ accentColor: '#FFD700', accentColorForeground: '#000', borderRadius: 'large' })}
+        chains={chains}
         modalSize="compact"
+        theme={darkTheme({ accentColor: '#FFD700', borderRadius: 'large' })}
       >
-        {children}
+        {ready ? children : null}
       </RainbowKitProvider>
     </WagmiConfig>
   )
