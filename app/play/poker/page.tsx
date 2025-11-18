@@ -1,6 +1,6 @@
 'use client'
 
-import PokerGame from '@/components/PokerGame'
+import PokerGame from '@/components/casino/PokerGame'
 
 export default function Page() {
   return (

@@ -1,5 +1,5 @@
 'use client'
-import PokerTable from '@/components/PokerTable'
+import PokerTable from '@/components/casino/PokerTable'
 
 export default function PokerRoomPage() {
   return (

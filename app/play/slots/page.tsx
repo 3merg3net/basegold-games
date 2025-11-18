@@ -1,5 +1,5 @@
 'use client'
-import SlotsGame from '@/components/SlotsGame'
+import SlotsGame from '@/components/casino/SlotsV2Game'
 
 export default function Page() {
   return (

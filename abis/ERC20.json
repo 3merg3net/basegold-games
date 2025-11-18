@@ -1,32 +1,5 @@
 [
-  {
-    "constant": true,
-    "inputs": [{ "name": "_owner", "type": "address" }],
-    "name": "balanceOf",
-    "outputs": [{ "name": "balance", "type": "uint256" }],
-    "type": "function",
-    "stateMutability": "view"
-  },
-  {
-    "constant": true,
-    "inputs": [
-      { "name": "_owner", "type": "address" },
-      { "name": "_spender", "type": "address" }
-    ],
-    "name": "allowance",
-    "outputs": [{ "name": "remaining", "type": "uint256" }],
-    "type": "function",
-    "stateMutability": "view"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      { "name": "_spender", "type": "address" },
-      { "name": "_value", "type": "uint256" }
-    ],
-    "name": "approve",
-    "outputs": [{ "name": "success", "type": "bool" }],
-    "type": "function",
-    "stateMutability": "nonpayable"
-  }
+  { "type": "function", "name": "balanceOf", "stateMutability": "view", "inputs": [{ "name": "account", "type": "address" }], "outputs": [{ "type": "uint256" }] },
+  { "type": "function", "name": "allowance", "stateMutability": "view", "inputs": [{ "name": "owner", "type": "address" }, { "name": "spender", "type": "address" }], "outputs": [{ "type": "uint256" }] },
+  { "type": "function", "name": "approve", "stateMutability": "nonpayable", "inputs": [{ "name": "spender", "type": "address" }, { "name": "amount", "type": "uint256" }], "outputs": [{ "type": "bool" }] }
 ]

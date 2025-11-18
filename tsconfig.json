@@ -16,11 +16,7 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+    "paths": { "@/*": ["*"] }
     // NOTE: no "types": ["react-dom"] here
     // If you want, you can add "types": ["node", "react"] but it's optional.
     ,

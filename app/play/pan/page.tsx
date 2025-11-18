@@ -1,22 +1,34 @@
-'use client'
+'use client';
 
-import PanGame from '@/components/PanGame'
+import CasinoLayout from '@/components/casino/CasinoLayout';
+import GameHero from '@/components/casino/GameHero';
+import PanGame from '@/components/casino/PanGameV2';
 
-export default function Page() {
+export default function PanPage() {
   return (
-    <main className="px-4 md:px-6 py-4">
-      {/* Slim top banner — keeps space for wheel */}
-      <div className="mb-4 rounded-xl border border-yellow-300/20 bg-yellow-200/5 px-4 py-3">
-        <div className="text-sm md:text-base font-extrabold text-[#FFD700] tracking-wide">
-          PAN FOR GOLD — ROULETTE MODE
-        </div>
-        <div className="mt-1 text-[12px] md:text-sm text-white/85">
-          Pick an entry and <span className="font-semibold">Spin the Pan</span>. The pointer shows the hit.
-          Bigger multipliers are rarer. Approve once, then spin freely.
-        </div>
-      </div>
+    <CasinoLayout>
+      <div className="space-y-6">
+        {/* Title + Hero */}
+        <div className="text-center">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-[#FFD700] drop-shadow-lg">
+            🟡 Spin the Golden Wheel
+          </h1>
 
-      <PanGame />
-    </main>
-  )
+          <GameHero
+            title="Pan – The Golden Wheel"
+            badge="MULTIPLIER SPINS"
+            subtitle="Fast, Gold Pan wheel. One spin can turn dust into Bars — from warm hits to legendary 25× strikes."
+            bullets={[
+              'Set your BGRC stake and spin the wheel.',
+              'Each wedge represents a multiplier up to 25×.',
+              'When the pointer locks in, BGRC payouts land instantly.',
+            ]}
+          />
+        </div>
+
+        {/* Game UI */}
+        <PanGame />
+      </div>
+    </CasinoLayout>
+  );
 }

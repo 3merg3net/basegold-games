@@ -1,0 +1,14 @@
+{
+  "abi": [
+    { "type":"function","name":"minStake","stateMutability":"view","inputs":[],"outputs":[{"type":"uint256"}] },
+    { "type":"function","name":"maxStake","stateMutability":"view","inputs":[],"outputs":[{"type":"uint256"}] },
+    { "type":"function","name":"playPan","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] },
+    { "type":"function","name":"playSlots","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] },
+    { "type":"function","name":"playBlackjack","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] },
+    { "type":"function","name":"playHiLo","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] },
+     { "type":"function","name":"playWar","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] }, 
+    { "type":"function","name":"playCoinFlip","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] },
+    { "type":"function","name":"playRoulette","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] },
+    { "type":"function","name":"playVideoPoker","stateMutability":"nonpayable","inputs":[{"type":"uint256"},{"type":"uint256"}],"outputs":[] }
+  ]
+}
