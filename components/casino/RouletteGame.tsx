@@ -263,13 +263,13 @@ export default function RouletteGame() {
 
   /** wheel + ball animation */
   const [spinning, setSpinning] = useState(false)
-  const [angle, setAngle] = useState(0)        // wheel rotation
+  const [angle, setAngle] = useState(0) // wheel rotation
   const [ballAngle, setBallAngle] = useState(0) // ball orbit
   const [resultNumber, setResultNumber] = useState<number | null>(null)
   const [status, setStatus] = useState('Place your bet.')
   const [lastWinGross, setLastWinGross] = useState<number>(0) // full payout
-  const [sessionPnL, setSessionPnL] = useState(0)              // net across spins
-  const [netDelta, setNetDelta] = useState(0)                  // net last spin
+  const [sessionPnL, setSessionPnL] = useState(0) // net across spins
+  const [netDelta, setNetDelta] = useState(0) // net last spin
 
   // after tx mined, derive wheel outcome from hash
   useEffect(() => {
@@ -303,7 +303,7 @@ export default function RouletteGame() {
     })
 
     // ball orbits around the wheel and ends back at the pointer
-    setBallAngle(prev => prev + 720) // 2 full circles (mod 360 looks same but gives motion)
+    setBallAngle(prev => prev + 720)
 
     setTimeout(() => {
       const winMul = computeWinMultiplier(resultNumber, bet)
@@ -339,27 +339,19 @@ export default function RouletteGame() {
     }, 3200)
   }
 
-  const canConfirm =
-    !!address &&
-    hasAllowance &&
-    !placing &&
-    !outOfBounds &&
-    (effectiveBalance ?? balance) >= betAmount
-  const canSpin = playWait.isSuccess && resultNumber != null && !spinning
-
   const approxUsd = (b: number) => {
     if (!priceUsd) return '…'
     const v = b * priceUsd
     return `~$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`
   }
 
+  const usdStr = (amt: number) =>
+    priceUsd != null ? approxUsd(amt) : ''
+
   const chooseSingle = (n: number) => {
     setSingleNumber(String(n))
     setBet({ kind: 'single', value: n })
   }
-
-  const usdStr = (amt: number) =>
-    priceUsd != null ? approxUsd(amt) : ''
 
   const onConfirmBet = () => {
     if (!play || !address) return
@@ -388,6 +380,41 @@ export default function RouletteGame() {
     })
   }
 
+  const canConfirm =
+    !!address &&
+    hasAllowance &&
+    !placing &&
+    !outOfBounds &&
+    (effectiveBalance ?? balance) >= betAmount
+
+  const canSpin = playWait.isSuccess && resultNumber != null && !spinning
+
+  // single CTA button label + handler (mobile flow)
+  const mainCtaLabel = !mounted
+    ? '…'
+    : placing || playWait.isLoading
+    ? 'Confirming bet…'
+    : spinning
+    ? 'Spinning…'
+    : canSpin
+    ? 'Spin Wheel'
+    : 'Confirm Bet'
+
+  const mainCtaDisabled =
+    !mounted ||
+    (!canConfirm && !canSpin) ||
+    placing ||
+    playWait.isLoading ||
+    spinning
+
+  const mainCtaOnClick = () => {
+    if (canSpin) {
+      spinWheel()
+    } else if (canConfirm) {
+      onConfirmBet()
+    }
+  }
+
   return (
     <div className="grid md:grid-cols-[minmax(360px,1.1fr)_420px] gap-6 items-start">
       {/* LEFT — WHEEL + STATUS */}
@@ -409,8 +436,6 @@ export default function RouletteGame() {
 
           <div className="mt-4 flex justify-center">
             <div className="relative w-full max-w-[360px] aspect-square">
-              
-
               {/* wheel + ball */}
               <div className="absolute inset-0 rounded-full bg-[#050509] flex items-center justify-center">
                 <svg
@@ -540,7 +565,7 @@ export default function RouletteGame() {
             <div className="mt-3 flex items-center justify-between gap-3">
               <div className="rounded-lg border border-white/15 bg-black/40 p-2 flex-1">
                 <div className="uppercase tracking-[0.16em] text-white/55 text-[10px]">
-                  Session P&L
+                  Session P&amp;L
                 </div>
                 <div
                   className={
@@ -770,10 +795,28 @@ export default function RouletteGame() {
                 </button>
               </div>
             </div>
+
+            {/* Quick pick row (optional; still mobile-friendly) */}
+            <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+              {[0, 7, 17, 23, 32].map(n => (
+                <button
+                  key={n}
+                  onClick={() => chooseSingle(n)}
+                  className={[
+                    'px-2 py-0.5 rounded-md border',
+                    bet.kind === 'single' && bet.value === n
+                      ? 'border-[#32e6b7]/80 bg-[#32e6b7]/20 text-[#e4fff4]'
+                      : 'border-white/20 bg-black/40 text-white/75 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Actions — single CTA mobile flow */}
         <div className="space-y-2">
           {!hasAllowance ? (
             <button
@@ -788,27 +831,15 @@ export default function RouletteGame() {
                 : 'Approve BGLD for Roulette'}
             </button>
           ) : (
-            <>
-              <button
-                className="w-full btn-gold h-11 text-sm font-extrabold"
-                disabled={!mounted || !canConfirm}
-                onClick={onConfirmBet}
-              >
-                {!mounted
-                  ? '…'
-                  : placing || playWait.isLoading
-                  ? 'Confirming bet…'
-                  : 'Confirm Bet'}
-              </button>
-              <button
-                className="w-full btn-dim h-10 text-sm"
-                disabled={!mounted || !canSpin}
-                onClick={spinWheel}
-              >
-                {spinning ? 'Spinning…' : 'Spin Wheel'}
-              </button>
-            </>
+            <button
+              className="w-full btn-gold h-11 text-sm font-extrabold"
+              disabled={mainCtaDisabled}
+              onClick={mainCtaOnClick}
+            >
+              {mainCtaLabel}
+            </button>
           )}
+
           {(approveErr || playErr) && (
             <div className="text-[11px] text-rose-300">
               {(approveErr as any)?.shortMessage ||

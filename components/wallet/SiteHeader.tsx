@@ -50,8 +50,8 @@ export default function SiteHeader() {
         >
           <div className="relative h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
             <Image
-              src="/images/goldrush-icon-V2.png"
-              alt="Base Gold Rush Icon"
+              src="/images/base-logo-light.png"
+              alt="Base Gold Rush"
               fill
               sizes="40px"
               className="rounded object-contain group-hover:scale-105 transition-transform"

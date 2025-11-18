@@ -147,7 +147,7 @@ export default function RouletteArcadeMachine() {
   const [angle, setAngle] = useState(0)
   const [ballAngle, setBallAngle] = useState(0)
   const [resultNumber, setResultNumber] = useState<number | null>(null)
-  const [status, setStatus] = useState('Place your bets and press SPIN.')
+  const [status, setStatus] = useState('Place your bets and tap Spin.')
   const [lastWin, setLastWin] = useState(0)
   const [lastResultColor, setLastResultColor] = useState<
     'RED' | 'BLACK' | 'GREEN' | null
@@ -246,10 +246,8 @@ export default function RouletteArcadeMachine() {
         }
       }
 
-      // ✅ update global arcade wallet
-     // update global demo wallet
-recordSpin({ wager: totalBet, payout: totalPayout })
-
+      // update global demo wallet
+      recordSpin({ wager: totalBet, payout: totalPayout })
 
       const net = totalPayout - totalBet
       setLastWin(net)
@@ -279,10 +277,8 @@ recordSpin({ wager: totalBet, payout: totalPayout })
     }, 3200)
   }
 
-  const resetCredits = () => {
+  const resetTable = () => {
     if (spinning) return
-
-    // Local table reset only — demo wallet balance stays as-is
     setHistory([])
     setLastWin(0)
     setResultNumber(null)
@@ -295,22 +291,23 @@ recordSpin({ wager: totalBet, payout: totalPayout })
     bets.find(b => b.type === 'STRAIGHT' && b.number === num)
 
   return (
-    <div className="mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)]">
-      {/* TOP: MARQUEE + CREDIT STRIP */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+    <div className="mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4">
+      {/* TOP: TITLE + DEMO STRIP */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
             Base Gold Rush Casino
           </div>
-          <div className="mt-1 text-2xl md:text-3xl font-extrabold text-white">
-            Golden Wheel Roulette <span className="text-[#facc15]">• Demo</span>
+          <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
+            Golden Wheel Roulette <span className="text-[#facc15]">• Arcade</span>
           </div>
-          <div className="text-xs text-white/60 mt-1">
-            European wheel • Free demo chips only • Real Vegas multipliers
+          <div className="text-xs text-white/60 mt-1 max-w-sm">
+            European wheel. Free demo credits only. Same multipliers you&apos;ll see
+            on the on-chain roulette table.
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1 text-right text-xs md:text-sm">
-          <div className="rounded-xl border border-white/15 bg-black/60 px-4 py-2">
+        <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
+          <div className="rounded-xl border border-white/15 bg-black/60 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
             <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
               Demo Credits
             </div>
@@ -318,7 +315,7 @@ recordSpin({ wager: totalBet, payout: totalPayout })
               {credits.toLocaleString()}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
             <MiniStat label="Total Bet" value={totalBet} />
             <MiniStat label="Last Net" value={lastWin} colored />
             <MiniStat label="Session P&L" value={sessionPnL} colored />
@@ -326,20 +323,21 @@ recordSpin({ wager: totalBet, payout: totalPayout })
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(320px,1.15fr)_minmax(260px,0.9fr)] gap-6">
+      {/* MAIN: WHEEL LEFT, BOARD RIGHT (STACK ON MOBILE) */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(320px,1.05fr)_minmax(260px,0.95fr)]">
         {/* LEFT: WHEEL + STATUS */}
-        <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-4 md:p-5">
-          <div className="flex items-center justify-between text-xs mb-3">
-            <div className="text-[11px] uppercase tracking-[0.3em] text-white/60">
+        <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-4 md:p-5 space-y-3">
+          <div className="flex items-center justify-between text-[11px] mb-1">
+            <div className="uppercase tracking-[0.3em] text-white/60">
               Golden Wheel Display
             </div>
-            <div className="text-[11px] text-white/50">
-              Demo arcade • RNG off-chain
+            <div className="text-white/50">
+              Demo arcade • RNG local
             </div>
           </div>
 
           <div className="flex justify-center">
-            <div className="relative w-full max-w-[360px] aspect-square">
+            <div className="relative w-full max-w-[320px] sm:max-w-[360px] aspect-square">
               <div className="absolute inset-0 rounded-full bg-[#020617] flex items-center justify-center">
                 <svg
                   viewBox="0 0 200 200"
@@ -456,8 +454,8 @@ recordSpin({ wager: totalBet, payout: totalPayout })
           </div>
 
           {/* STATUS & LAST RESULT */}
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/50 p-3 text-xs">
-            <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="rounded-xl border border-white/10 bg-black/50 p-3 text-xs space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] uppercase tracking-[0.25em] text-white/60">
                 Spin Status
               </div>
@@ -481,11 +479,12 @@ recordSpin({ wager: totalBet, payout: totalPayout })
                 </div>
               )}
             </div>
+
             <div className="text-[13px] text-white/90 min-h-[1.4rem]">
               {status}
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-3 text-[11px]">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px]">
               <div className="flex-1">
                 <div className="uppercase tracking-[0.16em] text-white/50">
                   Last Net
@@ -536,14 +535,14 @@ recordSpin({ wager: totalBet, payout: totalPayout })
         </div>
 
         {/* RIGHT: BETTING BOARD / CHIPS */}
-        <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white">
+        <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-3">
           {/* Chip selector + controls */}
-          <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
                 Chip Value
               </div>
-              <div className="mt-1 flex gap-1.5">
+              <div className="mt-1 flex flex-wrap gap-1.5">
                 {[1, 5, 10, 25, 100].map(v => {
                   const active = v === currentChip
                   return (
@@ -563,11 +562,11 @@ recordSpin({ wager: totalBet, payout: totalPayout })
                 })}
               </div>
             </div>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-start sm:items-end gap-1">
               <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
-                Controls
+                Table Controls
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={clearBets}
                   disabled={spinning || bets.length === 0}
@@ -576,18 +575,18 @@ recordSpin({ wager: totalBet, payout: totalPayout })
                   Clear Bets
                 </button>
                 <button
-                  onClick={resetCredits}
+                  onClick={resetTable}
                   disabled={spinning}
                   className="rounded-full border border-yellow-300/60 bg-black/30 px-3 py-1.5 text-[11px] hover:bg-yellow-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Reset Stack
+                  Reset Table
                 </button>
               </div>
             </div>
           </div>
 
           {/* OUTSIDE BETS */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2">
             <BetPill
               label="1 to 18"
               subtitle="1:1"
@@ -629,9 +628,9 @@ recordSpin({ wager: totalBet, payout: totalPayout })
           </div>
 
           {/* NUMBER GRID + DOZENS/COLUMNS */}
-          <div className="rounded-2xl border border-emerald-200/50 bg-black/30 p-3">
+          <div className="rounded-2xl border border-emerald-200/50 bg-black/30 p-3 space-y-2">
             {/* Zero row */}
-            <div className="flex mb-2">
+            <div className="flex">
               <button
                 onClick={() => addBet({ type: 'STRAIGHT', number: 0 })}
                 className="flex-1 rounded-xl bg-emerald-700/80 border border-emerald-300/80 py-1.5 text-center text-xs font-semibold shadow-[0_0_12px_rgba(16,185,129,0.7)]"
@@ -646,7 +645,7 @@ recordSpin({ wager: totalBet, payout: totalPayout })
             </div>
 
             {/* 1–36 grid (3 columns) */}
-            <div className="grid grid-cols-3 gap-1 mb-2">
+            <div className="grid grid-cols-3 gap-1">
               {Array.from({ length: 36 }, (_, i) => i + 1).map(n => {
                 const straight = getStraightBetFor(n)
                 const isRedNum = isRed(n)
@@ -657,7 +656,7 @@ recordSpin({ wager: totalBet, payout: totalPayout })
                       addBet({ type: 'STRAIGHT', number: n })
                     }
                     className={[
-                      'relative h-10 rounded-md border text-xs font-semibold flex flex-col items-center justify-center',
+                      'relative h-9 sm:h-10 rounded-md border text-[11px] font-semibold flex flex-col items-center justify-center',
                       isRedNum
                         ? 'bg-red-700/80 border-red-300/80'
                         : 'bg-slate-800/80 border-slate-300/80',
@@ -675,7 +674,7 @@ recordSpin({ wager: totalBet, payout: totalPayout })
             </div>
 
             {/* Dozens */}
-            <div className="grid grid-cols-3 gap-1 mb-2 text-[11px]">
+            <div className="grid grid-cols-3 gap-1 text-[11px]">
               <DozenButton
                 label="1st 12"
                 range="1–12"
@@ -720,7 +719,7 @@ recordSpin({ wager: totalBet, payout: totalPayout })
           </div>
 
           {/* SPIN BUTTON */}
-          <div className="mt-4">
+          <div className="pt-1">
             <button
               onClick={spin}
               disabled={spinning}
@@ -733,8 +732,8 @@ recordSpin({ wager: totalBet, payout: totalPayout })
                 : 'Place Bet & Spin'}
             </button>
             <div className="mt-1 text-[10px] text-emerald-100/80 text-center">
-              Demo arcade – no real BGLD used. On-chain contract versions
-              will be deployed separately.
+              Demo arcade only – no real BGLD used. On-chain roulette
+              games will be wired up on a separate page.
             </div>
           </div>
         </div>

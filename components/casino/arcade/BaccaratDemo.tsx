@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
@@ -142,7 +142,7 @@ export default function BaccaratDemo() {
 
   // sync seat PnL → arcade wallet
   const [syncedPnL, setSyncedPnL] = useState(0)
-    useEffect(() => {
+  useEffect(() => {
     if (!mounted) return
     const delta = sessionPnL - syncedPnL
     if (delta === 0) return
@@ -156,7 +156,6 @@ export default function BaccaratDemo() {
     setSyncedPnL(sessionPnL)
   }, [mounted, sessionPnL, syncedPnL, addWin, addLoss])
 
-
   const [phase, setPhase] = useState<Phase>('betting')
   const [bets, setBets] = useState<Bets>(() => ({
     player: 0,
@@ -167,7 +166,16 @@ export default function BaccaratDemo() {
   }))
   const [chip, setChip] = useState<number>(5)
 
-  const [shoe, setShoe] = useState<Card[]>(() => buildShoe())
+  // 🔁 Shoe lives in a mutable ref; we track only the count in state for UI
+  const shoeRef = useRef<Card[]>([])
+  const [shoeCount, setShoeCount] = useState(0)
+
+  useEffect(() => {
+    const fresh = buildShoe()
+    shoeRef.current = fresh
+    setShoeCount(fresh.length)
+  }, [])
+
   const [playerHand, setPlayerHand] = useState<HandSide>({ cards: [], total: 0 })
   const [bankerHand, setBankerHand] = useState<HandSide>({ cards: [], total: 0 })
   const [result, setResult] = useState<RoundResult | null>(null)
@@ -175,7 +183,9 @@ export default function BaccaratDemo() {
   const [pairBanker, setPairBanker] = useState(false)
 
   const [banner, setBanner] = useState<string>('Place your bets.')
-  const [detailMsg, setDetailMsg] = useState<string>('Standard baccarat rules. Player vs Banker.')
+  const [detailMsg, setDetailMsg] = useState<string>(
+    'Standard baccarat rules. Player vs Banker.'
+  )
   const [lastOutcomeTrack, setLastOutcomeTrack] = useState<RoundResult[]>([])
 
   const [priceUsd, setPriceUsd] = useState<number | null>(null)
@@ -246,21 +256,20 @@ export default function BaccaratDemo() {
     setBanner('Bets cleared. Place new bets.')
   }
 
-  function ensureShoe() {
-    if (shoe.length < 20) {
-      setShoe(buildShoe())
-    }
-  }
-
+  // ✅ Proper shoe draw: unique per hand, no undefined
   function drawCard(): Card {
-    if (shoe.length <= 0) {
+    if (shoeRef.current.length === 0) {
       const fresh = buildShoe()
-      setShoe(fresh)
-      return fresh.pop()!
+      shoeRef.current = fresh
+      setShoeCount(fresh.length)
     }
-    const c = shoe[shoe.length - 1]
-    setShoe(prev => prev.slice(0, prev.length - 1))
-    return c
+
+    const deck = shoeRef.current
+    const idx = deck.length - 1
+    const drawn = deck[idx]
+    deck.pop()
+    setShoeCount(deck.length)
+    return drawn
   }
 
   function dealRound() {
@@ -275,8 +284,6 @@ export default function BaccaratDemo() {
       )
       return
     }
-
-    ensureShoe()
 
     setPhase('dealing')
     setBanner('Dealing cards…')
@@ -293,8 +300,7 @@ export default function BaccaratDemo() {
     const initPlayerTotal = handTotal(initialPlayer)
     const initBankerTotal = handTotal(initialBanker)
 
-    const natural =
-      initPlayerTotal >= 8 || initBankerTotal >= 8
+    const natural = initPlayerTotal >= 8 || initBankerTotal >= 8
 
     setPlayerHand({ cards: initialPlayer, total: initPlayerTotal })
     setBankerHand({ cards: initialBanker, total: initBankerTotal })
@@ -355,10 +361,7 @@ export default function BaccaratDemo() {
       setPhase('reveal')
       setDetailMsg('Final hands – resolving bets…')
 
-      setTimeout(
-        () => finalizeRound(tempPlayerCards, tempBankerCards),
-        600
-      )
+      setTimeout(() => finalizeRound(tempPlayerCards, tempBankerCards), 600)
     }, 600)
   }
 
@@ -426,9 +429,7 @@ export default function BaccaratDemo() {
     } else {
       setBanner(
         net > 0
-          ? `TIE • +${net.toFixed(2)} BGRC (gross ${grossReturn.toFixed(
-              2
-            )})`
+          ? `TIE • +${net.toFixed(2)} BGRC (gross ${grossReturn.toFixed(2)})`
           : 'TIE • pushes on Player/Banker, tie bet only.'
       )
     }
@@ -481,7 +482,6 @@ export default function BaccaratDemo() {
   }
 
   const canDeal = phase === 'betting' && stagedTotal > 0
-  const canNextRound = phase === 'result'
 
   return (
     <div className="grid md:grid-cols-[minmax(360px,1.3fr)_320px] gap-6 items-start">
@@ -514,7 +514,9 @@ export default function BaccaratDemo() {
               Seat P&amp;L:{' '}
               <span
                 className={
-                  sessionPnL >= 0 ? 'text-emerald-200 font-semibold' : 'text-rose-300 font-semibold'
+                  sessionPnL >= 0
+                    ? 'text-emerald-200 font-semibold'
+                    : 'text-rose-300 font-semibold'
                 }
               >
                 {sessionPnL >= 0 ? '+' : ''}
@@ -522,7 +524,7 @@ export default function BaccaratDemo() {
               </span>
             </div>
             <div className="text-[10px] text-emerald-100/70">
-              Shoe cards remaining: {shoe.length}
+              Shoe cards remaining: {shoeCount}
             </div>
           </div>
         </div>
@@ -726,8 +728,9 @@ export default function BaccaratDemo() {
           </div>
         </div>
 
-        {/* Controls bar under felt */}
+        {/* Controls bar under felt — MOBILE FAST FLOW */}
         <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 relative z-10">
+          {/* chip + clear */}
           <div>
             <div className="text-[11px] text-emerald-50/80 mb-1">
               Choose chip &amp; tap bet zones to place wagers
@@ -760,38 +763,50 @@ export default function BaccaratDemo() {
             </div>
           </div>
 
+          {/* seat + single main CTA */}
           <div className="flex flex-col items-end gap-2 text-[11px] text-emerald-50/85">
             <div>
               Seat Credits:{' '}
               <span className="font-semibold text-emerald-50">
                 {remainingCredits.toFixed(2)} BGRC
               </span>
+              {priceUsd && (
+                <span className="ml-1 text-emerald-100/70">
+                  ({approxUsd(remainingCredits)})
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={dealRound}
-                disabled={!canDeal}
-                className={[
-                  'rounded-full px-6 py-2 text-xs font-semibold tracking-[0.2em] uppercase',
-                  canDeal
-                    ? 'bg-[#facc15] text-black shadow-[0_0_18px_rgba(250,204,21,0.9)] hover:bg-[#fde68a]'
-                    : 'bg-slate-700 text-slate-300 cursor-not-allowed',
-                ].join(' ')}
-              >
-                {phase === 'dealing' || phase === 'reveal'
-                  ? 'Dealing…'
-                  : 'Deal'}
-              </button>
-              <button
-                type="button"
-                onClick={nextRound}
-                disabled={!canNextRound}
-                className="rounded-full border border-white/30 bg-black/60 px-4 py-1.5 text-[11px] text-white/80 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                New Round
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (phase === 'result') {
+                  nextRound()
+                } else {
+                  dealRound()
+                }
+              }}
+              disabled={
+                (phase === 'betting' && !canDeal) ||
+                phase === 'dealing' ||
+                phase === 'reveal'
+              }
+              className={[
+                'rounded-full px-6 py-2 text-xs font-semibold tracking-[0.2em] uppercase',
+                phase === 'dealing' || phase === 'reveal'
+                  ? 'bg-slate-700 text-slate-300 cursor-wait'
+                  : phase === 'result'
+                  ? 'bg-[#facc15] text-black shadow-[0_0_18px_rgba(250,204,21,0.9)] hover:bg-[#fde68a]'
+                  : phase === 'betting' && canDeal
+                  ? 'bg-[#facc15] text-black shadow-[0_0_18px_rgba(250,204,21,0.9)] hover:bg-[#fde68a]'
+                  : 'bg-slate-700 text-slate-300 cursor-not-allowed',
+              ].join(' ')}
+            >
+              {phase === 'dealing' || phase === 'reveal'
+                ? 'Dealing…'
+                : phase === 'result'
+                ? 'Deal Again'
+                : 'Deal'}
+            </button>
           </div>
         </div>
 
@@ -881,11 +896,25 @@ export default function BaccaratDemo() {
             Table Rules (Demo)
           </div>
           <ul className="space-y-1 text-white/70 list-disc list-inside">
-            <li>8-deck shoe (simulated) with standard drawing rules.</li>
-            <li>Natural 8–9 on either side freezes drawing.</li>
+            <li>8-deck shoe (simulated) with standard baccarat drawing rules.</li>
+            <li>
+              Each round, you bet on <span className="font-semibold">Player</span>,{' '}
+              <span className="font-semibold">Banker</span>, or{' '}
+              <span className="font-semibold">Tie</span>.
+            </li>
+            <li>
+              Cards 2–9 count as face value, Aces are 1, 10 / J / Q / K count as 0.
+            </li>
+            <li>
+              Add the card values and only keep the last digit (0–9). Closest to 9
+              wins.
+            </li>
             <li>Player wins pay 1:1, Banker wins pay 0.95:1.</li>
             <li>Ties pay 8:1 (9x including stake).</li>
-            <li>Optional Player/Banker pair side bets pay 11:1.</li>
+            <li>
+              Optional Player / Banker Pair side bets pay 11:1 if the first two cards
+              form a pair.
+            </li>
           </ul>
           <div className="text-[11px] text-white/50 pt-1">
             Front-end only demonstration of gameplay &amp; UX.
@@ -894,8 +923,8 @@ export default function BaccaratDemo() {
             verifiable randomness &amp; true payouts.
           </div>
           <div className="text-[11px] text-white/45 pt-1">
-            Each seat tracks its own demo stack and P&amp;L. Arcade wallet
-            tracks your total net across all demo games.
+            Each seat tracks its own demo stack and P&amp;L. Arcade wallet tracks your
+            total net across all demo games.
           </div>
         </div>
       </div>

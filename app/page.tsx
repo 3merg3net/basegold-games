@@ -195,15 +195,19 @@ function SpinningChipHero() {
   return (
     <div className="relative flex flex-col items-center justify-center">
       {/* HERO BACKGROUND OVERLAY BEHIND BAR */}
-      <div className="pointer-events-none absolute inset-0 opacity-35">
-        <Image
-          src="/images/goldrush-hero-v2.png"
-          alt="Base Gold Rush casino floor"
-          fill
-          priority
-          className="object-cover"
-        />
-      </div>
+      <div className="rounded-3xl overflow-hidden border border-white/10 shadow-xl mb-6">
+  <div className="relative w-full h-40 sm:h-52 md:h-60 lg:h-64">
+    <Image
+      src="/images/arcade-hero-v2.png"
+      alt="Base Gold Rush Demo Arcade"
+      fill
+      sizes="100vw"
+      className="object-cover"
+      priority={false}
+    />
+  </div>
+</div>
+
 
       {/* WRAPPER — keeps everything aligned */}
       <div className="relative w-[260px] sm:w-[320px] md:w-[520px]">
@@ -339,18 +343,19 @@ export default function HomePage() {
 
       {/* HERO */}
       <section
-        className="
-          relative overflow-hidden border-b border-white/10 text-white
-          min-h-[calc(100vh-64px)]
-        "
-        style={{
-          backgroundImage:
-            "linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0.70)), url('/images/bg-goldrush-hero-v2.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
+  className="
+    relative overflow-hidden border-b border-white/10 text-white
+    min-h-[calc(100vh-64px)]
+  "
+  style={{
+    backgroundImage:
+      'linear-gradient(to bottom, rgba(0,0,0,0.85), rgba(0,0,0,0.95))',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  }}
+>
+
         {/* subtle gold/blue overlay */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.18),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.14),_transparent_50%)]" />
 

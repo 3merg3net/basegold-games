@@ -67,7 +67,7 @@ const arcadeCategories: GameCategory[] = [
 
 export default function NavBar() {
   const pathname = usePathname()
-  const [open, setOpen] = useState(false)        // mobile menu
+  const [open, setOpen] = useState(false) // mobile menu
   const [casinoOpen, setCasinoOpen] = useState(false) // desktop dropdown
   const [cashierOpen, setCashierOpen] = useState(false) // cashier modal
 
@@ -116,7 +116,6 @@ export default function NavBar() {
     pathname === '/video-poker' ||
     pathname === '/poker-demo'
 
-  // ────────── DESKTOP NAV + DROPDOWN ──────────
   return (
     <nav className="relative flex w-full items-center justify-between">
       {/* Desktop: inline links + dropdown + cashier */}
@@ -148,6 +147,7 @@ export default function NavBar() {
           {casinoOpen && (
             <div className="absolute left-0 mt-2 w-[420px] rounded-xl border border-[#FFD700]/30 bg-black shadow-2xl z-50">
               <div className="py-2 max-h-[70vh] overflow-y-auto grid grid-cols-2 gap-x-1">
+                {/* Left: On-chain casino (desktop unchanged) */}
                 <div className="border-r border-white/10">
                   <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#FFD700]/70">
                     On-Chain Casino
@@ -174,6 +174,7 @@ export default function NavBar() {
                   ))}
                 </div>
 
+                {/* Right: Demo arcade (desktop unchanged) */}
                 <div>
                   <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
                     Demo Arcade
@@ -230,6 +231,7 @@ export default function NavBar() {
             aria-label="Mobile navigation"
           >
             <div className="py-1 max-h-[80vh] overflow-y-auto">
+              {/* Home link */}
               {staticItems.map(it => {
                 const active = pathname === it.href
                 return (
@@ -249,31 +251,9 @@ export default function NavBar() {
                 )
               })}
 
-              {/* On-chain / Arcade groups */}
+              {/* 🔼 Arcade FIRST on mobile */}
               <div className="border-t border-[#FFD700]/20 mt-1 pt-1">
-                <div className="px-4 pt-2 pb-1 text-[#FFD700]/80 text-[11px] uppercase tracking-wider">
-                  On-Chain Casino
-                </div>
-                {onchainCategories.flatMap(cat => cat.items).map(it => {
-                  const active = pathname === it.href
-                  return (
-                    <Link
-                      key={it.href}
-                      href={it.href}
-                      onClick={() => setOpen(false)}
-                      role="menuitem"
-                      className={[
-                        'block w-full px-4 py-2.5 text-sm font-semibold',
-                        'text-[#FFD700] bg-black',
-                        active ? 'bg-[#161616]' : 'hover:bg-[#0f0f0f]',
-                      ].join(' ')}
-                    >
-                      {it.label}
-                    </Link>
-                  )
-                })}
-
-                <div className="px-4 pt-3 pb-1 text-emerald-300/90 text-[11px] uppercase tracking-wider">
+                <div className="px-4 pt-2 pb-1 text-emerald-300/90 text-[11px] uppercase tracking-wider">
                   Demo Arcade
                 </div>
                 {arcadeCategories.flatMap(cat => cat.items).map(it => {
@@ -288,6 +268,28 @@ export default function NavBar() {
                         'block w-full px-4 py-2.5 text-sm font-semibold',
                         'text-emerald-200 bg-black',
                         active ? 'bg-[#052e16]' : 'hover:bg-[#022c22]',
+                      ].join(' ')}
+                    >
+                      {it.label}
+                    </Link>
+                  )
+                })}
+
+                <div className="px-4 pt-3 pb-1 text-[#FFD700]/80 text-[11px] uppercase tracking-wider">
+                  On-Chain Casino
+                </div>
+                {onchainCategories.flatMap(cat => cat.items).map(it => {
+                  const active = pathname === it.href
+                  return (
+                    <Link
+                      key={it.href}
+                      href={it.href}
+                      onClick={() => setOpen(false)}
+                      role="menuitem"
+                      className={[
+                        'block w-full px-4 py-2.5 text-sm font-semibold',
+                        'text-[#FFD700] bg-black',
+                        active ? 'bg-[#161616]' : 'hover:bg-[#0f0f0f]',
                       ].join(' ')}
                     >
                       {it.label}

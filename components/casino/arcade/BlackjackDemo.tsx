@@ -102,7 +102,7 @@ export default function BlackjackDemo() {
   const [syncedPnL, setSyncedPnL] = useState(0)
 
   // Sync blackjack P&L into global arcade wallet
-    useEffect(() => {
+  useEffect(() => {
     if (!mounted) return
     const delta = sessionPnL - syncedPnL
     if (delta === 0) return
@@ -114,7 +114,6 @@ export default function BlackjackDemo() {
     }
     setSyncedPnL(sessionPnL)
   }, [mounted, sessionPnL, syncedPnL, addWin, addLoss])
-
 
   const [baseBet, setBaseBet] = useState(10)
   const MIN_BET = 1
@@ -152,12 +151,15 @@ export default function BlackjackDemo() {
 
   const dealerTotal = useMemo(() => handTotal(dealerCards), [dealerCards])
 
-  const canDeal =
-    phase === 'betting' &&
+  const stakeReady =
     baseBet >= MIN_BET &&
     baseBet <= MAX_BET &&
     seatCount > 0 &&
     credits >= baseBet * seatCount
+
+  const canDeal = phase === 'betting' && stakeReady
+
+  const canPrimaryDeal = (phase === 'betting' || phase === 'settled') && stakeReady
 
   const canHit =
     phase === 'player' && !!currentHand && !currentHand.isDone && !currentHand.isBust
@@ -200,7 +202,7 @@ export default function BlackjackDemo() {
   }
 
   function dealHand() {
-    if (!canDeal) return
+    if (!stakeReady) return
 
     const totalStake = baseBet * seatCount
     setCredits(c => c - totalStake)
@@ -242,6 +244,7 @@ export default function BlackjackDemo() {
     setLastPayout(0)
     setLastResultSummary('—')
     setBanner('')
+    setPhase('player')
 
     if (dealerBJ) {
       let netChange = 0
@@ -303,7 +306,7 @@ export default function BlackjackDemo() {
     if (firstIdx === -1) {
       setDealerReveal(true)
       setPhase('settled')
-      setTableMessage('All hands resolved (blackjacks). Tap NEW HAND to play again.')
+      setTableMessage('All hands resolved (blackjacks). Tap DEAL for next hand.')
     } else {
       setPhase('player')
       setCurrentIndex(firstIdx)
@@ -332,7 +335,7 @@ export default function BlackjackDemo() {
     if (!anyLive) {
       setPhase('settled')
       setDealerReveal(true)
-      setTableMessage('Round complete. Tap NEW HAND to play again.')
+      setTableMessage('Round complete. Tap DEAL for next hand.')
       return
     }
 
@@ -342,7 +345,7 @@ export default function BlackjackDemo() {
 
     let workingCards = [...dealerCards]
     const drawStep = () => {
-      const { total, isSoft } = handTotal(workingCards)
+      const { total } = handTotal(workingCards)
       const mustHit = total <= 16 // S17
       if (!mustHit || total > 21) {
         settleRound(workingCards, handsState)
@@ -419,7 +422,7 @@ export default function BlackjackDemo() {
         : 'All pushes this round.'
     )
     setPhase('settled')
-    setTableMessage('Round complete. Tap NEW HAND to play again.')
+    setTableMessage('Round complete. Tap DEAL for next hand.')
   }
 
   function handleHit() {
@@ -576,6 +579,20 @@ export default function BlackjackDemo() {
     setBanner('')
   }
 
+  // Single primary button for Deal / Next Hand
+  function handlePrimaryDeal() {
+    if (!stakeReady) return
+    if (phase === 'settled') {
+      handleNewHand()
+      // let state reset then deal
+      setTimeout(() => {
+        dealHand()
+      }, 0)
+    } else {
+      dealHand()
+    }
+  }
+
   /* ---------- hydration guard ---------- */
 
   if (!mounted) {
@@ -591,12 +608,12 @@ export default function BlackjackDemo() {
   const renderCard = (card: Card | null, faceDown?: boolean) => {
     if (!card || faceDown) {
       return (
-        <div className="w-[70px] h-[100px] md:w-[88px] md:h-[126px] rounded-xl bg-[repeating-linear-gradient(135deg,#0b1120,#0b1120_6px,#1f2937_6px,#1f2937_12px)] border border-slate-700 shadow-[0_6px_20px_rgba(0,0,0,0.85)]" />
+        <div className="w-[64px] h-[92px] md:w-[80px] md:h-[116px] rounded-xl bg-[repeating-linear-gradient(135deg,#0b1120,#0b1120_6px,#1f2937_6px,#1f2937_12px)] border border-slate-700 shadow-[0_6px_20px_rgba(0,0,0,0.85)]" />
       )
     }
     const isRed = card.suit === '♥' || card.suit === '♦'
     return (
-      <div className="w-[70px] h-[100px] md:w-[88px] md:h-[126px] rounded-xl bg-white border border-slate-300 shadow-[0_8px_26px_rgba(0,0,0,0.9)] flex flex-col justify-between p-2">
+      <div className="w-[64px] h-[92px] md:w-[80px] md:h-[116px] rounded-xl bg-white border border-slate-300 shadow-[0_8px_26px_rgba(0,0,0,0.9)] flex flex-col justify-between p-2">
         <div
           className={[
             'text-xs font-bold',
@@ -717,7 +734,7 @@ export default function BlackjackDemo() {
       </div>
 
       {/* dealer row */}
-      <div className="relative z-10 mt-3 rounded-3xl border border-emerald-300/40 bg-[radial-gradient(circle_at_50%_0%,#064e3b,#022c22_65%,#01120f_100%)] px-4 pt-4 pb-5 md:px-6 md:pt-5 md:pb-6">
+      <div className="relative z-10 mt-3 rounded-3xl border border-emerald-300/40 bg-[radial-gradient(circle_at_50%_0%,#064e3b,#022c22_65%,#01120f_100%)] px-3 pt-4 pb-4 md:px-6 md:pt-5 md:pb-6">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-50/85">
             Dealer
@@ -730,9 +747,18 @@ export default function BlackjackDemo() {
               : 'Waiting for deal'}
           </div>
         </div>
-        <div className="flex items-center gap-3 md:gap-4">
-          {renderCard(dealerCards[0] ?? null, false)}
-          {renderCard(dealerCards[1] ?? null, !dealerReveal)}
+        <div className="flex items-start gap-3 md:gap-4">
+          <div className="flex items-end gap-2 md:gap-3 overflow-x-auto pb-2">
+            {dealerCards.length === 0 ? (
+              renderCard(null)
+            ) : (
+              dealerCards.map((card, idx) => (
+                <div key={idx}>
+                  {renderCard(card, !dealerReveal && idx === 1)}
+                </div>
+              ))
+            )}
+          </div>
           <div className="flex-1 ml-2">
             <div className="text-[11px] text-emerald-100/80 min-h-[2rem]">
               {tableMessage}
@@ -774,7 +800,7 @@ export default function BlackjackDemo() {
           </div>
 
           {/* player hands */}
-          <div className="flex justify-center gap-4 md:gap-6 flex-wrap">
+          <div className="flex justify-start md:justify-center gap-3 md:gap-6 flex-nowrap md:flex-wrap overflow-x-auto pb-2">
             {Array.from({ length: seatCount }).map((_, idx) => {
               const hand = players[idx]
               const label = `Player ${idx + 1}`
@@ -790,7 +816,7 @@ export default function BlackjackDemo() {
                       ? 'border-emerald-200/70 shadow-[0_0_18px_rgba(16,185,129,0.5)]'
                       : 'border-emerald-900/60 border-dashed bg-black/20',
                   ].join(' ')}
-                  style={{ minWidth: '120px' }}
+                  style={{ minWidth: '130px' }}
                 >
                   <div className="flex items-center justify-between w-full text-[10px] text-emerald-100/85">
                     <span className="uppercase tracking-[0.22em]">
@@ -855,13 +881,15 @@ export default function BlackjackDemo() {
                 <button
                   key={v}
                   onClick={() => setBaseBet(Math.min(MAX_BET, v))}
-                  disabled={phase !== 'betting'}
+                  disabled={phase !== 'betting' && phase !== 'settled'}
                   className={[
                     'px-3 py-1 rounded-full border text-[11px] font-semibold',
                     baseBet === v
                       ? 'border-[#facc15] bg-[#facc15]/20 text-[#fef3c7]'
                       : 'border-emerald-300/40 bg-emerald-900/40 text-emerald-100',
-                    phase !== 'betting' ? 'opacity-40 cursor-not-allowed' : '',
+                    phase !== 'betting' && phase !== 'settled'
+                      ? 'opacity-40 cursor-not-allowed'
+                      : '',
                   ].join(' ')}
                 >
                   {v}
@@ -869,70 +897,65 @@ export default function BlackjackDemo() {
               ))}
               <button
                 onClick={() => setBaseBet(Math.min(MAX_BET, baseBet + 5))}
-                disabled={phase !== 'betting'}
+                disabled={phase !== 'betting' && phase !== 'settled'}
                 className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 +5
               </button>
               <button
                 onClick={() => setBaseBet(MIN_BET)}
-                disabled={phase !== 'betting'}
+                disabled={phase !== 'betting' && phase !== 'settled'}
                 className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Clear
               </button>
             </div>
 
-            {/* action buttons */}
+            {/* action buttons – mobile-first, big tap targets */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-              <button
-                onClick={dealHand}
-                disabled={!canDeal || phase !== 'betting'}
-                className="col-span-2 md:col-span-1 h-10 rounded-lg bg-gradient-to-b from-[#facc15] to-[#f59e0b] text-black font-extrabold text-xs tracking-[0.16em] uppercase shadow-[0_0_18px_rgba(250,204,21,0.8)] disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Deal
-              </button>
               <button
                 onClick={handleHit}
                 disabled={!canHit}
-                className="h-10 rounded-lg border border-emerald-300/70 bg-emerald-600/90 text-white font-semibold text-xs tracking-[0.16em] uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-11 rounded-lg border border-emerald-300/70 bg-emerald-600/90 text-white font-semibold text-xs tracking-[0.16em] uppercase disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Hit
               </button>
               <button
                 onClick={handleStand}
                 disabled={!canStand}
-                className="h-10 rounded-lg border border-slate-300/70 bg-slate-800/90 text-white font-semibold text-xs tracking-[0.16em] uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-11 rounded-lg border border-slate-300/70 bg-slate-800/90 text-white font-semibold text-xs tracking-[0.16em] uppercase disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Stand
               </button>
               <button
                 onClick={handleDouble}
                 disabled={!canDouble}
-                className="h-10 rounded-lg border border-[#facc15]/70 bg-black/80 text-[#facc15] font-semibold text-[11px] tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
+                className="h-11 rounded-lg border border-[#facc15]/70 bg-black/80 text-[#facc15] font-semibold text-[11px] tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Double
               </button>
               <button
                 onClick={handleSplit}
                 disabled={!canSplit}
-                className="h-10 rounded-lg border border-indigo-300/70 bg-indigo-900/80 text-indigo-100 font-semibold text-[11px] tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
+                className="h-11 rounded-lg border border-indigo-300/70 bg-indigo-900/80 text-indigo-100 font-semibold text-[11px] tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Split
               </button>
               <button
                 onClick={handleSurrender}
                 disabled={!canSurrender}
-                className="h-10 rounded-lg border border-rose-400/70 bg-rose-900/80 text-rose-100 font-semibold text-[11px] tracking-[0.16em] uppercase col-span-2 md:col-span-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="h-11 rounded-lg border border-rose-400/70 bg-rose-900/80 text-rose-100 font-semibold text-[11px] tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Surrender
               </button>
+
+              {/* Primary Deal / Next Hand CTA – full width on mobile bottom row */}
               <button
-                onClick={handleNewHand}
-                disabled={phase !== 'settled'}
-                className="h-10 rounded-lg border border-white/25 bg-black/70 text-white text-[11px] font-semibold tracking-[0.16em] uppercase col-span-2 md:col-span-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                onClick={handlePrimaryDeal}
+                disabled={!canPrimaryDeal}
+                className="col-span-2 md:col-span-5 h-11 rounded-lg bg-gradient-to-b from-[#facc15] to-[#f59e0b] text-black font-extrabold text-xs tracking-[0.2em] uppercase shadow-[0_0_18px_rgba(250,204,21,0.8)] disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                New Hand
+                {phase === 'settled' ? 'Deal Next Hand' : 'Deal'}
               </button>
             </div>
           </div>
