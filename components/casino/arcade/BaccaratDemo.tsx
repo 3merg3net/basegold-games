@@ -142,18 +142,20 @@ export default function BaccaratDemo() {
 
   // sync seat PnL → arcade wallet
   const [syncedPnL, setSyncedPnL] = useState(0)
-  useEffect(() => {
+    useEffect(() => {
     if (!mounted) return
     const delta = sessionPnL - syncedPnL
     if (delta === 0) return
 
     if (delta > 0) {
-      addWin(delta, { game: 'baccarat' })
+      addWin(delta)
     } else {
-      addLoss(-delta, { game: 'baccarat' })
+      addLoss(-delta)
     }
+
     setSyncedPnL(sessionPnL)
   }, [mounted, sessionPnL, syncedPnL, addWin, addLoss])
+
 
   const [phase, setPhase] = useState<Phase>('betting')
   const [bets, setBets] = useState<Bets>(() => ({

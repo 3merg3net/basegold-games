@@ -5,112 +5,103 @@ import React, {
   useContext,
   useMemo,
   useState,
-  ReactNode,
 } from 'react'
 
-/**
- * Global demo arcade wallet context.
- * Shared across all arcade games (roulette, blackjack, poker room, etc.).
- */
-
-type ArcadeWalletContextValue = {
-  /** Current demo credits available to spend */
+export type ArcadeWalletContextValue = {
   credits: number
-  /** Starting stack for this session (e.g. 1,000) */
   initialCredits: number
-  /** Lifetime net across all arcade games (wins - losses) */
   net: number
-  /** Number of full resets / rebuys */
+  spins: number
+  wins: number
   resets: number
-
-  /**
-   * Record a straight win (e.g. player wins +X credits).
-   * Used by games like blackjack that just call addWin/addLoss.
-   */
-  addWin: (amount: number, meta?: { game?: string }) => void
-
-  /**
-   * Record a straight loss (e.g. player loses X credits).
-   */
-  addLoss: (amount: number, meta?: { game?: string }) => void
-
-  /**
-   * Record a spin/round with explicit wager + payout.
-   * Used by roulette where you know both numbers.
-   */
-  recordSpin: (wager: number, payout: number) => void
-
-  /**
-   * Fully reset the wallet to the initial stack and zero net.
-   * Also increments the `resets` counter.
-   */
+  recordSpin: (opts: { wager: number; payout: number }) => void
   resetWallet: () => void
-
-  /**
-   * Alias for resetWallet so HUDs can call `recordReset()`.
-   */
   recordReset: () => void
+  // ✅ extra helpers used by some games (e.g. BaccaratDemo)
+  addWin: (amount: number) => void
+  addLoss: (amount: number) => void
 }
 
 const ArcadeWalletContext = createContext<ArcadeWalletContextValue | null>(null)
 
-type ProviderProps = {
-  children: ReactNode
-  /** Optional override for initial stack (default 1000) */
-  initialStack?: number
+// ✅ Safe fallback so using the hook without a provider
+// during prerender *does not* crash the build.
+function useArcadeWalletFallback(): ArcadeWalletContextValue {
+  return {
+    credits: 0,
+    initialCredits: 0,
+    net: 0,
+    spins: 0,
+    wins: 0,
+    resets: 0,
+    recordSpin: () => {},
+    resetWallet: () => {},
+    recordReset: () => {},
+    addWin: () => {},
+    addLoss: () => {},
+  }
 }
 
-export function ArcadeWalletProvider({
-  children,
-  initialStack = 1000,
-}: ProviderProps) {
-  const [initialCredits] = useState(initialStack)
-  const [credits, setCredits] = useState(initialStack)
+export function ArcadeWalletProvider({ children }: { children: React.ReactNode }) {
+  const [initialCredits] = useState(10_000)
+  const [credits, setCredits] = useState(initialCredits)
   const [net, setNet] = useState(0)
+  const [spins, setSpins] = useState(0)
+  const [wins, setWins] = useState(0)
   const [resets, setResets] = useState(0)
 
-  const addWin = (amount: number, _meta?: { game?: string }) => {
-    if (amount <= 0) return
-    setCredits(c => c + amount)
-    setNet(n => n + amount)
-  }
+  // generic “spin” record (used by most games)
+  const recordSpin: ArcadeWalletContextValue['recordSpin'] = ({ wager, payout }) => {
+    setCredits(prev => prev - wager + payout)
 
-  const addLoss = (amount: number, _meta?: { game?: string }) => {
-    if (amount <= 0) return
-    setCredits(c => Math.max(0, c - amount))
-    setNet(n => n - amount)
-  }
-
-  const recordSpin = (wager: number, payout: number) => {
     const delta = payout - wager
-    if (!Number.isFinite(delta) || isNaN(delta)) return
-    setCredits(c => Math.max(0, c + delta))
-    setNet(n => n + delta)
+    setNet(prev => prev + delta)
+    setSpins(prev => prev + 1)
+    if (delta > 0) setWins(prev => prev + 1)
+  }
+
+  // baccarat-style helpers: explicit win/loss
+  const addWin: ArcadeWalletContextValue['addWin'] = (amount: number) => {
+    if (amount <= 0) return
+    setCredits(prev => prev + amount)
+    setNet(prev => prev + amount)
+    setSpins(prev => prev + 1)
+    setWins(prev => prev + 1)
+  }
+
+  const addLoss: ArcadeWalletContextValue['addLoss'] = (amount: number) => {
+    if (amount <= 0) return
+    setCredits(prev => Math.max(0, prev - amount))
+    setNet(prev => prev - amount)
+    setSpins(prev => prev + 1)
+    // no win increment on a loss
   }
 
   const resetWallet = () => {
     setCredits(initialCredits)
     setNet(0)
-    setResets(r => r + 1)
+    setSpins(0)
+    setWins(0)
+    setResets(prev => prev + 1)
   }
 
-  const recordReset = () => {
-    resetWallet()
-  }
+  const recordReset = () => setResets(prev => prev + 1)
 
   const value: ArcadeWalletContextValue = useMemo(
     () => ({
       credits,
       initialCredits,
       net,
+      spins,
+      wins,
       resets,
-      addWin,
-      addLoss,
       recordSpin,
       resetWallet,
       recordReset,
+      addWin,
+      addLoss,
     }),
-    [credits, initialCredits, net, resets]
+    [credits, initialCredits, net, spins, wins, resets]
   )
 
   return (
@@ -122,8 +113,5 @@ export function ArcadeWalletProvider({
 
 export function useArcadeWallet(): ArcadeWalletContextValue {
   const ctx = useContext(ArcadeWalletContext)
-  if (!ctx) {
-    throw new Error('useArcadeWallet must be used within ArcadeWalletProvider')
-  }
-  return ctx
+  return ctx ?? useArcadeWalletFallback()
 }

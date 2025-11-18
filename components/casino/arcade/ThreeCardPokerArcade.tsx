@@ -183,13 +183,16 @@ export default function ThreeCardPokerArcade() {
 
   // sync table PnL into global arcade stack
   useEffect(() => {
-    if (!mounted) return
-    const delta = sessionPnL - syncedPnL
-    if (delta === 0) return
-    if (delta > 0) addWin(delta, { game: 'three-card-poker' })
-    else addLoss(-delta, { game: 'three-card-poker' })
-    setSyncedPnL(sessionPnL)
-  }, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
+  if (!mounted) return
+  const delta = sessionPnL - syncedPnL
+  if (delta === 0) return
+
+  if (delta > 0) addWin(delta)
+  else addLoss(-delta)
+
+  setSyncedPnL(sessionPnL)
+}, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
+
 
   const [phase, setPhase] = useState<Phase>('betting')
   const [seatCount, setSeatCount] = useState(3)

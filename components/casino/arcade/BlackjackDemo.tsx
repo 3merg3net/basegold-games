@@ -102,19 +102,19 @@ export default function BlackjackDemo() {
   const [syncedPnL, setSyncedPnL] = useState(0)
 
   // Sync blackjack P&L into global arcade wallet
-  useEffect(() => {
+    useEffect(() => {
     if (!mounted) return
     const delta = sessionPnL - syncedPnL
     if (delta === 0) return
 
     if (delta > 0) {
-      addWin(delta, { game: 'blackjack' })
+      addWin(delta)
     } else {
-      addLoss(-delta, { game: 'blackjack' })
+      addLoss(-delta)
     }
-
     setSyncedPnL(sessionPnL)
-  }, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
+  }, [mounted, sessionPnL, syncedPnL, addWin, addLoss])
+
 
   const [baseBet, setBaseBet] = useState(10)
   const MIN_BET = 1

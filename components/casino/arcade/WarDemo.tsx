@@ -78,17 +78,14 @@ export default function WarDemo() {
 
   // Sync table PnL to arcade wallet
   useEffect(() => {
-    if (!mounted) return
-    const delta = sessionPnL - syncedPnL
-    if (delta === 0) return
+  if (!mounted) return
+  const delta = sessionPnL - syncedPnL
+  if (delta === 0) return
+  if (delta > 0) addWin(delta)
+  else addLoss(-delta)
+  setSyncedPnL(sessionPnL)
+}, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
 
-    if (delta > 0) {
-      addWin(delta, { game: 'war' })
-    } else {
-      addLoss(-delta, { game: 'war' })
-    }
-    setSyncedPnL(sessionPnL)
-  }, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
 
   const [baseBet, setBaseBet] = useState(10)
   const MIN_BET = 1

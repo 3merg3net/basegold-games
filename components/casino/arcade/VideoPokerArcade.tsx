@@ -154,8 +154,9 @@ export default function VideoPokerArcade() {
     if (!mounted) return
     const delta = sessionPnL - syncedPnL
     if (delta === 0) return
-    if (delta > 0) addWin(delta, { game: 'video-poker' })
-    else addLoss(-delta, { game: 'video-poker' })
+    if (delta > 0) addWin(delta)
+else addLoss(-delta)
+
     setSyncedPnL(sessionPnL)
   }, [mounted, sessionPnL, syncedPnL, addWin, addLoss])
 

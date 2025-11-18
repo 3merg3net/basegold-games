@@ -124,7 +124,8 @@ export default function PanGameV2() {
   const minBet: bigint =
     typeof minRaw === 'bigint' ? minRaw : parseUnits('0.01', 18)
   const maxBet: bigint =
-    typeof maxRaw === 'bigint' ? maxRaw : parseUnits('1_000_000', 18)
+  typeof maxRaw === 'bigint' ? maxRaw : parseUnits('1000000', 18)
+
   const minB = Number(formatUnits(minBet, 18))
   const maxB = Number(formatUnits(maxBet, 18))
   const outOfBounds = bet < minB || bet > maxB

@@ -3,9 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
-
-
-
 /** European wheel numbers in order */
 const WHEEL_NUMBERS = [
   0,
@@ -141,15 +138,7 @@ function getPayoutMultiplier(bet: Bet, result: number): number {
 }
 
 export default function RouletteArcadeMachine() {
-  // demo credits (no wallet)
-      const {
-  credits,
-  initialCredits,
-  recordSpin,
-} = useArcadeWallet()
-
-
-
+  const { credits, initialCredits, recordSpin } = useArcadeWallet()
 
   const [bets, setBets] = useState<Bet[]>([])
   const [currentChip, setCurrentChip] = useState(5)
@@ -160,7 +149,9 @@ export default function RouletteArcadeMachine() {
   const [resultNumber, setResultNumber] = useState<number | null>(null)
   const [status, setStatus] = useState('Place your bets and press SPIN.')
   const [lastWin, setLastWin] = useState(0)
-  const [lastResultColor, setLastResultColor] = useState<'RED' | 'BLACK' | 'GREEN' | null>(null)
+  const [lastResultColor, setLastResultColor] = useState<
+    'RED' | 'BLACK' | 'GREEN' | null
+  >(null)
   const [history, setHistory] = useState<number[]>([])
 
   const totalBet = useMemo(
@@ -168,14 +159,17 @@ export default function RouletteArcadeMachine() {
     [bets]
   )
 
-  const sessionPnL = useMemo(() => credits - initialCredits, [credits, initialCredits])
+  const sessionPnL = useMemo(
+    () => credits - initialCredits,
+    [credits, initialCredits]
+  )
 
   const addBet = (bet: Omit<Bet, 'amount'>) => {
     if (spinning) return
     if (currentChip <= 0) return
 
     setBets(prev => {
-      // for STRAIGHT, merge on same number
+      // STRAIGHT: merge on same number
       if (bet.type === 'STRAIGHT') {
         const idx = prev.findIndex(
           b => b.type === 'STRAIGHT' && b.number === bet.number
@@ -191,7 +185,7 @@ export default function RouletteArcadeMachine() {
         return [...prev, { ...bet, amount: currentChip }]
       }
 
-      // for single outside bet types, merge by type
+      // outside bets: merge by type
       const idx = prev.findIndex(b => b.type === bet.type)
       if (idx >= 0) {
         const next = [...prev]
@@ -213,7 +207,7 @@ export default function RouletteArcadeMachine() {
     setLastWin(0)
   }
 
-    const spin = () => {
+  const spin = () => {
     if (spinning) return
     if (totalBet <= 0) {
       setStatus('No bets placed. Tap the board to add chips.')
@@ -252,8 +246,10 @@ export default function RouletteArcadeMachine() {
         }
       }
 
-      // update global demo wallet
-      recordSpin(totalBet, totalPayout)
+      // ✅ update global arcade wallet
+     // update global demo wallet
+recordSpin({ wager: totalBet, payout: totalPayout })
+
 
       const net = totalPayout - totalBet
       setLastWin(net)
@@ -278,13 +274,12 @@ export default function RouletteArcadeMachine() {
       }
 
       setSpinning(false)
-      // optional: keep bets for "repeat" or clear here
+      // keep bets if you want "repeat"
       // setBets([])
     }, 3200)
   }
 
-
-      const resetCredits = () => {
+  const resetCredits = () => {
     if (spinning) return
 
     // Local table reset only — demo wallet balance stays as-is
@@ -293,10 +288,8 @@ export default function RouletteArcadeMachine() {
     setResultNumber(null)
     setLastResultColor(null)
     setStatus('Table cleared. Demo credits unchanged.')
-    setBets([]) // optional, if you want to wipe bets too
+    setBets([])
   }
-
-
 
   const getStraightBetFor = (num: number) =>
     bets.find(b => b.type === 'STRAIGHT' && b.number === num)
@@ -439,26 +432,24 @@ export default function RouletteArcadeMachine() {
                   </g>
 
                   {/* BALL */}
-                  {true && (
-                    <g
-                      style={{
-                        transformOrigin: '50% 50%',
-                        transform: `rotate(${ballAngle}deg)`,
-                        transition: spinning
-                          ? 'transform 3.2s cubic-bezier(.18,.7,.26,1.05)'
-                          : undefined,
-                      }}
-                    >
-                      <circle
-                        cx="100"
-                        cy="32"
-                        r="5.5"
-                        fill="#f9fafb"
-                        stroke="#e5e7eb"
-                        strokeWidth="1"
-                      />
-                    </g>
-                  )}
+                  <g
+                    style={{
+                      transformOrigin: '50% 50%',
+                      transform: `rotate(${ballAngle}deg)`,
+                      transition: spinning
+                        ? 'transform 3.2s cubic-bezier(.18,.7,.26,1.05)'
+                        : undefined,
+                    }}
+                  >
+                    <circle
+                      cx="100"
+                      cy="32"
+                      r="5.5"
+                      fill="#f9fafb"
+                      stroke="#e5e7eb"
+                      strokeWidth="1"
+                    />
+                  </g>
                 </svg>
               </div>
             </div>
@@ -735,10 +726,15 @@ export default function RouletteArcadeMachine() {
               disabled={spinning}
               className="w-full h-11 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-sm font-extrabold tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(250,204,21,0.9)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {spinning ? 'Spinning…' : totalBet > 0 ? 'Spin Wheel' : 'Place Bet & Spin'}
+              {spinning
+                ? 'Spinning…'
+                : totalBet > 0
+                ? 'Spin Wheel'
+                : 'Place Bet & Spin'}
             </button>
             <div className="mt-1 text-[10px] text-emerald-100/80 text-center">
-              Demo arcade – no real BGLD used. On-chain contract versions will be deployed separately.
+              Demo arcade – no real BGLD used. On-chain contract versions
+              will be deployed separately.
             </div>
           </div>
         </div>
@@ -810,7 +806,9 @@ function BetPill({
       ].join(' ')}
     >
       <span>{label}</span>
-      <span className="text-[10px] text-emerald-100/80">{subtitle}</span>
+      <span className="text-[10px] text-emerald-100/80">
+        {subtitle}
+      </span>
     </button>
   )
 }
@@ -838,7 +836,9 @@ function DozenButton({
     >
       <span className="text-[11px] font-semibold">{label}</span>
       <span className="text-[10px] text-emerald-100/80">{range}</span>
-      <span className="text-[9px] text-emerald-200/80 mt-0.5">2:1</span>
+      <span className="text-[9px] text-emerald-200/80 mt-0.5">
+        2:1
+      </span>
     </button>
   )
 }
@@ -866,7 +866,9 @@ function ColumnButton({
     >
       <span className="text-[11px] font-semibold">{label}</span>
       <span className="text-[10px] text-emerald-100/80">{sub}</span>
-      <span className="text-[9px] text-emerald-200/80 mt-0.5">2:1</span>
+      <span className="text-[9px] text-emerald-200/80 mt-0.5">
+        2:1
+      </span>
     </button>
   )
 }

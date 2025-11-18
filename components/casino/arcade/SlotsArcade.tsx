@@ -131,7 +131,10 @@ type LineWin = {
   payout: number
 }
 
-function evaluateGrid(grid: SpinGrid, betPerLine: number): { totalWin: number; lineWins: LineWin[] } {
+function evaluateGrid(
+  grid: SpinGrid,
+  betPerLine: number
+): { totalWin: number; lineWins: LineWin[] } {
   const lineWins: LineWin[] = []
   let totalWin = 0
 
@@ -241,10 +244,6 @@ export default function SlotsArcade() {
     setLastBet(totalBet)
     setLastWin(0)
 
-    // deduct immediately from arcade + local session
-    addLoss(totalBet, { game: 'slots-arcade' })
-    setSessionPnL(prev => prev - totalBet)
-
     const finalGrid = randomGrid()
     const { totalWin, lineWins } = evaluateGrid(finalGrid, betPerLine)
 
@@ -254,10 +253,19 @@ export default function SlotsArcade() {
       setSpinning(false)
       setLastWin(totalWin)
 
-      if (totalWin > 0) {
-        addWin(totalWin, { game: 'slots-arcade' })
-        setSessionPnL(prev => prev + totalWin)
+      const net = totalWin - totalBet
 
+      // ✅ sync to arcade wallet as *net* result
+      if (net > 0) {
+        addWin(net)
+      } else if (net < 0) {
+        addLoss(-net)
+      }
+
+      // local session PnL
+      setSessionPnL(prev => prev + net)
+
+      if (totalWin > 0) {
         const mult = totalWin / totalBet
         if (mult >= 25) {
           setBanner('MEGA WIN')
@@ -296,7 +304,11 @@ export default function SlotsArcade() {
           </div>
           <div>
             Slots Session:{' '}
-            <span className={sessionPnL >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+            <span
+              className={
+                sessionPnL >= 0 ? 'text-emerald-300' : 'text-rose-300'
+              }
+            >
               {sessionPnL >= 0 ? '+' : ''}
               {sessionPnL.toFixed(2)} BGRC
             </span>
@@ -320,8 +332,16 @@ export default function SlotsArcade() {
           </span>
           <span>
             Last Win:{' '}
-            <span className={lastWin > 0 ? 'text-emerald-300 font-semibold' : 'text-white/60'}>
-              {lastWin > 0 ? `+${lastWin.toLocaleString()} BGRC` : '—'}
+            <span
+              className={
+                lastWin > 0
+                  ? 'text-emerald-300 font-semibold'
+                  : 'text-white/60'
+              }
+            >
+              {lastWin > 0
+                ? `+${lastWin.toLocaleString()} BGRC`
+                : '—'}
             </span>
           </span>
         </div>
@@ -347,16 +367,18 @@ export default function SlotsArcade() {
                       ? 'border-[#facc15] shadow-[0_0_20px_rgba(250,204,21,0.8)]'
                       : 'border-slate-700/70',
                   ].join(' ')}
-                  style={{
-                    height: 72,
-                  }}
+                  style={{ height: 72 }}
                 >
                   <div
                     className="flex items-center justify-center w-full h-full select-none"
                     style={{
                       transform: `scale(${scale})`,
-                      filter: blur ? `blur(${blur.toFixed(1)}px)` : undefined,
-                      transition: spinning ? 'none' : 'transform 0.12s ease-out',
+                      filter: blur
+                        ? `blur(${blur.toFixed(1)}px)`
+                        : undefined,
+                      transition: spinning
+                        ? 'none'
+                        : 'transform 0.12s ease-out',
                     }}
                   >
                     {def.kind === 'logo' ? (
@@ -397,7 +419,11 @@ export default function SlotsArcade() {
             </span>
             <span>
               Arcade Net:{' '}
-              <span className={arcadeNet >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+              <span
+                className={
+                  arcadeNet >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                }
+              >
                 {arcadeNet >= 0 ? '+' : ''}
                 {arcadeNet.toFixed(2)} BGRC
               </span>
@@ -507,8 +533,8 @@ export default function SlotsArcade() {
           Gold Rush Slots (Demo)
         </div>
         <div className="mt-1 text-xs text-white/70">
-          Front-end only video slot to model Base Gold Rush multipliers before
-          we launch full on-chain slots contracts on Base mainnet.
+          Front-end only video slot to model Base Gold Rush multipliers
+          before we launch full on-chain slots contracts on Base mainnet.
         </div>
       </div>
 
@@ -534,7 +560,9 @@ export default function SlotsArcade() {
                   )}
                 </div>
                 <div className="flex flex-col">
-                  <span className={`text-[11px] font-semibold ${sym.colorClass}`}>
+                  <span
+                    className={`text-[11px] font-semibold ${sym.colorClass}`}
+                  >
                     {sym.label}
                   </span>
                   <span className="text-[10px] text-white/50">
@@ -556,9 +584,12 @@ export default function SlotsArcade() {
           ))}
         </div>
         <div className="pt-1 text-[10px] text-white/50">
-          Multipliers apply to <span className="font-semibold text-[#facc15]">bet per line</span>.
-          Demo only — real BGLD / BGRC slots will mirror this structure with
-          verifiable randomness and Base mainnet settlement.
+          Multipliers apply to{' '}
+          <span className="font-semibold text-[#facc15]">
+            bet per line
+          </span>
+          . Demo only — real BGLD / BGRC slots will mirror this structure
+          with verifiable randomness and Base mainnet settlement.
         </div>
       </div>
     </div>
