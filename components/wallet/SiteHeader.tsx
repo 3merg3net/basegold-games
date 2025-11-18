@@ -36,43 +36,48 @@ export default function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/70 backdrop-blur-lg">
-      <div className="
-        mx-auto max-w-7xl
-        flex items-center justify-between 
-        px-4 py-3 gap-4
-      ">
-        
-        {/* LEFT — LARGE LOGO */}
-        <Link 
-          href="/" 
-          className="flex items-center gap-3 group"
+      <div
+        className="
+          mx-auto max-w-7xl
+          flex items-center justify-between 
+          px-4 py-3 gap-4
+        "
+      >
+        {/* LEFT — LOGO */}
+        <Link
+          href="/"
+          className="flex items-center gap-2 sm:gap-3 group"
         >
-          <Image
-            src="/images/goldrush-icon-V2.png"
-            alt="Base Gold Rush Icon"
-            width={48}
-            height={48}
-            className="rounded group-hover:scale-105 transition-transform"
-          />
-          <span 
+          <div className="relative h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
+            <Image
+              src="/images/goldrush-icon-V2.png"
+              alt="Base Gold Rush Icon"
+              fill
+              sizes="40px"
+              className="rounded object-contain group-hover:scale-105 transition-transform"
+              priority
+            />
+          </div>
+          <span
             className="
-              hidden sm:inline 
-              font-extrabold tracking-widest 
-              text-[#FFD700] text-xl md:text-2xl
+              text-sm sm:text-base 
+              font-extrabold tracking-[0.24em]
+              text-[#FFD700]
               group-hover:text-white transition-colors
+              uppercase
             "
           >
             BASE GOLD RUSH
           </span>
         </Link>
 
-        {/* CENTER — NAV */}
+        {/* CENTER — NAV (desktop only) */}
         <div className="hidden md:flex flex-1 justify-center">
           <NavBar />
         </div>
 
         {/* RIGHT — WALLET + BADGE */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <span className={`${netClass} hidden md:inline`}>{netLabel}</span>
 
           <div className={mounted ? '' : 'opacity-40 pointer-events-none'}>
@@ -85,8 +90,6 @@ export default function SiteHeader() {
             showBalance={false}
           />
         </div>
-
-        {/* MOBILE NAV UNDER LOGO */}
       </div>
 
       {/* Mobile Nav Row */}

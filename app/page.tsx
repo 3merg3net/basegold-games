@@ -3,9 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { ArcadeWalletProvider } from '@/lib/useArcadeWallet'
 import ArcadeWalletHUD from '@/components/casino/arcade/ArcadeWalletHUD'
-
 import CashierComingSoonModal from '@/components/casino/CashierComingSoonModal'
-
 
 const TOKEN_SYMBOL = process.env.NEXT_PUBLIC_TOKEN_SYMBOL ?? 'BGRC'
 const TOKEN_NAME = process.env.NEXT_PUBLIC_TOKEN_NAME ?? 'Base Gold Rush Chip'
@@ -192,11 +190,11 @@ const arcadeGames = games.filter(g => g.mode === 'arcade')
 const featuredGameHrefs = ['/play/slots-v2', '/play/blackjack', '/play/roulette']
 const featuredGames = onchainGames.filter(g => featuredGameHrefs.includes(g.href))
 
-// GOLD BAR HERO (replaces spinning chip image)
+// GOLD BAR HERO
 function SpinningChipHero() {
   return (
     <div className="relative flex flex-col items-center justify-center">
-      {/* HERO BACKGROUND OVERLAY (same as before) */}
+      {/* HERO BACKGROUND OVERLAY BEHIND BAR */}
       <div className="pointer-events-none absolute inset-0 opacity-35">
         <Image
           src="/images/goldrush-hero-v2.png"
@@ -208,12 +206,12 @@ function SpinningChipHero() {
       </div>
 
       {/* WRAPPER — keeps everything aligned */}
-      <div className="relative w-[380px] md:w-[520px]">
+      <div className="relative w-[260px] sm:w-[320px] md:w-[520px]">
         {/* PEDESTAL / BACKPLATE */}
         <div
           className="
             relative flex items-center justify-center
-            h-[260px] md:h-[340px]
+            h-[220px] sm:h-[260px] md:h-[340px]
             rounded-3xl overflow-hidden
             border border-[#FFD700]/30
             shadow-[0_30px_90px_rgba(0,0,0,0.95)]
@@ -227,11 +225,10 @@ function SpinningChipHero() {
           }}
         >
           {/* Soft gold glow under bar */}
-          <div className="pointer-events-none absolute h-44 w-44 md:h-56 md:w-56 rounded-full bg-[rgba(255,215,0,0.28)] blur-3xl" />
+          <div className="pointer-events-none absolute h-40 w-40 sm:h-44 sm:w-44 md:h-56 md:w-56 rounded-full bg-[rgba(255,215,0,0.28)] blur-3xl" />
 
-          {/* SINGLE ROTATING GOLD BAR */}
-                    {/* GOLD BAR HERO (rocking, not spinning) */}
-          <div className="relative h-52 w-52 md:h-72 md:w-72 flex items-center justify-center">
+          {/* GOLD BAR HERO (rocking, not spinning) */}
+          <div className="relative h-44 w-44 sm:h-52 sm:w-52 md:h-72 md:w-72 flex items-center justify-center">
             <Image
               src="/images/base-logo-light.png"
               alt="Base Gold Rush gold bar"
@@ -241,7 +238,6 @@ function SpinningChipHero() {
               className="gold-bar-rock drop-shadow-[0_28px_70px_rgba(0,0,0,0.98)] select-none object-contain"
             />
           </div>
-
         </div>
 
         {/* HUD UNDER BAR */}
@@ -263,9 +259,9 @@ function SpinningChipHero() {
               Testnet Live
             </span>
           </div>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between gap-2">
             <span className="text-white font-semibold">Base Gold Rush</span>
-            <span className="text-[#FFD700] text-[11px] font-bold">
+            <span className="text-[#FFD700] text-[11px] font-bold text-right">
               Demo Arcade → On-Chain Casino
             </span>
           </div>
@@ -274,7 +270,6 @@ function SpinningChipHero() {
     </div>
   )
 }
-
 
 function GameCardTile({
   game,
@@ -292,7 +287,7 @@ function GameCardTile({
     >
       {/* BIG ICON */}
       <div className="w-full flex items-center justify-center mb-3">
-        <div className="relative w-[160px] h-[160px] md:w-[200px] md:h-[200px]">
+        <div className="relative w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] md:w-[200px] md:h-[200px]">
           <Image
             src={game.icon}
             alt={`${game.label} icon`}
@@ -344,7 +339,10 @@ export default function HomePage() {
 
       {/* HERO */}
       <section
-        className="relative overflow-hidden border-b border-white/10 text-white"
+        className="
+          relative overflow-hidden border-b border-white/10 text-white
+          min-h-[calc(100vh-64px)]
+        "
         style={{
           backgroundImage:
             "linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0.70)), url('/images/bg-goldrush-hero-v2.png')",
@@ -356,14 +354,14 @@ export default function HomePage() {
         {/* subtle gold/blue overlay */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.18),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.14),_transparent_50%)]" />
 
-        <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 md:flex-row md:items-center md:py-14">
+        <div className="relative z-10 mx-auto flex min-h-[520px] max-w-6xl flex-col gap-8 px-4 py-8 md:flex-row md:items-center md:py-14">
           <div className="flex-1 space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD700]/40 bg-black/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#FFD700]/90">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD700]/40 bg-black/60 px-3 py-1 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-[#FFD700]/90">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Base Gold Rush • On-Chain Casino & Arcade
             </div>
 
-            <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow md:text-5xl">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white drop-shadow">
               Welcome to the <span className="text-[#FFD700]">Base Gold Rush</span>.
             </h1>
 
@@ -372,14 +370,14 @@ export default function HomePage() {
               <div className="mx-auto max-w-6xl">
                 <Link
                   href="/base-sepolia-guide"
-                  className="block rounded-2xl border border-sky-400/40 bg-[radial-gradient(circle_at_left,_rgba(56,189,248,0.22),_transparent_60%),#020617] px-6 py-4 shadow-[0_0_20px_rgba(56,189,248,0.4)] hover:brightness-110 transition-all duration-200"
+                  className="block rounded-2xl border border-sky-400/40 bg-[radial-gradient(circle_at_left,_rgba(56,189,248,0.22),_transparent_60%),#020617] px-4 py-3 sm:px-6 sm:py-4 shadow-[0_0_20px_rgba(56,189,248,0.4)] hover:brightness-110 transition-all duration-200"
                 >
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div className="text-sm md:text-base font-semibold text-sky-300">
+                    <div className="text-xs sm:text-sm md:text-base font-semibold text-sky-300">
                       🧭 New to Base Sepolia? Learn how to add the network, get testnet ETH,
                       and claim {TOKEN_SYMBOL} chips.
                     </div>
-                    <div className="text-xs md:text-sm font-bold text-white bg-sky-500/20 border border-sky-300/40 px-3 py-1 rounded-full">
+                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-white bg-sky-500/20 border border-sky-300/40 px-3 py-1 rounded-full text-center">
                       Read the Guide →
                     </div>
                   </div>
@@ -401,7 +399,7 @@ export default function HomePage() {
 
             {/* 3-STAGE PIPELINE STRIP */}
             <div className="mt-3 grid gap-2 text-[11px] md:text-xs">
-              <div className="rounded-xl border border-white/10 bg-black/60 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="rounded-xl border border-white/10 bg-black/60 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="font-semibold text-emerald-300">
                   Phase 1 — Live Now
                 </div>
@@ -409,7 +407,7 @@ export default function HomePage() {
                   On-chain testnet casino on Base Sepolia with {TOKEN_SYMBOL} chips.
                 </div>
               </div>
-              <div className="rounded-xl border border-emerald-400/40 bg-emerald-900/40 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="rounded-xl border border-emerald-400/40 bg-emerald-900/40 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="font-semibold text-emerald-200">
                   Phase 2 — Demo Arcade
                 </div>
@@ -418,7 +416,7 @@ export default function HomePage() {
                   UX, and multipliers before final contracts.
                 </div>
               </div>
-              <div className="rounded-xl border border-[#FFD700]/50 bg-[#1f2937]/80 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="rounded-xl border border-[#FFD700]/50 bg-[#1f2937]/80 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="font-semibold text-[#FFD700]">
                   Phase 3 — Base Mainnet
                 </div>
@@ -482,7 +480,7 @@ export default function HomePage() {
           </div>
 
           {/* Hero gold bar pedestal + sprite */}
-          <div className="relative z-0 flex-1 flex items-center justify-center">
+          <div className="relative z-0 flex-1 flex items-center justify-center mt-4 md:mt-0">
             <SpinningChipHero />
           </div>
         </div>
@@ -548,14 +546,11 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Arcade hero banner card */}
+        {/* Arcade hero banner card (responsive height) */}
         <div
-          className="rounded-3xl overflow-hidden border border-white/10 shadow-xl mb-6"
+          className="rounded-3xl overflow-hidden border border-white/10 shadow-xl mb-6 h-40 sm:h-52 md:h-60 lg:h-64 bg-cover bg-center"
           style={{
             backgroundImage: "url('/images/arcade-hero-v2.png')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            height: '240px',
           }}
         />
 
@@ -575,7 +570,7 @@ export default function HomePage() {
               {/* DEMO WALLET HUD */}
               <ArcadeWalletHUD />
 
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {arcadeGames.map(game => (
                   <GameCardTile
                     key={game.href}
@@ -593,7 +588,7 @@ export default function HomePage() {
           <h3 className="text-[12px] font-semibold uppercase tracking-[0.2em] text-white/60 mb-2">
             On-Chain Games (Base Sepolia)
           </h3>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {onchainGames.map(game => (
               <GameCardTile
                 key={game.href}
