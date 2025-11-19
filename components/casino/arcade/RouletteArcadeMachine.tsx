@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
 /** European wheel numbers in order */
@@ -83,7 +83,6 @@ function isInDozen(n: number, dozen: 1 | 2 | 3) {
 
 function isInColumn(n: number, column: 1 | 2 | 3) {
   if (n === 0) return false
-  // Column 1: 1,4,7,... ; Column 2: 2,5,8,... ; Column 3: 3,6,9,...
   const mod = n % 3
   if (column === 1) return mod === 1
   if (column === 2) return mod === 2
@@ -169,7 +168,6 @@ export default function RouletteArcadeMachine() {
     if (currentChip <= 0) return
 
     setBets(prev => {
-      // STRAIGHT: merge on same number
       if (bet.type === 'STRAIGHT') {
         const idx = prev.findIndex(
           b => b.type === 'STRAIGHT' && b.number === bet.number
@@ -185,7 +183,6 @@ export default function RouletteArcadeMachine() {
         return [...prev, { ...bet, amount: currentChip }]
       }
 
-      // outside bets: merge by type
       const idx = prev.findIndex(b => b.type === bet.type)
       if (idx >= 0) {
         const next = [...prev]
@@ -228,16 +225,17 @@ export default function RouletteArcadeMachine() {
     const segment = 360 / WHEEL_NUMBERS.length
     const centerOffset = segment / 2
     const targetAngle = idx * segment + centerOffset
-    const totalRotation = 5 * 360 + targetAngle
+    const totalRotation = 5 * 360 + targetAngle // long spin every time
 
-    // wheel + ball animation
+    // reset angles, then animate so every spin feels full and fresh
+    setAngle(0)
+    setBallAngle(0)
     requestAnimationFrame(() => {
       setAngle(-totalRotation)
-      setBallAngle(prev => prev + 720)
+      setBallAngle(720) // two full orbits
     })
 
     setTimeout(() => {
-      // compute payouts
       let totalPayout = 0
       for (const b of bets) {
         const mul = getPayoutMultiplier(b, n)
@@ -246,7 +244,6 @@ export default function RouletteArcadeMachine() {
         }
       }
 
-      // update global demo wallet
       recordSpin({ wager: totalBet, payout: totalPayout })
 
       const net = totalPayout - totalBet
@@ -272,8 +269,6 @@ export default function RouletteArcadeMachine() {
       }
 
       setSpinning(false)
-      // keep bets if you want "repeat"
-      // setBets([])
     }, 3200)
   }
 
@@ -302,8 +297,8 @@ export default function RouletteArcadeMachine() {
             Golden Wheel Roulette <span className="text-[#facc15]">• Arcade</span>
           </div>
           <div className="text-xs text-white/60 mt-1 max-w-sm">
-            European wheel. Free demo credits only. Same multipliers you&apos;ll see
-            on the on-chain roulette table.
+            European wheel. Free demo credits only. Same multipliers
+            you&apos;ll see on the on-chain roulette table.
           </div>
         </div>
         <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
@@ -325,7 +320,7 @@ export default function RouletteArcadeMachine() {
 
       {/* MAIN: WHEEL LEFT, BOARD RIGHT (STACK ON MOBILE) */}
       <div className="grid gap-5 lg:grid-cols-[minmax(320px,1.05fr)_minmax(260px,0.95fr)]">
-        {/* LEFT: WHEEL + STATUS */}
+        {/* LEFT: WHEEL + SPIN + STATUS */}
         <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-4 md:p-5 space-y-3">
           <div className="flex items-center justify-between text-[11px] mb-1">
             <div className="uppercase tracking-[0.3em] text-white/60">
@@ -336,6 +331,7 @@ export default function RouletteArcadeMachine() {
             </div>
           </div>
 
+          {/* WHEEL */}
           <div className="flex justify-center">
             <div className="relative w-full max-w-[320px] sm:max-w-[360px] aspect-square">
               <div className="absolute inset-0 rounded-full bg-[#020617] flex items-center justify-center">
@@ -453,7 +449,25 @@ export default function RouletteArcadeMachine() {
             </div>
           </div>
 
-          {/* STATUS & LAST RESULT */}
+          {/* SPIN BUTTON DIRECTLY UNDER WHEEL */}
+          <div className="pt-1">
+            <button
+              onClick={spin}
+              disabled={spinning}
+              className="w-full h-11 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-sm font-extrabold tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(250,204,21,0.9)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {spinning
+                ? 'Spinning…'
+                : totalBet > 0
+                ? 'Spin Wheel'
+                : 'Place Bet & Spin'}
+            </button>
+            <div className="mt-1 text-[10px] text-emerald-100/80 text-center">
+              Demo arcade only – no real BGLD used here.
+            </div>
+          </div>
+
+          {/* STATUS & LAST RESULT BELOW BUTTON */}
           <div className="rounded-xl border border-white/10 bg-black/50 p-3 text-xs space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] uppercase tracking-[0.25em] text-white/60">
@@ -718,23 +732,8 @@ export default function RouletteArcadeMachine() {
             </div>
           </div>
 
-          {/* SPIN BUTTON */}
-          <div className="pt-1">
-            <button
-              onClick={spin}
-              disabled={spinning}
-              className="w-full h-11 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-sm font-extrabold tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(250,204,21,0.9)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {spinning
-                ? 'Spinning…'
-                : totalBet > 0
-                ? 'Spin Wheel'
-                : 'Place Bet & Spin'}
-            </button>
-            <div className="mt-1 text-[10px] text-emerald-100/80 text-center">
-              Demo arcade only – no real BGLD used. On-chain roulette
-              games will be wired up on a separate page.
-            </div>
+          <div className="text-[10px] text-emerald-100/80 text-center">
+            Tap any number or bet zone to drop your selected chip value.
           </div>
         </div>
       </div>

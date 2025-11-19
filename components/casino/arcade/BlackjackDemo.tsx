@@ -119,9 +119,7 @@ export default function BlackjackDemo() {
   const MIN_BET = 1
   const MAX_BET = 500
 
-  const [seatCount, setSeatCount] = useState(1)
-  const MAX_SEATS = 3
-
+  // single-player table
   const [phase, setPhase] = useState<Phase>('betting')
   const [dealerCards, setDealerCards] = useState<Card[]>([])
   const [dealerReveal, setDealerReveal] = useState(false)
@@ -131,14 +129,12 @@ export default function BlackjackDemo() {
   const [handIdSeq, setHandIdSeq] = useState(1)
 
   const [tableMessage, setTableMessage] = useState<string>(
-    'Set your stake and seats, then hit DEAL to start.'
+    'Set your stake, then hit DEAL to start.'
   )
 
   const [lastNet, setLastNet] = useState(0)
   const [lastPayout, setLastPayout] = useState(0)
   const [lastResultSummary, setLastResultSummary] = useState<string>('—')
-
-  const [banner, setBanner] = useState<string>('')
 
   const priceUsd: number | null = null // plumbing for later
   const approxUsd = (b: number) =>
@@ -146,7 +142,6 @@ export default function BlackjackDemo() {
 
   /* ---------- derived helpers ---------- */
 
-  const activePlayers = players.filter(p => p.wager > 0)
   const currentHand = players[currentIndex] ?? null
 
   const dealerTotal = useMemo(() => handTotal(dealerCards), [dealerCards])
@@ -154,10 +149,7 @@ export default function BlackjackDemo() {
   const stakeReady =
     baseBet >= MIN_BET &&
     baseBet <= MAX_BET &&
-    seatCount > 0 &&
-    credits >= baseBet * seatCount
-
-  const canDeal = phase === 'betting' && stakeReady
+    credits >= baseBet
 
   const canPrimaryDeal = (phase === 'betting' || phase === 'settled') && stakeReady
 
@@ -177,7 +169,7 @@ export default function BlackjackDemo() {
     currentHand!.cards.length === 2 &&
     currentHand!.cards[0].rank === currentHand!.cards[1].rank &&
     !currentHand!.isSplitChild &&
-    players.length < MAX_SEATS &&
+    players.length < 4 &&
     credits >= currentHand!.wager
 
   const canSurrender =
@@ -194,8 +186,7 @@ export default function BlackjackDemo() {
     setPlayers([])
     setCurrentIndex(0)
     setPhase('betting')
-    setTableMessage('Fresh shoe. Set your stake and seats, then DEAL.')
-    setBanner('')
+    setTableMessage('Fresh shoe. Set your stake, then DEAL.')
     setLastNet(0)
     setLastPayout(0)
     setLastResultSummary('—')
@@ -204,31 +195,30 @@ export default function BlackjackDemo() {
   function dealHand() {
     if (!stakeReady) return
 
-    const totalStake = baseBet * seatCount
+    const totalStake = baseBet
     setCredits(c => c - totalStake)
 
-    const newPlayers: PlayerHand[] = []
-    let nextId = handIdSeq
+    // single main seat
+    const c1 = randomCard()
+    const c2 = randomCard()
+    const cards = [c1, c2]
+    const isBJ = isBlackjackHand(cards)
 
-    for (let i = 0; i < seatCount; i++) {
-      const c1 = randomCard()
-      const c2 = randomCard()
-      const cards = [c1, c2]
-      const isBJ = isBlackjackHand(cards)
-
-      newPlayers.push({
-        id: nextId++,
-        cards,
-        wager: baseBet,
-        result: isBJ ? 'BLACKJACK' : null,
-        isDone: isBJ,
-        isBust: false,
-        isBlackjack: isBJ,
-        isDoubled: false,
-        isSplitChild: false,
-        hasActed: false,
-      })
+    const mainHand: PlayerHand = {
+      id: handIdSeq,
+      cards,
+      wager: baseBet,
+      result: isBJ ? 'BLACKJACK' : null,
+      isDone: isBJ,
+      isBust: false,
+      isBlackjack: isBJ,
+      isDoubled: false,
+      isSplitChild: false,
+      hasActed: false,
     }
+
+    const newPlayers: PlayerHand[] = [mainHand]
+    let nextId = handIdSeq + 1
 
     const d1 = randomCard()
     const d2 = randomCard()
@@ -243,14 +233,13 @@ export default function BlackjackDemo() {
     setLastNet(0)
     setLastPayout(0)
     setLastResultSummary('—')
-    setBanner('')
     setPhase('player')
 
+    // Dealer blackjack check
     if (dealerBJ) {
       let netChange = 0
       const resolved: PlayerHand[] = newPlayers.map((ph): PlayerHand => {
         if (ph.isBlackjack) {
-          // push vs dealer BJ
           return { ...ph, result: 'PUSH', isDone: true }
         }
         netChange -= ph.wager
@@ -259,13 +248,13 @@ export default function BlackjackDemo() {
 
       setPlayers(resolved)
       setDealerReveal(true)
-      setCredits(c => c + (baseBet * seatCount) + netChange)
+      setCredits(c => c + totalStake + netChange)
       setSessionPnL(prev => prev + netChange)
       setLastNet(netChange)
       setLastPayout(totalStake + netChange)
       setLastResultSummary(
         netChange === 0
-          ? 'All pushes vs dealer blackjack.'
+          ? 'Push vs dealer blackjack.'
           : `Dealer blackjack • Net ${netChange >= 0 ? '+' : ''}${netChange.toFixed(
               2
             )} BGRC`
@@ -275,7 +264,7 @@ export default function BlackjackDemo() {
       return
     }
 
-    // pay immediate player blackjacks
+    // pay immediate player blackjack
     let netChange = 0
     const updated: PlayerHand[] = newPlayers.map((ph): PlayerHand => {
       if (ph.isBlackjack) {
@@ -288,7 +277,7 @@ export default function BlackjackDemo() {
     })
 
     if (netChange !== 0) {
-      setCredits(c => c + (baseBet * seatCount) + netChange)
+      setCredits(c => c + totalStake + netChange)
       setSessionPnL(prev => prev + netChange)
       setLastNet(netChange)
       setLastPayout(totalStake + netChange)
@@ -298,10 +287,11 @@ export default function BlackjackDemo() {
           : 'All hands in action.'
       )
     } else {
-      setCredits(c => c + baseBet * seatCount)
+      setCredits(c => c + totalStake)
     }
 
     setPlayers(updated)
+
     const firstIdx = updated.findIndex(p => !p.isDone)
     if (firstIdx === -1) {
       setDealerReveal(true)
@@ -310,7 +300,7 @@ export default function BlackjackDemo() {
     } else {
       setPhase('player')
       setCurrentIndex(firstIdx)
-      setTableMessage(`Hand ${firstIdx + 1}: Hit, Stand, Double, Split, or Surrender.`)
+      setTableMessage('Your hand: Hit, Stand, Double, Split, or Surrender.')
     }
   }
 
@@ -566,7 +556,7 @@ export default function BlackjackDemo() {
     newHands.splice(idx + 1, 0, second)
     setHandIdSeq(prev => prev + 1)
     setPlayers(newHands)
-    setTableMessage(`Hand ${idx + 1} split. Play left hand first.`)
+    setTableMessage('Hand split. Play left hand first.')
   }
 
   function handleNewHand() {
@@ -575,16 +565,13 @@ export default function BlackjackDemo() {
     setDealerReveal(false)
     setPhase('betting')
     setCurrentIndex(0)
-    setTableMessage('Set your stake and seats, then hit DEAL to start.')
-    setBanner('')
+    setTableMessage('Set your stake, then hit DEAL to start.')
   }
 
-  // Single primary button for Deal / Next Hand
   function handlePrimaryDeal() {
     if (!stakeReady) return
     if (phase === 'settled') {
       handleNewHand()
-      // let state reset then deal
       setTimeout(() => {
         dealHand()
       }, 0)
@@ -687,231 +674,210 @@ export default function BlackjackDemo() {
     )
   }
 
-  const left = (
-    <div className="relative rounded-[28px] border border-emerald-400/40 bg-[radial-gradient(circle_at_10%_0%,#064e3b,transparent_55%),radial-gradient(circle_at_90%_0%,#047857,transparent_55%),#022c22] shadow-[0_18px_45px_rgba(0,0,0,0.9)] p-4 md:p-5 overflow-hidden">
-      {/* glow */}
-      <div className="pointer-events-none absolute inset-x-0 -top-10 h-28 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.35),transparent_65%)]" />
-      {/* header */}
-      <div className="flex items-center justify-between mb-3 relative z-10">
+  /* ---------- RENDER: SINGLE COLUMN LAYOUT, TIGHT TABLE ---------- */
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-4">
+      {/* TOP: TITLE + ARCADE SUMMARY */}
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-black/70 via-[#020617] to-black/80 p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="text-[11px] tracking-[0.32em] uppercase text-emerald-100/85 font-semibold">
             BASE GOLD RUSH
           </div>
-          <div className="mt-1 text-xl md:text-2xl font-extrabold text-emerald-50">
-            Video Blackjack (Arcade)
+          <div className="mt-1 text-xl md:text-2xl font-extrabold text-white">
+            Video Blackjack <span className="text-[#facc15]">• Arcade</span>
           </div>
           <div className="text-[11px] text-emerald-100/80">
             6-deck shoe • Dealer stands on 17 • 3:2 blackjack
           </div>
-        </div>
-        <div className="text-right text-[11px] text-emerald-100/75 space-y-1">
-          <div>
+          <div className="mt-2 text-[11px] text-emerald-100/75">
             Local Table:{' '}
             <span className="font-bold text-[#facc15]">
               {credits.toLocaleString()} BGRC
             </span>
-          </div>
-          <div className="text-[10px]">
-            Table P&amp;L:{' '}
-            <span
-              className={
-                sessionPnL >= 0
-                  ? 'text-emerald-200 font-semibold'
-                  : 'text-rose-300 font-semibold'
-              }
-            >
-              {sessionPnL >= 0 ? '+' : ''}
-              {sessionPnL.toFixed(2)} BGRC
+            <span className="ml-3">
+              Table P&amp;L:{' '}
+              <span
+                className={
+                  sessionPnL >= 0
+                    ? 'text-emerald-200 font-semibold'
+                    : 'text-rose-300 font-semibold'
+                }
+              >
+                {sessionPnL >= 0 ? '+' : ''}
+                {sessionPnL.toFixed(2)} BGRC
+              </span>
             </span>
           </div>
           <button
             onClick={newShoe}
-            className="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-300/60 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-100 hover:bg-emerald-500/10"
+            className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/60 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-100 hover:bg-emerald-500/10"
           >
-            <span>New Shoe</span>
+            New Shoe
           </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs w-full md:w-auto">
+          <div className="rounded-xl border border-white/14 bg-black/40 p-3">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
+              Arcade Stack
+            </div>
+            <div className="mt-1 text-xl font-extrabold text-white">
+              {arcadeCredits.toLocaleString()}{' '}
+              <span className="text-xs text-white/70">BGRC</span>
+            </div>
+            <div className="mt-1 text-[11px] text-white/55">
+              Global demo balance across all arcade games.
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/14 bg-black/40 p-3">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
+              Arcade Net
+            </div>
+            <div
+              className={[
+                'mt-1 text-xl font-extrabold',
+                arcadeNet >= 0 ? 'text-emerald-300' : 'text-rose-300',
+              ].join(' ')}
+            >
+              {arcadeNet >= 0 ? '+' : ''}
+              {arcadeNet.toFixed(2)} BGRC
+            </div>
+            <div className="mt-1 text-[11px] text-white/55">
+              Since you first opened the arcade.
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* dealer row */}
-      <div className="relative z-10 mt-3 rounded-3xl border border-emerald-300/40 bg-[radial-gradient(circle_at_50%_0%,#064e3b,#022c22_65%,#01120f_100%)] px-3 pt-4 pb-4 md:px-6 md:pt-5 md:pb-6">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-50/85">
-            Dealer
-          </div>
-          <div className="text-[11px] text-emerald-100/80">
-            {dealerCards.length > 0 && dealerReveal
-              ? `Total: ${handTotal(dealerCards).total}`
-              : dealerCards.length > 0
-              ? 'Showing…'
-              : 'Waiting for deal'}
-          </div>
-        </div>
-        <div className="flex items-start gap-3 md:gap-4">
-          <div className="flex items-end gap-2 md:gap-3 overflow-x-auto pb-2">
-            {dealerCards.length === 0 ? (
-              renderCard(null)
-            ) : (
-              dealerCards.map((card, idx) => (
-                <div key={idx}>
-                  {renderCard(card, !dealerReveal && idx === 1)}
-                </div>
-              ))
-            )}
-          </div>
-          <div className="flex-1 ml-2">
-            <div className="text-[11px] text-emerald-100/80 min-h-[2rem]">
-              {tableMessage}
-            </div>
-            {lastResultSummary && (
-              <div className="mt-1 text-[11px] text-amber-100/80">
-                {lastResultSummary}
+      {/* TABLE: DEALER DIRECTLY ABOVE PLAYER, ONE BOX */}
+      <div className="relative rounded-[28px] border border-emerald-400/40 bg-[radial-gradient(circle_at_10%_0%,#064e3b,transparent_55%),radial-gradient(circle_at_90%_0%,#047857,transparent_55%),#022c22] shadow-[0_18px_45px_rgba(0,0,0,0.9)] p-4 md:p-5 space-y-4 overflow-hidden">
+        {/* glow */}
+        <div className="pointer-events-none absolute inset-x-0 -top-10 h-28 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.35),transparent_65%)]" />
+
+        <div className="relative z-10 space-y-4">
+          {/* DEALER + STATUS – lowered, centered */}
+          <div className="rounded-3xl border border-emerald-300/40 bg-[radial-gradient(circle_at_50%_0%,#064e3b,#022c22_65%,#01120f_100%)] px-3 pt-4 pb-3 md:px-6 md:pt-4 md:pb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-50/85">
+                Dealer
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* players row + controls */}
-        <div className="mt-5 space-y-4">
-          {/* seats */}
-          <div className="flex items-center justify-between text-[11px] text-emerald-100/80">
-            <div>
-              Seats in play:{' '}
-              <span className="font-semibold text-emerald-50">
-                {seatCount}
-              </span>
+              <div className="text-[11px] text-emerald-100/80">
+                {dealerCards.length > 0 && dealerReveal
+                  ? `Total: ${dealerTotal.total}`
+                  : dealerCards.length > 0
+                  ? 'Showing…'
+                  : 'Waiting for deal'}
+              </div>
             </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setSeatCount(s => (s > 1 ? s - 1 : s))}
-                disabled={phase !== 'betting' || seatCount <= 1}
-                className="px-2 py-1 rounded-full border border-emerald-200/60 bg-black/40 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                − Seat
-              </button>
-              <button
-                onClick={() => setSeatCount(s => (s < MAX_SEATS ? s + 1 : s))}
-                disabled={phase !== 'betting' || seatCount >= MAX_SEATS}
-                className="px-2 py-1 rounded-full border border-emerald-200/60 bg-black/40 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                + Seat
-              </button>
-            </div>
-          </div>
 
-          {/* player hands */}
-          <div className="flex justify-start md:justify-center gap-3 md:gap-6 flex-nowrap md:flex-wrap overflow-x-auto pb-2">
-            {Array.from({ length: seatCount }).map((_, idx) => {
-              const hand = players[idx]
-              const label = `Player ${idx + 1}`
-              const isActive = hand && idx === currentIndex && phase === 'player'
-              const total = hand ? handTotal(hand.cards) : null
-
-              return (
-                <div
-                  key={idx}
-                  className={[
-                    'relative flex flex-col items-center gap-2 px-2 py-3 rounded-2xl border bg-[radial-gradient(circle_at_50%_0%,rgba(6,95,70,0.8),rgba(6,78,59,0.95))] transition-shadow',
-                    hand
-                      ? 'border-emerald-200/70 shadow-[0_0_18px_rgba(16,185,129,0.5)]'
-                      : 'border-emerald-900/60 border-dashed bg-black/20',
-                  ].join(' ')}
-                  style={{ minWidth: '130px' }}
-                >
-                  <div className="flex items-center justify-between w-full text-[10px] text-emerald-100/85">
-                    <span className="uppercase tracking-[0.22em]">
-                      {label}
-                    </span>
-                    {hand && (
-                      <span className="font-semibold">
-                        {total?.total ?? '--'} {total?.isSoft ? '(soft)' : ''}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-end gap-2">
-                    {hand ? (
-                      hand.cards.map((c, i) => (
-                        <div
-                          key={i}
-                          className={isActive ? 'animate-pulse' : ''}
-                        >
-                          {renderCard(c)}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="opacity-40">
-                        {renderCard(null)}
-                      </div>
-                    )}
-                    {hand && renderChipStack(hand.wager)}
-                  </div>
-
-                  {hand && hand.result && (
-                    <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-emerald-50 bg-black/40 px-2 py-1 rounded-full">
-                      {resultLabel(hand.result)}
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-end gap-2 md:gap-3">
+                {dealerCards.length === 0 ? (
+                  renderCard(null)
+                ) : (
+                  dealerCards.map((card, idx) => (
+                    <div key={idx}>
+                      {renderCard(card, !dealerReveal && idx === 1)}
                     </div>
-                  )}
+                  ))
+                )}
+              </div>
+
+              <div className="w-full text-center">
+                <div className="text-[11px] text-emerald-100/80 min-h-[2rem]">
+                  {tableMessage}
                 </div>
-              )
-            })}
+                {lastResultSummary && (
+                  <div className="mt-1 text-[11px] text-amber-100/80">
+                    {lastResultSummary}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* ACTION BAR */}
-          <div className="mt-2 rounded-2xl border border-emerald-200/50 bg-black/55 px-3 py-3 flex flex-col gap-3">
-            {/* bet controls */}
-            <div className="flex items-center justify-between text-[11px] text-emerald-100/80">
-              <span>
-                Table Bet:{' '}
-                <span className="font-bold text-[#facc15]">
-                  {baseBet.toLocaleString()} BGRC
-                </span>
-                {approxUsd(baseBet) && (
-                  <span className="ml-1 text-[10px] text-emerald-100/70">
-                    ({approxUsd(baseBet)})
-                  </span>
-                )}
-              </span>
-              <span className="text-[10px] text-emerald-100/60">
-                Min {MIN_BET} • Max {MAX_BET}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[1, 5, 10, 25, 50, 100].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setBaseBet(Math.min(MAX_BET, v))}
-                  disabled={phase !== 'betting' && phase !== 'settled'}
-                  className={[
-                    'px-3 py-1 rounded-full border text-[11px] font-semibold',
-                    baseBet === v
-                      ? 'border-[#facc15] bg-[#facc15]/20 text-[#fef3c7]'
-                      : 'border-emerald-300/40 bg-emerald-900/40 text-emerald-100',
-                    phase !== 'betting' && phase !== 'settled'
-                      ? 'opacity-40 cursor-not-allowed'
-                      : '',
-                  ].join(' ')}
-                >
-                  {v}
-                </button>
-              ))}
-              <button
-                onClick={() => setBaseBet(Math.min(MAX_BET, baseBet + 5))}
-                disabled={phase !== 'betting' && phase !== 'settled'}
-                className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                +5
-              </button>
-              <button
-                onClick={() => setBaseBet(MIN_BET)}
-                disabled={phase !== 'betting' && phase !== 'settled'}
-                className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Clear
-              </button>
+          {/* PLAYER HAND(S) DIRECTLY BELOW DEALER */}
+          <div className="space-y-2">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-50/80 text-center">
+              Your Hand
             </div>
 
-            {/* action buttons – mobile-first, big tap targets */}
+            <div className="flex justify-center gap-3 md:gap-4 flex-wrap">
+              {players.length === 0 ? (
+                <div
+                  className="relative flex flex-col items-center gap-2 px-3 py-3 rounded-2xl border border-emerald-900/60 border-dashed bg-black/20"
+                  style={{ minWidth: '150px' }}
+                >
+                  <div className="flex items-center justify-between w-full text-[10px] text-emerald-100/60">
+                    <span className="uppercase tracking-[0.22em]">
+                      Player
+                    </span>
+                    <span className="font-semibold">--</span>
+                  </div>
+                  <div className="opacity-40 mt-1">
+                    {renderCard(null)}
+                  </div>
+                  <div className="mt-1 text-[10px] text-emerald-100/70">
+                    Tap DEAL to start.
+                  </div>
+                </div>
+              ) : (
+                players.map((hand, idx) => {
+                  const label =
+                    players.length === 1 ? 'Player' : `Hand ${idx + 1}`
+                  const isActive = idx === currentIndex && phase === 'player'
+                  const total = handTotal(hand.cards)
+
+                  return (
+                    <div
+                      key={hand.id}
+                      className={[
+                        'relative flex flex-col items-center gap-2 px-3 py-3 rounded-2xl border bg-[radial-gradient(circle_at_50%_0%,rgba(6,95,70,0.8),rgba(6,78,59,0.95))] transition-shadow',
+                        'border-emerald-200/70 shadow-[0_0_16px_rgba(16,185,129,0.45)]',
+                        isActive ? 'ring-2 ring-[#facc15]/80' : '',
+                      ].join(' ')}
+                      style={{ minWidth: '150px' }}
+                    >
+                      <div className="flex items-center justify-between w-full text-[10px] text-emerald-100/85">
+                        <span className="uppercase tracking-[0.22em]">
+                          {label}
+                        </span>
+                        <span className="text-base md:text-lg font-extrabold text-[#facc15] drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]">
+    {total?.total ?? '--'}{' '}
+    <span className="text-[9px] md:text-[10px] font-semibold text-emerald-100/90">
+      {total?.isSoft ? '(soft)' : ''}
+    </span>
+  </span>
+                      </div>
+
+                      <div className="flex items-end gap-2 mt-1">
+                        {hand.cards.map((c, i) => (
+                          <div
+                            key={i}
+                            className={isActive ? 'animate-pulse' : ''}
+                          >
+                            {renderCard(c)}
+                          </div>
+                        ))}
+                        {renderChipStack(hand.wager)}
+                      </div>
+
+                      {hand.result && (
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-emerald-50 bg-black/40 px-2 py-1 rounded-full">
+                          {resultLabel(hand.result)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          {/* ACTION BAR – directly under hands, good on mobile */}
+          <div className="mt-2 rounded-2xl border border-emerald-200/50 bg-black/55 px-3 py-3 flex flex-col gap-3">
+            {/* action buttons */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
               <button
                 onClick={handleHit}
@@ -949,7 +915,7 @@ export default function BlackjackDemo() {
                 Surrender
               </button>
 
-              {/* Primary Deal / Next Hand CTA – full width on mobile bottom row */}
+              {/* Primary Deal / Next Hand CTA */}
               <button
                 onClick={handlePrimaryDeal}
                 disabled={!canPrimaryDeal}
@@ -958,63 +924,67 @@ export default function BlackjackDemo() {
                 {phase === 'settled' ? 'Deal Next Hand' : 'Deal'}
               </button>
             </div>
+
+            {/* bet controls */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-emerald-100/80">
+                <span>
+                  Table Bet:{' '}
+                  <span className="font-bold text-[#facc15]">
+                    {baseBet.toLocaleString()} BGRC
+                  </span>
+                  {approxUsd(baseBet) && (
+                    <span className="ml-1 text-[10px] text-emerald-100/70">
+                      ({approxUsd(baseBet)})
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] text-emerald-100/60">
+                  Min {MIN_BET} • Max {MAX_BET}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[1, 5, 10, 25, 50, 100].map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setBaseBet(Math.min(MAX_BET, v))}
+                    disabled={phase !== 'betting' && phase !== 'settled'}
+                    className={[
+                      'px-3 py-1 rounded-full border text-[11px] font-semibold',
+                      baseBet === v
+                        ? 'border-[#facc15] bg-[#facc15]/20 text-[#fef3c7]'
+                        : 'border-emerald-300/40 bg-emerald-900/40 text-emerald-100',
+                      phase !== 'betting' && phase !== 'settled'
+                        ? 'opacity-40 cursor-not-allowed'
+                        : '',
+                    ].join(' ')}
+                  >
+                    {v}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setBaseBet(Math.min(MAX_BET, baseBet + 5))}
+                  disabled={phase !== 'betting' && phase !== 'settled'}
+                  className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  +5
+                </button>
+                <button
+                  onClick={() => setBaseBet(MIN_BET)}
+                  disabled={phase !== 'betting' && phase !== 'settled'}
+                  className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
 
-  const right = (
-    <div className="rounded-2xl border border-white/12 bg-gradient-to-b from-[#111827] via-[#020617] to-black p-4 md:p-5 space-y-4">
-      <div>
-        <div className="text-[11px] uppercase tracking-[0.26em] text-white/60">
-          GAME SUMMARY
-        </div>
-        <div className="mt-1 text-lg font-bold text-white">
-          Blackjack Demo (BGRC Arcade)
-        </div>
-        <div className="mt-1 text-xs text-white/70">
-          Fully local demo to model Base Gold Rush blackjack before we wire the
-          V4 on-chain contract. All values are{' '}
-          <span className="font-semibold">BGRC demo credits</span>.
-        </div>
-      </div>
-
-      {/* Global arcade wallet + local P&L */}
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div className="rounded-xl border border-white/14 bg-black/40 p-3">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-            Arcade Stack
-          </div>
-          <div className="mt-1 text-xl font-extrabold text-white">
-            {arcadeCredits.toLocaleString()}{' '}
-            <span className="text-xs text-white/70">BGRC</span>
-          </div>
-          <div className="mt-1 text-[11px] text-white/55">
-            Global demo balance across all arcade games.
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-white/14 bg-black/40 p-3">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-            Arcade Net
-          </div>
-          <div
-            className={[
-              'mt-1 text-xl font-extrabold',
-              arcadeNet >= 0 ? 'text-emerald-300' : 'text-rose-300',
-            ].join(' ')}
-          >
-            {arcadeNet >= 0 ? '+' : ''}
-            {arcadeNet.toFixed(2)} BGRC
-          </div>
-          <div className="mt-1 text-[11px] text-white/55">
-            Since you first opened the arcade.
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-white/14 bg-black/40 p-3 text-xs space-y-2">
+      {/* RULES CARD BELOW TABLE */}
+      <div className="rounded-2xl border border-white/12 bg-gradient-to-b from-[#111827] via-[#020617] to-black p-4 md:p-5 text-xs space-y-2">
         <div className="text-sm font-semibold text-white">
           Table Rules (Demo)
         </div>
@@ -1034,13 +1004,6 @@ export default function BlackjackDemo() {
           verifiable randomness &amp; true payouts.
         </div>
       </div>
-    </div>
-  )
-
-  return (
-    <div className="grid md:grid-cols-[minmax(360px,1.3fr)_360px] gap-6 items-start">
-      {left}
-      {right}
     </div>
   )
 }

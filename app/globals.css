@@ -67,9 +67,37 @@ body { font-feature-settings: "tnum"; }
   100% { transform: rotate(360deg); }
 }
 
-.chip-spin {
-  animation: chip-spin 3s linear infinite;
+/* Slow vertical float + full 360° spin */
+@keyframes chipFloatSpin {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(180deg);
+  }
+  100% {
+    transform: translateY(0px) rotate(360deg);
+  }
 }
+
+/* Soft glow pulse beneath the chip */
+@keyframes chipGlowPulse {
+  0%, 100% {
+    filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.95)) brightness(1);
+  }
+  50% {
+    filter: drop-shadow(0 26px 80px rgba(0, 0, 0, 1)) brightness(1.12);
+  }
+}
+
+/* Use this class on the hero chip image */
+.chip-hero-anim {
+  animation:
+    chipFloatSpin 16s ease-in-out infinite,
+    chipGlowPulse 5s ease-in-out infinite;
+  transform-origin: center center;
+}
+
 
 .backface-hidden {
   backface-visibility: hidden;
@@ -88,4 +116,50 @@ body { font-feature-settings: "tnum"; }
 .gold-bar-rock {
   animation: gold-bar-rock 3.2s ease-in-out infinite;
   transform-origin: center center;
+}
+
+@layer components {
+  .slot-reel-window {
+    position: relative;
+    flex: 1 1 0;
+    max-width: 32%;
+    height: 100%;
+    min-height: 120px;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 0%, #facc15, #111827 55%);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.95);
+  }
+
+  @media (min-width: 640px) {
+    .slot-reel-window {
+      min-height: 140px;
+    }
+  }
+
+  .slot-reel-strip {
+    --symbol-count: 10;
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: 100% calc(var(--symbol-count) * 100%);
+    transform: translateY(0);
+    transition: transform 0.9s cubic-bezier(0.19, 1, 0.22, 1);
+    will-change: transform, background-position;
+  }
+
+  .slot-reel-strip--spinning {
+    animation: slotReelSpin 0.4s linear infinite;
+    background-size: 100% auto;
+  }
+
+  @keyframes slotReelSpin {
+    from {
+      background-position-y: 0%;
+    }
+    to {
+      background-position-y: 100%;
+    }
+  }
 }

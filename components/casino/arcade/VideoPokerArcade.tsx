@@ -1,78 +1,30 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
-/* --------- card + game types ---------- */
+type Suit = '♠' | '♥' | '♦' | '♣'
+type Rank = 'A' | 'K' | 'Q' | 'J' | '10' | '9' | '8' | '7' | '6' | '5' | '4' | '3' | '2'
 
-const SUITS = ['♠', '♥', '♦', '♣'] as const
-const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'] as const
-
-type Suit = (typeof SUITS)[number]
-type Rank = (typeof RANKS)[number]
-
-type Card = { rank: Rank; suit: Suit }
-
-type Phase = 'betting' | 'dealt' | 'settled'
-
-type HandRank =
-  | 'ROYAL_FLUSH'
-  | 'STRAIGHT_FLUSH'
-  | 'FOUR_OF_A_KIND'
-  | 'FULL_HOUSE'
-  | 'FLUSH'
-  | 'STRAIGHT'
-  | 'THREE_OF_A_KIND'
-  | 'TWO_PAIR'
-  | 'JACKS_OR_BETTER'
-  | 'NONE'
-
-type PayTableRow = {
-  rank: HandRank
-  label: string
-  pays: [number, number, number, number, number] // credits for bet 1..5
+type Card = {
+  rank: Rank
+  suit: Suit
 }
 
-/* 9/6 Jacks or Better style table */
-const PAY_TABLE: PayTableRow[] = [
-  { rank: 'ROYAL_FLUSH', label: 'Royal Flush',       pays: [250, 500, 750, 1000, 4000] },
-  { rank: 'STRAIGHT_FLUSH', label: 'Straight Flush', pays: [50, 100, 150, 200, 250] },
-  { rank: 'FOUR_OF_A_KIND', label: '4 of a Kind',    pays: [25, 50, 75, 100, 125] },
-  { rank: 'FULL_HOUSE',     label: 'Full House',     pays: [9, 18, 27, 36, 45] },
-  { rank: 'FLUSH',          label: 'Flush',          pays: [6, 12, 18, 24, 30] },
-  { rank: 'STRAIGHT',       label: 'Straight',       pays: [4, 8, 12, 16, 20] },
-  { rank: 'THREE_OF_A_KIND',label: '3 of a Kind',    pays: [3, 6, 9, 12, 15] },
-  { rank: 'TWO_PAIR',       label: 'Two Pair',       pays: [2, 4, 6, 8, 10] },
-  { rank: 'JACKS_OR_BETTER',label: 'Jacks or Better',pays: [1, 2, 3, 4, 5] },
-]
+type Phase = 'idle' | 'deal' | 'draw'
 
-const RANK_SCORE: Record<Rank, number> = {
-  '2': 2,
-  '3': 3,
-  '4': 4,
-  '5': 5,
-  '6': 6,
-  '7': 7,
-  '8': 8,
-  '9': 9,
-  '10': 10,
-  J: 11,
-  Q: 12,
-  K: 13,
-  A: 14,
-}
+const RANKS: Rank[] = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2']
+const SUITS: Suit[] = ['♠', '♥', '♦', '♣']
 
-/* --------- helpers ---------- */
+// ---------- helpers ----------
 
-function buildShuffledDeck(): Card[] {
+function buildDeck(): Card[] {
   const deck: Card[] = []
-  for (const suit of SUITS) {
-    for (const rank of RANKS) {
-      deck.push({ rank, suit })
+  for (const r of RANKS) {
+    for (const s of SUITS) {
+      deck.push({ rank: r, suit: s })
     }
   }
-  // Fisher–Yates shuffle
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[deck[i], deck[j]] = [deck[j], deck[i]]
@@ -80,577 +32,442 @@ function buildShuffledDeck(): Card[] {
   return deck
 }
 
-function evaluateHand(cards: Card[]): HandRank {
-  const values = cards.map(c => RANK_SCORE[c.rank]).sort((a, b) => a - b)
-  const suits = cards.map(c => c.suit)
+function cardValueRankIndex(rank: Rank): number {
+  return RANKS.indexOf(rank)
+}
+
+type HandRank =
+  | 'ROYAL_FLUSH'
+  | 'STRAIGHT_FLUSH'
+  | 'FOUR_KIND'
+  | 'FULL_HOUSE'
+  | 'FLUSH'
+  | 'STRAIGHT'
+  | 'THREE_KIND'
+  | 'TWO_PAIR'
+  | 'JACKS_OR_BETTER'
+  | 'NOTHING'
+
+const PAY_TABLE: Record<HandRank, number> = {
+  ROYAL_FLUSH: 250,
+  STRAIGHT_FLUSH: 50,
+  FOUR_KIND: 25,
+  FULL_HOUSE: 9,
+  FLUSH: 6,
+  STRAIGHT: 4,
+  THREE_KIND: 3,
+  TWO_PAIR: 2,
+  JACKS_OR_BETTER: 1,
+  NOTHING: 0,
+}
+
+function evaluateHand(hand: Card[]): HandRank {
+  if (hand.length !== 5) return 'NOTHING'
+
+  const ranks = hand.map(c => c.rank)
+  const suits = hand.map(c => c.suit)
   const isFlush = suits.every(s => s === suits[0])
 
-  const isWheel = values.toString() === [2, 3, 4, 5, 14].toString()
-  const isStraight =
-    isWheel ||
-    values.every((v, i) => (i === 0 ? true : v === values[0] + i))
-
-  const counts: Record<number, number> = {}
-  for (const v of values) {
-    counts[v] = (counts[v] || 0) + 1
+  // count ranks
+  const count: Record<Rank, number> = {
+    A: 0,
+    K: 0,
+    Q: 0,
+    J: 0,
+    '10': 0,
+    '9': 0,
+    '8': 0,
+    '7': 0,
+    '6': 0,
+    '5': 0,
+    '4': 0,
+    '3': 0,
+    '2': 0,
   }
-  const countValues = Object.values(counts).sort((a, b) => b - a)
-  const hasFour = countValues[0] === 4
-  const hasThree = countValues[0] === 3
-  const pairCount = countValues.filter(c => c === 2).length
+  for (const r of ranks) count[r]++
 
-  // Jacks or Better
-  const hasHighPair = Object.entries(counts).some(([v, cnt]) => {
-    if (cnt < 2) return false
-    const n = Number(v)
-    return n >= RANK_SCORE['J'] // J,Q,K,A
-  })
+  const uniqueRanks = Object.entries(count).filter(([, v]) => v > 0)
+  const counts = uniqueRanks.map(([, v]) => v).sort((a, b) => b - a)
 
-  const maxVal = Math.max(...values)
-  const minVal = Math.min(...values)
-
-  if (isStraight && isFlush && maxVal === 14 && minVal === 10) {
-    return 'ROYAL_FLUSH'
+  // Straight detection (A can be high only: 10-J-Q-K-A)
+  const sortedIdxs = [...new Set(ranks.map(cardValueRankIndex))].sort((a, b) => a - b)
+  let isStraight = false
+  if (sortedIdxs.length === 5) {
+    // normal straight
+    if (sortedIdxs[4] - sortedIdxs[0] === 4) {
+      isStraight = true
+    }
+    // 10-J-Q-K-A
+    const highStraight = ['10', 'J', 'Q', 'K', 'A']
+    if (highStraight.every(r => ranks.includes(r as Rank))) {
+      isStraight = true
+    }
   }
-  if (isStraight && isFlush) return 'STRAIGHT_FLUSH'
-  if (hasFour) return 'FOUR_OF_A_KIND'
+
+  const hasFour = counts[0] === 4
+  const hasThree = counts[0] === 3
+  const pairCount = counts.filter(c => c === 2).length
+
+  const isRoyal = isFlush && isStraight && ['10', 'J', 'Q', 'K', 'A'].every(r => ranks.includes(r as Rank))
+
+  if (isRoyal) return 'ROYAL_FLUSH'
+  if (isFlush && isStraight) return 'STRAIGHT_FLUSH'
+  if (hasFour) return 'FOUR_KIND'
   if (hasThree && pairCount === 1) return 'FULL_HOUSE'
   if (isFlush) return 'FLUSH'
   if (isStraight) return 'STRAIGHT'
-  if (hasThree) return 'THREE_OF_A_KIND'
+  if (hasThree) return 'THREE_KIND'
   if (pairCount === 2) return 'TWO_PAIR'
-  if (hasHighPair) return 'JACKS_OR_BETTER'
-  return 'NONE'
-}
 
-function getPayout(rank: HandRank, bet: number): number {
-  if (rank === 'NONE' || bet <= 0) return 0
-  const row = PAY_TABLE.find(r => r.rank === rank)
-  if (!row) return 0
-  const idx = Math.min(Math.max(bet, 1), 5) - 1
-  return row.pays[idx]
-}
-
-function rankLabel(rank: HandRank): string {
-  const row = PAY_TABLE.find(r => r.rank === rank)
-  return row?.label ?? ''
-}
-
-/* --------- component ---------- */
-
-export default function VideoPokerArcade() {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
-  const { credits: arcadeCredits, net: arcadeNet, addWin, addLoss } = useArcadeWallet()
-
-  // local machine credits (demo)
-  const [machineCredits, setMachineCredits] = useState(500)
-  const [sessionPnL, setSessionPnL] = useState(0)
-  const [syncedPnL, setSyncedPnL] = useState(0)
-
-  // sync to global arcade wallet
-  useEffect(() => {
-    if (!mounted) return
-    const delta = sessionPnL - syncedPnL
-    if (delta === 0) return
-    if (delta > 0) addWin(delta)
-else addLoss(-delta)
-
-    setSyncedPnL(sessionPnL)
-  }, [mounted, sessionPnL, syncedPnL, addWin, addLoss])
-
-  const [phase, setPhase] = useState<Phase>('betting')
-  const [betPerHand, setBetPerHand] = useState(5) // 1–5 credits
-  const [deck, setDeck] = useState<Card[]>([])
-  const [hand, setHand] = useState<Card[]>([])
-  const [held, setHeld] = useState<boolean[]>([false, false, false, false, false])
-  const [lastRank, setLastRank] = useState<HandRank>('NONE')
-  const [lastWin, setLastWin] = useState(0)
-  const [lastMessage, setLastMessage] = useState<string>(
-    'Set your bet, then DEAL to start.'
-  )
-
-  const canDeal =
-    (phase === 'betting' || phase === 'settled') &&
-    betPerHand >= 1 &&
-    betPerHand <= 5 &&
-    machineCredits >= betPerHand
-
-  const canDraw = phase === 'dealt'
-
-  const currentHandTotal = useMemo(() => {
-    if (hand.length !== 5) return null
-    const rank = evaluateHand(hand)
-    return rank === 'NONE' ? null : rankLabel(rank)
-  }, [hand])
-
-  /* --------- actions ---------- */
-
-  function startDeal() {
-    if (!canDeal) return
-
-    const newDeck = buildShuffledDeck()
-    const newHand = newDeck.slice(0, 5)
-    const remainder = newDeck.slice(5)
-
-    setDeck(remainder)
-    setHand(newHand)
-    setHeld([false, false, false, false, false])
-    setPhase('dealt')
-    setLastRank('NONE')
-    setLastWin(0)
-
-    setMachineCredits(c => c - betPerHand)
-    setSessionPnL(p => p - betPerHand)
-    setLastMessage('Tap cards to HOLD, then hit DRAW.')
+  // Jacks or Better
+  if (pairCount === 1) {
+    const highPairs: Rank[] = ['A', 'K', 'Q', 'J']
+    for (const [r, v] of Object.entries(count) as [Rank, number][]) {
+      if (v === 2 && highPairs.includes(r)) {
+        return 'JACKS_OR_BETTER'
+      }
+    }
   }
 
-  function handleDraw() {
-    if (!canDraw) return
-    if (deck.length < 5) {
-      // safety, should not happen
-      setLastMessage('Out of cards – reshuffling shoe. Try again.')
-      setPhase('betting')
+  return 'NOTHING'
+}
+
+function handLabel(rank: HandRank): string {
+  switch (rank) {
+    case 'ROYAL_FLUSH':
+      return 'Royal Flush'
+    case 'STRAIGHT_FLUSH':
+      return 'Straight Flush'
+    case 'FOUR_KIND':
+      return 'Four of a Kind'
+    case 'FULL_HOUSE':
+      return 'Full House'
+    case 'FLUSH':
+      return 'Flush'
+    case 'STRAIGHT':
+      return 'Straight'
+    case 'THREE_KIND':
+      return 'Three of a Kind'
+    case 'TWO_PAIR':
+      return 'Two Pair'
+    case 'JACKS_OR_BETTER':
+      return 'Jacks or Better'
+    default:
+      return 'No Made Hand'
+  }
+}
+
+// ---------- UI ----------
+
+export default function VideoPokerArcade() {
+  const { credits, recordSpin } = useArcadeWallet()
+
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [deck, setDeck] = useState<Card[]>(() => buildDeck())
+  const [hand, setHand] = useState<Card[]>([])
+  const [held, setHeld] = useState<boolean[]>([false, false, false, false, false])
+  const [bet, setBet] = useState(5)
+  const [lastNet, setLastNet] = useState(0)
+  const [lastRank, setLastRank] = useState<HandRank>('NOTHING')
+  const [status, setStatus] = useState('Tap DEAL to start a hand.')
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsMobile(window.innerWidth < 768)
+    }
+  }, [])
+
+  const totalBet = bet
+  const canDeal = credits >= totalBet && (phase === 'idle' || phase === 'deal')
+  const canDraw = phase === 'draw'
+
+  function freshDeckIfNeeded(currentDeck: Card[]): Card[] {
+    if (currentDeck.length < 10) return buildDeck()
+    return currentDeck
+  }
+
+  function deal() {
+    if (!canDeal) {
+      setStatus('Not enough demo credits for that bet.')
       return
     }
 
-    let drawIndex = 0
-    const newHand = hand.map((card, idx) => {
-      if (held[idx]) return card
-      const nextCard = deck[drawIndex]
-      drawIndex++
-      return nextCard
-    })
-    const remainingDeck = deck.slice(drawIndex)
+    const newDeck = freshDeckIfNeeded(deck)
+    const nextDeck = [...newDeck]
+
+    const newHand: Card[] = []
+    for (let i = 0; i < 5; i++) {
+      const c = nextDeck.pop()
+      if (!c) break
+      newHand.push(c)
+    }
+
+    // deduct wager once up front
+    recordSpin({ wager: totalBet, payout: 0 })
+
+    setDeck(nextDeck)
+    setHand(newHand)
+    setHeld([false, false, false, false, false])
+    setPhase('draw')
+    setStatus('Tap cards to HOLD, then hit DRAW.')
+    setLastNet(0)
+    setLastRank('NOTHING')
+  }
+
+  function draw() {
+    if (!canDraw) return
+
+    const newDeck = freshDeckIfNeeded(deck)
+    const nextDeck = [...newDeck]
+    const newHand = [...hand]
+
+    for (let i = 0; i < 5; i++) {
+      if (held[i]) continue
+      const c = nextDeck.pop()
+      if (c) newHand[i] = c
+    }
 
     const rank = evaluateHand(newHand)
-    const payout = getPayout(rank, betPerHand)
-
-    setDeck(remainingDeck)
-    setHand(newHand)
-    setPhase('settled')
-    setLastRank(rank)
-    setLastWin(payout)
+    const mult = PAY_TABLE[rank]
+    const payout = mult * bet
+    const net = payout - totalBet
 
     if (payout > 0) {
-      setMachineCredits(c => c + payout)
-      setSessionPnL(p => p + payout)
-      setLastMessage(
-        `${rankLabel(rank)} • WIN +${payout.toLocaleString()} BGRC`
-      )
-    } else {
-      setLastMessage('No qualifying hand • BET AGAIN.')
+      recordSpin({ wager: 0, payout })
     }
-  }
 
-  function handlePrimaryButton() {
-    if (phase === 'betting' || phase === 'settled') {
-      startDeal()
-    } else if (phase === 'dealt') {
-      handleDraw()
-    }
-  }
-
-  function toggleHold(idx: number) {
-    if (phase !== 'dealt') return
-    setHeld(prev =>
-      prev.map((h, i) => (i === idx ? !h : h))
+    setDeck(nextDeck)
+    setHand(newHand)
+    setPhase('deal')
+    setLastRank(rank)
+    setLastNet(net)
+    setStatus(
+      mult > 0
+        ? `${handLabel(rank)} • Paid ${payout} credits (net ${net >= 0 ? '+' : ''}${net}).`
+        : 'No made hand. Tap DEAL for a new hand.'
     )
   }
 
-  const primaryLabel =
-    phase === 'betting'
-      ? 'Deal'
-      : phase === 'dealt'
-      ? 'Draw'
-      : 'Deal Again'
-
-  /* --------- render helpers ---------- */
-
-  function renderCard(card: Card | null, isHeld: boolean, index: number) {
-    if (!card) {
-      return (
-        <div className="w-[72px] h-[104px] md:w-[88px] md:h-[128px] rounded-xl bg-[repeating-linear-gradient(135deg,#0b1120,#0b1120_6px,#1f2937_6px,#1f2937_12px)] border border-slate-700 shadow-[0_6px_20px_rgba(0,0,0,0.85)]" />
-      )
-    }
-    const isRed = card.suit === '♥' || card.suit === '♦'
-
-    return (
-      <button
-        type="button"
-        onClick={() => toggleHold(index)}
-        className="relative group focus:outline-none"
-      >
-        <div className="w-[72px] h-[104px] md:w-[88px] md:h-[128px] rounded-xl bg-white border border-slate-300 shadow-[0_10px_30px_rgba(0,0,0,0.9)] flex flex-col justify-between p-2">
-          <div
-            className={[
-              'text-xs font-bold',
-              isRed ? 'text-red-600' : 'text-slate-900',
-            ].join(' ')}
-          >
-            {card.rank}
-            <span className="ml-0.5">{card.suit}</span>
-          </div>
-          <div
-            className={[
-              'text-3xl md:text-4xl text-center',
-              isRed ? 'text-red-600' : 'text-slate-900',
-            ].join(' ')}
-          >
-            {card.suit}
-          </div>
-          <div
-            className={[
-              'text-xs font-bold self-end rotate-180',
-              isRed ? 'text-red-600' : 'text-slate-900',
-            ].join(' ')}
-          >
-            {card.rank}
-            <span className="ml-0.5">{card.suit}</span>
-          </div>
-        </div>
-
-        {/* HOLD badge */}
-        <div
-          className={[
-            'mt-1 h-5 rounded-full border px-2 text-[10px] flex items-center justify-center tracking-[0.16em] uppercase transition',
-            isHeld
-              ? 'border-[#facc15]/90 bg-[#facc15]/20 text-[#fef9c3] shadow-[0_0_12px_rgba(250,204,21,0.8)]'
-              : 'border-emerald-200/60 bg-black/40 text-emerald-100/80 group-hover:bg-emerald-500/20',
-          ].join(' ')}
-        >
-          {isHeld ? 'Held' : 'Tap to Hold'}
-        </div>
-      </button>
-    )
-  }
-
-  function renderPayTable() {
-    return (
-      <div className="mt-3 rounded-2xl border border-amber-300/70 bg-gradient-to-b from-black/70 via-[#1f2937] to-black/90 px-3 py-3 text-[10px] md:text-[11px] text-amber-50">
-        <div className="flex items-center justify-between mb-2">
-          <div className="uppercase tracking-[0.22em] text-[9px] text-amber-100/80">
-            Payout Schedule — Jacks or Better
-          </div>
-          <div className="flex gap-1 text-[9px] text-amber-100/80">
-            {[1, 2, 3, 4, 5].map(n => (
-              <div
-                key={n}
-                className={[
-                  'w-6 text-center rounded-full border px-1 py-0.5',
-                  betPerHand === n
-                    ? 'border-[#facc15] bg-[#facc15]/20 text-[#fef9c3]'
-                    : 'border-amber-300/40 bg-black/40',
-                ].join(' ')}
-              >
-                {n}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-[2.2fr_repeat(5,1fr)] gap-x-2 gap-y-1">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-amber-100/70">
-            Hand
-          </div>
-          {[1, 2, 3, 4, 5].map(n => (
-            <div
-              key={`hdr-${n}`}
-              className="text-center text-[9px] text-amber-100/70"
-            >
-              {n}
-            </div>
-          ))}
-
-          {PAY_TABLE.map(row => {
-            const isHit = lastRank === row.rank && lastWin > 0
-            return (
-              <FragmentRow
-                key={row.rank}
-                row={row}
-                betPerHand={betPerHand}
-                isHit={isHit}
-              />
-            )
-          })}
-        </div>
-      </div>
-    )
+  const onMainButton = () => {
+    if (phase === 'draw') draw()
+    else deal()
   }
 
   return (
-    <div className="grid md:grid-cols-[minmax(360px,1.3fr)_360px] gap-6 items-start">
-      {/* MACHINE SIDE */}
-      <div className="relative rounded-[30px] border border-amber-400/60 bg-[radial-gradient(circle_at_0%_0%,#78350f_0%,transparent_55%),radial-gradient(circle_at_100%_0%,#f59e0b_0%,transparent_55%),#111827] shadow-[0_24px_70px_rgba(0,0,0,0.95)] p-4 md:p-5 overflow-hidden">
-        {/* top glow */}
-        <div className="pointer-events-none absolute inset-x-0 -top-16 h-40 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.5),transparent_60%)]" />
+    <div className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-4">
+      {/* MOBILE TIP */}
+      {isMobile && (
+        <div className="mb-3 rounded-xl border border-white/15 bg-black/70 px-3 py-2 text-[11px] text-white/75">
+          <span className="font-semibold text-emerald-300">Tip:</span>{' '}
+          For best view of all five cards,{' '}
+          <span className="font-semibold text-white">rotate your phone sideways</span>.
+        </div>
+      )}
 
-        {/* header */}
-        <div className="relative z-10 flex items-center justify-between mb-4">
+      <div className="rounded-[24px] border border-yellow-300/40 bg-gradient-to-b from-[#020617] via-black to-[#020617] p-3 sm:p-4 shadow-[0_24px_60px_rgba(0,0,0,0.9)]">
+        {/* HEADER / HUD */}
+        <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.3em] text-amber-100/80">
-              BASE GOLD RUSH ARCADE
+            <div className="text-[10px] uppercase tracking-[0.35em] text-[#facc15]/80">
+              Video Poker Arcade
             </div>
-            <div className="mt-1 text-xl md:text-2xl font-extrabold text-amber-50 drop-shadow">
-              Video Poker • Jacks or Better
+            <div className="text-xl sm:text-2xl font-extrabold text-white">
+              Jacks or Better
             </div>
-            <div className="text-[11px] text-amber-100/75">
-              5-card draw • Hold what you like • Classic bar-top machine.
-            </div>
-          </div>
-          <div className="text-right text-[11px] text-amber-50/80 space-y-1">
-            <div>
-              Machine Credits:{' '}
-              <span className="font-bold text-[#facc15]">
-                {machineCredits.toLocaleString()} BGRC
-              </span>
-            </div>
-            <div>
-              Machine P&amp;L:{' '}
-              <span
-                className={
-                  sessionPnL >= 0
-                    ? 'text-emerald-200 font-semibold'
-                    : 'text-rose-300 font-semibold'
-                }
-              >
-                {sessionPnL >= 0 ? '+' : ''}
-                {sessionPnL.toFixed(2)} BGRC
-              </span>
+            <div className="text-[11px] text-white/60">
+              Single-hand, fast-play bar-top vibe using BGRC demo credits.
             </div>
           </div>
-        </div>
-
-        {/* screen area */}
-        <div className="relative rounded-[24px] border border-amber-300/70 bg-[radial-gradient(circle_at_50%_0%,#1e293b,#020617_65%,#000_100%)] px-4 pt-4 pb-5 md:px-6 md:pt-5 md:pb-6">
-          {/* video screen frame */}
-          <div className="rounded-2xl border border-slate-500/70 bg-gradient-to-b from-slate-900 via-slate-950 to-black px-3 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.9)]">
-            {/* message + current rank */}
-            <div className="flex items-center justify-between text-[11px] text-sky-100/85 mb-2">
-              <div className="truncate">
-                {lastMessage || 'Ready.'}
+          <div className="flex items-end justify-between gap-3 sm:flex-col sm:items-end">
+            <div className="rounded-xl border border-white/20 bg-black/70 px-3 py-2 text-right">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+                Demo Credits
               </div>
-              <div className="text-right">
-                {currentHandTotal && (
-                  <span className="text-amber-100 font-semibold">
-                    {currentHandTotal}
-                  </span>
-                )}
+              <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
+                {credits.toLocaleString()}
               </div>
             </div>
-
-            {/* cards row */}
-            <div className="mt-1 flex justify-center gap-3 md:gap-4">
-              {Array.from({ length: 5 }).map((_, idx) =>
-                renderCard(hand[idx] ?? null, held[idx], idx)
-              )}
-            </div>{/* control panel */}
-          <div className="mt-4 rounded-2xl border border-amber-300/70 bg-gradient-to-b from-black/80 via-slate-900 to-black/95 px-3 py-3">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[11px] text-amber-50/80">
+            <div className="text-right text-[11px] text-white/60">
               <div>
-                <div className="uppercase tracking-[0.22em] text-[9px] text-amber-100/70">
-                  Bet Per Hand
-                </div>
-                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                  {[1, 2, 3, 4, 5].map(v => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => {
-                        if (phase === 'betting' || phase === 'settled') {
-                          setBetPerHand(v)
-                        }
-                      }}
-                      className={[
-                        'px-3 py-1 rounded-full border text-[11px] font-semibold',
-                        betPerHand === v
-                          ? 'border-[#facc15] bg-[#facc15]/30 text-[#fef9c3]'
-                          : 'border-amber-300/50 bg-black/60 text-amber-100',
-                        phase === 'dealt'
-                          ? 'opacity-40 cursor-not-allowed'
-                          : '',
-                      ].join(' ')}
-                      disabled={phase === 'dealt'}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col items-end gap-2">
-                <div className="text-[10px] text-amber-100/70">
-                  Total Bet:{' '}
-                  <span className="font-bold text-[#facc15]">
-                    {betPerHand} BGRC
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handlePrimaryButton}
-                  disabled={
-                    (phase === 'betting' || phase === 'settled')
-                      ? !canDeal
-                      : !canDraw
-                  }
-                  className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#facc15] to-[#f97316] px-7 py-2 text-[11px] font-extrabold uppercase tracking-[0.22em] text-black shadow-[0_0_24px_rgba(250,204,21,0.9)] disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {primaryLabel}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-            {/* last win strip */}
-            <div className="mt-3 flex items-center justify-between text-[11px] text-amber-100/85">
-              <div>
-                Last Win:{' '}
+                Last Net:{' '}
                 <span
                   className={
-                    lastWin > 0 ? 'text-emerald-200 font-semibold' : ''
+                    lastNet > 0
+                      ? 'text-emerald-300 font-semibold'
+                      : lastNet < 0
+                      ? 'text-rose-300 font-semibold'
+                      : 'text-slate-200 font-semibold'
                   }
                 >
-                  {lastWin > 0
-                    ? `+${lastWin.toLocaleString()} BGRC`
-                    : '—'}
+                  {lastNet > 0 ? '+' : ''}
+                  {lastNet}
                 </span>
               </div>
               <div>
                 Last Hand:{' '}
-                <span className="font-semibold">
-                  {lastRank === 'NONE' ? '—' : rankLabel(lastRank)}
+                <span className="text-white/80 font-semibold">
+                  {phase === 'idle' && lastRank === 'NOTHING'
+                    ? '—'
+                    : handLabel(lastRank)}
                 </span>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* pay table */}
-          {renderPayTable()}
-
-          
-
-      {/* SIDE HUD */}
-      <div className="rounded-2xl border border-white/12 bg-gradient-to-b from-[#111827] via-[#020617] to-black p-4 md:p-5 space-y-4">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.26em] text-white/60">
-            GAME SUMMARY
-          </div>
-          <div className="mt-1 text-lg font-bold text-white">
-            Video Poker (BGRC Arcade)
-          </div>
-          <div className="mt-1 text-xs text-white/70">
-            Local-only demo of a{' '}
-            <span className="font-semibold text-[#facc15]">
-              Jacks or Better
-            </span>{' '}
-            machine in the Base Gold Rush theme. Five cards, hold &amp; draw,
-            classic 9/6 payout table.
+        {/* CARDS ROW */}
+        <div className="mb-3 overflow-x-auto pb-1">
+          <div className="flex items-stretch gap-2 min-w-max mx-auto justify-center">
+            {Array.from({ length: 5 }).map((_, i) => {
+              const c = hand[i]
+              const h = held[i]
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={!c || phase === 'idle'}
+                  onClick={() => {
+                    if (!c || phase !== 'draw') return
+                    setHeld(prev => {
+                      const next = [...prev]
+                      next[i] = !next[i]
+                      return next
+                    })
+                  }}
+                  className={[
+                    'relative w-[60px] h-[88px] sm:w-[72px] sm:h-[104px] rounded-xl border flex flex-col justify-between p-1.5 bg-white shadow-[0_10px_24px_rgba(0,0,0,0.85)]',
+                    c ? 'border-slate-300' : 'border-slate-600/50 bg-slate-900/70',
+                    h ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-black' : '',
+                  ].join(' ')}
+                >
+                  {c ? (
+                    <>
+                      <div
+                        className={`text-xs font-bold ${
+                          c.suit === '♥' || c.suit === '♦'
+                            ? 'text-red-600'
+                            : 'text-slate-800'
+                        }`}
+                      >
+                        {c.rank}
+                        <span className="ml-0.5">{c.suit}</span>
+                      </div>
+                      <div
+                        className={`text-2xl sm:text-3xl text-center ${
+                          c.suit === '♥' || c.suit === '♦'
+                            ? 'text-red-600'
+                            : 'text-slate-800'
+                        }`}
+                      >
+                        {c.suit}
+                      </div>
+                      <div
+                        className={`text-xs font-bold self-end rotate-180 ${
+                          c.suit === '♥' || c.suit === '♦'
+                            ? 'text-red-600'
+                            : 'text-slate-800'
+                        }`}
+                      >
+                        {c.rank}
+                        <span className="ml-0.5">{c.suit}</span>
+                      </div>
+                      {h && (
+                        <div className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 text-[10px] px-2 py-0.5 font-semibold text-emerald-50 shadow-sm">
+                          HOLD
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[11px] text-slate-400">
+                      —
+                    </div>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* global arcade + machine HUD */}
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="rounded-xl border border-white/14 bg-black/40 p-3">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-              Arcade Stack
+        {/* STATUS */}
+        <div className="mb-3 rounded-xl border border-white/15 bg-black/60 px-3 py-2 text-[11px] text-white/80">
+          {status}
+        </div>
+
+        {/* BET + ACTIONS */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Bet selector */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+              Bet per Hand
             </div>
-            <div className="mt-1 text-xl font-extrabold text-white">
-              {arcadeCredits.toLocaleString()}{' '}
-              <span className="text-xs text-white/70">BGRC</span>
-            </div>
-            <div className="mt-1 text-[11px] text-white/55">
-              Global demo balance across all arcade titles.
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {[1, 2, 5, 10, 25].map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => phase !== 'draw' && setBet(v)}
+                  className={[
+                    'rounded-full px-3 py-1.5 text-[11px] font-semibold border',
+                    bet === v
+                      ? 'border-[#facc15] bg-[#facc15]/20 text-[#fef9c3] shadow-[0_0_14px_rgba(250,204,21,0.8)]'
+                      : 'border-white/25 bg-black/50 text-white/80 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  {v}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/14 bg-black/40 p-3">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-              Arcade Net
-            </div>
-            <div
-              className={[
-                'mt-1 text-xl font-extrabold',
-                arcadeNet >= 0 ? 'text-emerald-300' : 'text-rose-300',
-              ].join(' ')}
+          {/* Main button */}
+          <div className="flex-1 flex flex-col items-stretch gap-2">
+            <button
+              type="button"
+              onClick={onMainButton}
+              disabled={(phase === 'idle' || phase === 'deal') ? !canDeal : !canDraw}
+              className="h-11 rounded-full bg-gradient-to-r from-[#facc15] via-[#fde68a] to-[#fbbf24] text-black text-sm font-extrabold uppercase tracking-[0.3em] shadow-[0_0_24px_rgba(250,204,21,0.9)] disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {arcadeNet >= 0 ? '+' : ''}
-              {arcadeNet.toFixed(2)} BGRC
-            </div>
-            <div className="mt-1 text-[11px] text-white/55">
-              Cumulative P&amp;L since you opened the arcade.
+              {phase === 'draw' ? 'Draw' : 'Deal'}
+            </button>
+            <div className="text-[10px] text-white/50 text-right">
+              Bet: {bet} credits • {canDeal ? 'Ready' : 'Insufficient credits'}
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/14 bg-black/40 p-3 text-xs space-y-2">
-          <div className="text-sm font-semibold text-white">
-            Machine Rules (Demo)
-          </div>
-          <ul className="space-y-1 text-white/70 list-disc list-inside">
-            <li>5-card draw with HOLD / DRAW flow.</li>
-            <li>{'9/6 Jacks or Better paytable (Royal up to 4,000).'}</li>
-            <li>Max 5 credits per hand (BGRC demo credits).</li>
-            <li>Each hand uses a freshly shuffled 52-card deck.</li>
-          </ul>
-          <div className="text-[11px] text-white/50 pt-1">
-            This is a{' '}
-            <span className="font-semibold">
-              front-end only arcade machine
-            </span>
-            . Future{' '}
-            <span className="font-semibold text-[#facc15]">
-              BGLD / BGRC
-            </span>{' '}
-            on-chain video poker contracts can plug in verifiable randomness
-            and settle against a casino treasury while reusing this exact UX.
-          </div>
+        {/* MINI PAY TABLE (tight) */}
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-white/70">
+          {(
+            [
+              'ROYAL_FLUSH',
+              'STRAIGHT_FLUSH',
+              'FOUR_KIND',
+              'FULL_HOUSE',
+              'FLUSH',
+              'STRAIGHT',
+              'THREE_KIND',
+              'TWO_PAIR',
+              'JACKS_OR_BETTER',
+            ] as HandRank[]
+          ).map(key => (
+            <div
+              key={key}
+              className="rounded-lg border border-white/10 bg-black/50 px-2 py-1.5 flex items-center justify-between"
+            >
+              <span>{handLabel(key)}</span>
+              <span className="font-semibold text-[#facc15]">
+                x{PAY_TABLE[key]}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-2 text-[10px] text-white/45">
+          Demo arcade only – no real BGLD. Final odds &amp; pay table may adjust before
+          on-chain deployment.
         </div>
       </div>
     </div>
-  )
-}
-
-/* small helper for paytable row */
-function FragmentRow({
-  row,
-  betPerHand,
-  isHit,
-}: {
-  row: PayTableRow
-  betPerHand: number
-  isHit: boolean
-}) {
-  return (
-    <>
-      <div
-        className={[
-          'py-1 pr-1 text-[10px]',
-          isHit ? 'text-[#fef9c3] font-semibold' : 'text-amber-100/80',
-        ].join(' ')}
-      >
-        {row.label}
-      </div>
-      {row.pays.map((v, idx) => {
-        const activeCol = betPerHand === idx + 1
-        return (
-          <div
-            key={`${row.rank}-${idx}`}
-            className={[
-              'text-right px-1 py-1',
-              isHit && activeCol
-                ? 'bg-[#facc15]/30 text-[#fef9c3] font-bold rounded-md shadow-[0_0_12px_rgba(250,204,21,0.9)]'
-                : activeCol
-                ? 'text-amber-100 font-semibold'
-                : 'text-amber-100/75',
-            ].join(' ')}
-          >
-            {v}
-          </div>
-        )
-      })}
-    </>
   )
 }

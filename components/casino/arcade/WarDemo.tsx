@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
@@ -16,17 +16,7 @@ type Card = { rank: Rank; suit: Suit }
 
 type WarResult = 'WIN' | 'LOSE' | 'PUSH' | 'WAR' | null
 
-type Phase = 'betting' | 'dealing' | 'revealing' | 'settled'
-
-type WarSeat = {
-  id: number
-  seatLabel: string
-  playerCard: Card | null
-  dealerCard: Card | null
-  wager: number
-  result: WarResult
-  isDone: boolean
-}
+type Phase = 'betting' | 'revealing' | 'settled'
 
 /* ---------- helpers ---------- */
 
@@ -78,29 +68,26 @@ export default function WarDemo() {
 
   // Sync table PnL to arcade wallet
   useEffect(() => {
-  if (!mounted) return
-  const delta = sessionPnL - syncedPnL
-  if (delta === 0) return
-  if (delta > 0) addWin(delta)
-  else addLoss(-delta)
-  setSyncedPnL(sessionPnL)
-}, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
+    if (!mounted) return
+    const delta = sessionPnL - syncedPnL
+    if (delta === 0) return
+    if (delta > 0) addWin(delta)
+    else addLoss(-delta)
+    setSyncedPnL(sessionPnL)
+  }, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
 
-
+  // Single-hand state
+  const [phase, setPhase] = useState<Phase>('betting')
   const [baseBet, setBaseBet] = useState(10)
   const MIN_BET = 1
   const MAX_BET = 500
 
-  const [seatCount, setSeatCount] = useState(3)
-  const MAX_SEATS = 4
-
-  const [phase, setPhase] = useState<Phase>('betting')
-  const [seats, setSeats] = useState<WarSeat[]>([])
-  const [currentSeatIdx, setCurrentSeatIdx] = useState(0)
-  const [seatIdSeq, setSeatIdSeq] = useState(1)
+  const [playerCard, setPlayerCard] = useState<Card | null>(null)
+  const [dealerCard, setDealerCard] = useState<Card | null>(null)
+  const [result, setResult] = useState<WarResult>(null)
 
   const [tableMessage, setTableMessage] = useState(
-    'Set your stake and seats, then hit DEAL WAR to flip the cards.'
+    'Set your stake, then tap DEAL WAR to flip the cards.'
   )
 
   const [lastNet, setLastNet] = useState(0)
@@ -113,159 +100,124 @@ export default function WarDemo() {
 
   /* ---------- derived ---------- */
 
-  const activeSeats = useMemo(
-    () => seats.slice(0, seatCount),
-    [seats, seatCount]
-  )
-
-  const canDeal =
-    phase === 'betting' &&
+  const stakeReady =
     baseBet >= MIN_BET &&
     baseBet <= MAX_BET &&
-    seatCount > 0 &&
-    credits >= baseBet * seatCount
+    credits >= baseBet
 
-  const totalTableStake = baseBet * seatCount
+  const canPrimaryDeal =
+    stakeReady && (phase === 'betting' || phase === 'settled')
 
   /* ---------- core actions ---------- */
-
-  function resetTable() {
-    setSeats([])
-    setCurrentSeatIdx(0)
-    setPhase('betting')
-    setLastNet(0)
-    setLastPayout(0)
-    setLastSummary('—')
-    setTableMessage('Set your stake and seats, then hit DEAL WAR to flip the cards.')
-  }
 
   function newShoe() {
     setCredits(500)
     setSessionPnL(0)
     setSyncedPnL(0)
-    resetTable()
-  }
-
-  function ensureSeats() {
-    // ensure we have at least seatCount seats configured
-    if (seats.length >= seatCount) return
-    const labels = ['Rail 1', 'Rail 2', 'Rail 3', 'Rail 4']
-    const nextSeats: WarSeat[] = [...seats]
-    let id = seatIdSeq
-    for (let i = seats.length; i < seatCount; i++) {
-      nextSeats.push({
-        id: id++,
-        seatLabel: labels[i] ?? `Seat ${i + 1}`,
-        playerCard: null,
-        dealerCard: null,
-        wager: baseBet,
-        result: null,
-        isDone: false,
-      })
-    }
-    setSeatIdSeq(id)
-    setSeats(nextSeats)
-  }
-
-  function dealRound() {
-    if (!canDeal) return
-
-    ensureSeats()
-    const totalStake = totalTableStake
-
-    // Take stake from local credits
-    setCredits(c => c - totalStake)
-
-    const dealtSeats: WarSeat[] = activeSeats.map((seat): WarSeat => {
-      const playerCard = randomCard()
-      const dealerCard = randomCard()
-      return {
-        ...seat,
-        playerCard,
-        dealerCard,
-        wager: baseBet,
-        result: null,
-        isDone: false,
-      }
-    })
-
-    // If we have existing seats array larger than seatCount, keep them but mark as idle
-    const idleSeats: WarSeat[] = seats
-      .slice(seatCount)
-      .map((seat): WarSeat => ({
-        ...seat,
-        playerCard: null,
-        dealerCard: null,
-        wager: 0,
-        result: null,
-        isDone: true,
-      }))
-
-    const allSeats: WarSeat[] = [...dealtSeats, ...idleSeats]
-
-    setSeats(allSeats)
-    setPhase('dealing')
-    setTableMessage('Cards are out. Resolving results…')
+    setPlayerCard(null)
+    setDealerCard(null)
+    setResult(null)
+    setPhase('betting')
     setLastNet(0)
     setLastPayout(0)
     setLastSummary('—')
-    setCurrentSeatIdx(0)
-
-    // Slight delay for drama, then settle
-    setTimeout(() => {
-      resolveRound(allSeats, totalStake)
-    }, 800)
+    setTableMessage('Fresh shoe loaded. Set your stake, then tap DEAL WAR.')
   }
 
-  function resolveRound(initialSeats: WarSeat[], totalStake: number) {
+  function resetHand() {
+    setPlayerCard(null)
+    setDealerCard(null)
+    setResult(null)
+    setPhase('betting')
+    setTableMessage('Set your stake, then tap DEAL WAR to flip the cards.')
+  }
+
+  function dealHand() {
+    if (!stakeReady) return
+
+    // take stake
+    setCredits(c => c - baseBet)
+
+    // deal cards
+    const p = randomCard()
+    const d = randomCard()
+    setPlayerCard(p)
+    setDealerCard(d)
+    setResult(null)
+    setPhase('revealing')
+    setTableMessage('Cards are out… resolving WAR.')
+
+    // resolve after a small beat
+    setTimeout(() => {
+      settleRound(p, d)
+    }, 450)
+  }
+
+  function settleRound(p: Card, d: Card) {
+    const playerVal = rankValue(p.rank)
+    const dealerVal = rankValue(d.rank)
+
+    let outcome: WarResult = 'PUSH'
     let netChange = 0
     let grossReturned = 0
 
-    const resolvedSeats: WarSeat[] = initialSeats.map((seat): WarSeat => {
-      if (!seat.playerCard || !seat.dealerCard || seat.wager <= 0) {
-        return { ...seat, isDone: true }
-      }
+    if (playerVal > dealerVal) {
+      outcome = 'WIN'
+      netChange += baseBet
+      grossReturned += baseBet * 2
+    } else if (playerVal < dealerVal) {
+      outcome = 'LOSE'
+      netChange -= baseBet
+      // nothing returned
+    } else {
+      // tie is WAR / push
+      outcome = 'WAR'
+      grossReturned += baseBet
+    }
 
-      const playerVal = rankValue(seat.playerCard.rank)
-      const dealerVal = rankValue(seat.dealerCard.rank)
-
-      let result: WarResult = 'PUSH'
-      if (playerVal > dealerVal) {
-        result = 'WIN'
-        netChange += seat.wager
-        grossReturned += seat.wager * 2
-      } else if (playerVal < dealerVal) {
-        result = 'LOSE'
-        netChange -= seat.wager
-      } else {
-        // Tie counts as "WAR" but treated as push in demo
-        result = 'WAR'
-        grossReturned += seat.wager
-      }
-
-      return {
-        ...seat,
-        result,
-        isDone: true,
-      }
-    })
-
-    setSeats(resolvedSeats)
+    setResult(outcome)
     setCredits(c => c + grossReturned + netChange)
     setSessionPnL(prev => prev + netChange)
-    setPhase('settled')
-
     setLastNet(netChange)
     setLastPayout(grossReturned)
+
     setLastSummary(
       netChange > 0
-        ? `WAR table wins • Net +${netChange.toFixed(2)} BGRC`
+        ? `You won the WAR • Net +${netChange.toFixed(2)} BGRC`
         : netChange < 0
         ? `Dealer took the edge • Net ${netChange.toFixed(2)} BGRC`
-        : 'All pushes and WAR ties this round.'
+        : outcome === 'WAR'
+        ? 'WAR tie — bet pushed back to you.'
+        : 'Round pushed overall.'
     )
 
-    setTableMessage('Round complete. Adjust stakes or hit DEAL WAR again.')
+    setTableMessage('Round complete. Adjust stake or tap DEAL WAR again.')
+    setPhase('settled')
+  }
+
+  // Single primary button like blackjack
+  function handlePrimaryDeal() {
+    if (!stakeReady) return
+
+    if (phase === 'settled') {
+      // soft reset then deal again
+      resetHand()
+      setTimeout(() => {
+        dealHand()
+      }, 0)
+    } else {
+      dealHand()
+    }
+  }
+
+  /* ---------- hydration guard ---------- */
+
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center py-10 text-xs text-white/60">
+        Initializing WAR demo…
+      </div>
+    )
   }
 
   /* ---------- render helpers ---------- */
@@ -284,7 +236,7 @@ export default function WarDemo() {
       <div
         className={[
           'w-[64px] h-[92px] md:w-[80px] md:h-[115px] rounded-xl bg-white border border-slate-300 shadow-[0_8px_26px_rgba(0,0,0,0.9)] flex flex-col justify-between p-2 transition-transform',
-          dim ? 'opacity-70 scale-[0.98]' : 'opacity-100',
+          dim ? 'opacity-75 scale-[0.98]' : 'opacity-100',
         ].join(' ')}
       >
         <div className={`text-xs font-bold ${baseColor}`}>
@@ -344,7 +296,7 @@ export default function WarDemo() {
     )
   }
 
-  /* ---------- left side: table ---------- */
+  /* ---------- left side: compact table ---------- */
 
   const left = (
     <div className="relative rounded-[28px] border border-emerald-400/50 bg-[radial-gradient(circle_at_10%_0%,#064e3b,transparent_55%),radial-gradient(circle_at_90%_0%,#047857,transparent_55%),#022c22] shadow-[0_22px_60px_rgba(0,0,0,0.95)] p-4 md:p-5 overflow-hidden">
@@ -393,8 +345,8 @@ export default function WarDemo() {
         </div>
       </div>
 
-      {/* table felt */}
-      <div className="relative z-10 rounded-3xl border border-emerald-300/50 bg-[radial-gradient(circle_at_50%_0%,#065f46,#022c22_65%,#01120f_100%)] px-4 pt-4 pb-5 md:px-6 md:pt-5 md:pb-6">
+      {/* compact felt / hand box */}
+      <div className="relative z-10 rounded-3xl border border-emerald-300/50 bg-[radial-gradient(circle_at_50%_0%,#065f46,#022c22_65%,#01120f_100%)] px-4 pt-4 pb-4 md:px-6 md:pt-5 md:pb-5">
         {/* headline message strip */}
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-[11px]">
           <div className="inline-flex max-w-xl items-center rounded-full border border-amber-200/70 bg-black/60 px-3 py-1.5 text-amber-50 shadow-[0_0_12px_rgba(251,191,36,0.6)]">
@@ -417,115 +369,60 @@ export default function WarDemo() {
           </div>
         </div>
 
-        {/* dealer row */}
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-emerald-200/70 bg-black/25 px-3 py-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full border border-emerald-200/80 bg-black/70 flex items-center justify-center text-[10px] font-black tracking-[0.16em] text-emerald-50">
-              DEALER
+        {/* dealer + player stacked tight */}
+        <div className="rounded-2xl border border-emerald-200/60 bg-black/25 px-3 py-3 md:px-4 md:py-4">
+          <div className="flex flex-col gap-4 items-center">
+            {/* Dealer row */}
+            <div className="flex flex-col items-center gap-1">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-emerald-50/85">
+                Dealer
+              </div>
+              <div className="flex items-center gap-2">
+                {renderCard(dealerCard, false)}
+              </div>
             </div>
-            <div className="text-[11px] text-emerald-100/85 max-w-xs">
-              Dealer pulls from the same virtual shoe as the rail. High card
-              takes the pot, WAR ties push.
+
+            {/* Player row */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-emerald-50/85">
+                You
+              </div>
+              <div className="flex items-end gap-3">
+                {renderCard(playerCard, false)}
+                {renderChipStack(baseBet)}
+              </div>
+              {result && (
+                <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-emerald-50 bg-black/40 px-3 py-1 rounded-full">
+                  {resultLabel(result)}
+                </div>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* For visual we just show the first seat's dealer card bigger */}
-            {renderCard(activeSeats[0]?.dealerCard ?? null, false)}
           </div>
         </div>
 
-        {/* rail seats */}
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: seatCount }).map((_, idx) => {
-            const seat = activeSeats[idx]
-            const isActiveSeat = idx === currentSeatIdx && phase !== 'betting'
-            const playerCard = seat?.playerCard ?? null
-            const dealerCard = seat?.dealerCard ?? null
-
-            return (
-              <div
-                key={idx}
-                className={[
-                  'relative flex flex-col items-center gap-2 px-2 py-3 rounded-2xl border bg-[radial-gradient(circle_at_50%_0%,rgba(6,95,70,0.9),rgba(6,78,59,0.96))] transition-shadow',
-                  seat
-                    ? 'border-emerald-200/70 shadow-[0_0_18px_rgba(16,185,129,0.5)]'
-                    : 'border-emerald-900/60 border-dashed bg-black/20',
-                ].join(' ')}
-              >
-                <div className="flex items-center justify-between w-full text-[10px] text-emerald-100/85">
-                  <span className="uppercase tracking-[0.22em]">
-                    {seat?.seatLabel ?? `Rail ${idx + 1}`}
-                  </span>
-                  {seat && (
-                    <span className="font-semibold">
-                      Bet {seat.wager.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-end gap-2">
-                  <div className={isActiveSeat ? 'animate-pulse' : ''}>
-                    {renderCard(playerCard, false)}
-                  </div>
-                  <div className="opacity-90">
-                    {renderCard(dealerCard, true)}
-                  </div>
-                  {seat && renderChipStack(seat.wager)}
-                </div>
-
-                {seat?.result && (
-                  <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-emerald-50 bg-black/40 px-2 py-1 rounded-full">
-                    {resultLabel(seat.result)}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+        {/* ACTION BAR – right under the hand (mobile-first) */}
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+          <button
+            onClick={handlePrimaryDeal}
+            disabled={!canPrimaryDeal}
+            className="col-span-2 md:col-span-2 h-11 rounded-lg bg-gradient-to-b from-[#facc15] to-[#f59e0b] text-black font-extrabold text-xs tracking-[0.2em] uppercase shadow-[0_0_18px_rgba(250,204,21,0.85)] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {phase === 'settled' ? 'Deal Next War' : 'Deal War'}
+          </button>
+          <button
+            onClick={resetHand}
+            disabled={phase === 'betting' && !playerCard && !dealerCard}
+            className="h-11 rounded-lg border border-white/25 bg-black/70 text-white text-[11px] font-semibold tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Reset Hand
+          </button>
         </div>
 
-        {/* bottom controls strip */}
-        <div className="mt-4 rounded-2xl border border-emerald-200/60 bg-black/55 px-3 py-3 flex flex-col gap-3">
-          {/* seat + bet controls */}
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-[11px] text-emerald-100/80">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span>
-                Rail Seats:{' '}
-                <span className="font-semibold text-emerald-50">
-                  {seatCount}
-                </span>
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setSeatCount(s => (s > 1 ? s - 1 : s))}
-                  disabled={phase !== 'betting' || seatCount <= 1}
-                  className="px-2 py-1 rounded-full border border-emerald-200/60 bg-black/40 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  − Seat
-                </button>
-                <button
-                  onClick={() =>
-                    setSeatCount(s => (s < MAX_SEATS ? s + 1 : s))
-                  }
-                  disabled={phase !== 'betting' || seatCount >= MAX_SEATS}
-                  className="px-2 py-1 rounded-full border border-emerald-200/60 bg-black/40 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  + Seat
-                </button>
-              </div>
-            </div>
-            <div className="text-[10px] text-emerald-100/60">
-              Round Stake:{' '}
-              <span className="font-semibold text-[#facc15]">
-                {totalTableStake.toLocaleString()} BGRC
-              </span>{' '}
-              from table credits.
-            </div>
-          </div>
-
-          {/* bet chips */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[11px] text-emerald-100/80">
-              Base Bet per Seat:{' '}
+        {/* bet controls under actions */}
+        <div className="mt-3 flex flex-col gap-2 text-[11px] text-emerald-100/80">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span>
+              Base Bet:{' '}
               <span className="font-bold text-[#facc15]">
                 {baseBet.toLocaleString()} BGRC
               </span>
@@ -535,17 +432,23 @@ export default function WarDemo() {
                 </span>
               )}
             </span>
+            <span className="text-[10px] text-emerald-100/60">
+              Min {MIN_BET} • Max {MAX_BET}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             {[1, 5, 10, 25, 50, 100].map(v => (
               <button
                 key={v}
                 onClick={() => setBaseBet(Math.min(MAX_BET, v))}
-                disabled={phase !== 'betting'}
+                disabled={phase === 'revealing'}
                 className={[
                   'px-3 py-1 rounded-full border text-[11px] font-semibold',
                   baseBet === v
                     ? 'border-[#facc15] bg-[#facc15]/20 text-[#fef3c7]'
                     : 'border-emerald-300/40 bg-emerald-900/40 text-emerald-100',
-                  phase !== 'betting' ? 'opacity-40 cursor-not-allowed' : '',
+                  phase === 'revealing' ? 'opacity-40 cursor-not-allowed' : '',
                 ].join(' ')}
               >
                 {v}
@@ -553,41 +456,17 @@ export default function WarDemo() {
             ))}
             <button
               onClick={() => setBaseBet(Math.min(MAX_BET, baseBet + 5))}
-              disabled={phase !== 'betting'}
+              disabled={phase === 'revealing'}
               className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               +5
             </button>
             <button
               onClick={() => setBaseBet(MIN_BET)}
-              disabled={phase !== 'betting'}
+              disabled={phase === 'revealing'}
               className="px-3 py-1 rounded-full border border-emerald-300/60 bg-black/40 text-[11px] text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Clear
-            </button>
-          </div>
-
-          {/* action buttons */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-1">
-            <button
-              onClick={dealRound}
-              disabled={!canDeal || phase !== 'betting'}
-              className="col-span-2 md:col-span-2 h-10 rounded-lg bg-gradient-to-b from-[#facc15] to-[#f59e0b] text-black font-extrabold text-xs tracking-[0.16em] uppercase shadow-[0_0_18px_rgba(250,204,21,0.85)] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Deal War
-            </button>
-            <button
-              onClick={resetTable}
-              disabled={phase === 'betting'}
-              className="h-10 rounded-lg border border-white/25 bg-black/70 text-white text-[11px] font-semibold tracking-[0.16em] uppercase disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              Reset Table
-            </button>
-            <button
-              onClick={newShoe}
-              className="h-10 rounded-lg border border-emerald-300/60 bg-emerald-900/80 text-emerald-100 text-[11px] font-semibold tracking-[0.16em] uppercase"
-            >
-              Reload 500
             </button>
           </div>
         </div>
@@ -607,9 +486,8 @@ export default function WarDemo() {
           Casino War (BGRC Arcade)
         </div>
         <div className="mt-1 text-xs text-white/70">
-          High-card face-off vs the house, tuned for Base Gold Rush. Multi-seat
-          rail so you can feel what a packed table will look like before we
-          wire the real contracts.
+          High-card face-off vs the house, tuned for Base Gold Rush. Tight single-seat
+          layout so it feels great on mobile before we wire live rail tables.
         </div>
       </div>
 
@@ -620,7 +498,8 @@ export default function WarDemo() {
             Arcade Stack
           </div>
           <div className="mt-1 text-xl font-extrabold text-white">
-            {arcadeCredits.toLocaleString()} <span className="text-xs text-white/70">BGRC</span>
+            {arcadeCredits.toLocaleString()}{' '}
+            <span className="text-xs text-white/70">BGRC</span>
           </div>
           <div className="mt-1 text-[11px] text-white/55">
             Global demo balance across all arcade games.
@@ -685,10 +564,13 @@ export default function WarDemo() {
           Table Rules (Demo)
         </div>
         <ul className="space-y-1 text-white/70 list-disc list-inside">
-          <li>Each seat places an equal base bet in BGRC demo credits.</li>
-          <li>One card to each seat, one card to the dealer.</li>
+          <li>Single seat: one card to you, one card to the dealer.</li>
+          <li>Base bet in BGRC demo credits each round.</li>
           <li>High card wins 1:1. Low card loses.</li>
-          <li>Ties show as <span className="text-[#facc15] font-semibold">WAR</span> and push (bet returned).</li>
+          <li>
+            Ties show as <span className="text-[#facc15] font-semibold">WAR</span> and push
+            (bet returned).
+          </li>
           <li>All results are local-only in this arcade build.</li>
         </ul>
         <div className="text-[11px] text-white/50 pt-1">
