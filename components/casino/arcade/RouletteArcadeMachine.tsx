@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
 /** European wheel numbers in order */
@@ -143,8 +143,8 @@ export default function RouletteArcadeMachine() {
   const [currentChip, setCurrentChip] = useState(5)
 
   const [spinning, setSpinning] = useState(false)
-  const [angle, setAngle] = useState(0)
-  const [ballAngle, setBallAngle] = useState(0)
+const [angle, setAngle] = useState(0)
+const [ballAngle, setBallAngle] = useState(0)
   const [resultNumber, setResultNumber] = useState<number | null>(null)
   const [status, setStatus] = useState('Place your bets and tap Spin.')
   const [lastWin, setLastWin] = useState(0)
@@ -205,72 +205,80 @@ export default function RouletteArcadeMachine() {
   }
 
   const spin = () => {
-    if (spinning) return
-    if (totalBet <= 0) {
-      setStatus('No bets placed. Tap the board to add chips.')
-      return
+  if (spinning) return
+  if (totalBet <= 0) {
+    setStatus('No bets placed. Tap the board to add chips.')
+    return
+  }
+  if (totalBet > credits) {
+    setStatus('Not enough demo credits for that total bet.')
+    return
+  }
+
+  setStatus('Spinning… Good luck!')
+  setSpinning(true)
+
+  // 1) Pick random pocket index + number
+  const idx = Math.floor(Math.random() * WHEEL_NUMBERS.length)
+  const n = WHEEL_NUMBERS[idx]
+
+  // 2) Geometry of the wheel
+  const segment = 360 / WHEEL_NUMBERS.length
+  // Center of pocket idx in the wheel’s local coords
+  const pocketDirection = (idx + 0.5) * segment - 90
+
+  // 3) Decide how much the wheel turns this spin
+  const spinsPerClick = 6 // full rotations per click
+  const newWheelAngle = angle - spinsPerClick * 360
+
+  // 4) Make the ball orbit a few extra times but end over the pocket
+  const ballOrbits = 4 // how many full laps the ball makes
+  const newBallAngle = pocketDirection + newWheelAngle + 90 + ballOrbits * 360
+  // Explanation:
+  //   Ball direction at end = -90 + newBallAngle
+  //   Wheel pocket direction = pocketDirection + newWheelAngle
+  //   With +90 above, those match exactly, so ball sits on the pocket center.
+
+  // Apply both rotations; CSS handles smooth animation from old → new
+  setAngle(newWheelAngle)
+  setBallAngle(newBallAngle)
+
+  // 5) Resolve outcome after the animation duration
+  setTimeout(() => {
+    let totalPayout = 0
+    for (const b of bets) {
+      const mul = getPayoutMultiplier(b, n)
+      if (mul > 0) {
+        totalPayout += b.amount * mul
+      }
     }
-    if (totalBet > credits) {
-      setStatus('Not enough demo credits for that total bet.')
-      return
-    }
 
-    setStatus('Spinning… Good luck!')
-    setSpinning(true)
+    recordSpin({ wager: totalBet, payout: totalPayout })
 
-    // random result
-    const idx = Math.floor(Math.random() * WHEEL_NUMBERS.length)
-    const n = WHEEL_NUMBERS[idx]
+    const net = totalPayout - totalBet
+    setLastWin(net)
+    setResultNumber(n)
+    setLastResultColor(n === 0 ? 'GREEN' : isRed(n) ? 'RED' : 'BLACK')
 
-    const segment = 360 / WHEEL_NUMBERS.length
-    const centerOffset = segment / 2
-    const targetAngle = idx * segment + centerOffset
-    const totalRotation = 5 * 360 + targetAngle // long spin every time
-
-    // reset angles, then animate so every spin feels full and fresh
-    setAngle(0)
-    setBallAngle(0)
-    requestAnimationFrame(() => {
-      setAngle(-totalRotation)
-      setBallAngle(720) // two full orbits
+    setHistory(prev => {
+      const next = [n, ...prev]
+      return next.slice(0, 12)
     })
 
-    setTimeout(() => {
-      let totalPayout = 0
-      for (const b of bets) {
-        const mul = getPayoutMultiplier(b, n)
-        if (mul > 0) {
-          totalPayout += b.amount * mul
-        }
-      }
+    if (net > 0) {
+      setStatus(`Hit ${n}! You won ${totalPayout} credits (net +${net}).`)
+    } else if (net === 0) {
+      setStatus(`Hit ${n}. You broke even on that spin.`)
+    } else {
+      setStatus(`Hit ${n}. Net ${net} this spin.`)
+    }
 
-      recordSpin({ wager: totalBet, payout: totalPayout })
+    setSpinning(false)
+  }, 3200)
+}
 
-      const net = totalPayout - totalBet
-      setLastWin(net)
-      setResultNumber(n)
-      setLastResultColor(
-        n === 0 ? 'GREEN' : isRed(n) ? 'RED' : 'BLACK'
-      )
 
-      setHistory(prev => {
-        const next = [n, ...prev]
-        return next.slice(0, 12)
-      })
 
-      if (net > 0) {
-        setStatus(
-          `Hit ${n}! You won ${totalPayout} credits (net +${net}).`
-        )
-      } else if (net === 0) {
-        setStatus(`Hit ${n}. You broke even on that spin.`)
-      } else {
-        setStatus(`Hit ${n}. Net ${net} this spin.`)
-      }
-
-      setSpinning(false)
-    }, 3200)
-  }
 
   const resetTable = () => {
     if (spinning) return
@@ -297,7 +305,7 @@ export default function RouletteArcadeMachine() {
             Golden Wheel Roulette <span className="text-[#facc15]">• Arcade</span>
           </div>
           <div className="text-xs text-white/60 mt-1 max-w-sm">
-            European wheel. Free demo credits only. Same multipliers
+            Riulette wheel. Free demo credits only. Same multipliers
             you&apos;ll see on the on-chain roulette table.
           </div>
         </div>
@@ -324,10 +332,10 @@ export default function RouletteArcadeMachine() {
         <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-4 md:p-5 space-y-3">
           <div className="flex items-center justify-between text-[11px] mb-1">
             <div className="uppercase tracking-[0.3em] text-white/60">
-              Golden Wheel Display
+              Golden Wheel 
             </div>
             <div className="text-white/50">
-              Demo arcade • RNG local
+              Demo arcade • On-Chain Soon
             </div>
           </div>
 
@@ -425,25 +433,29 @@ export default function RouletteArcadeMachine() {
                     />
                   </g>
 
-                  {/* BALL */}
-                  <g
-                    style={{
-                      transformOrigin: '50% 50%',
-                      transform: `rotate(${ballAngle}deg)`,
-                      transition: spinning
-                        ? 'transform 3.2s cubic-bezier(.18,.7,.26,1.05)'
-                        : undefined,
-                    }}
-                  >
-                    <circle
-                      cx="100"
-                      cy="32"
-                      r="5.5"
-                      fill="#f9fafb"
-                      stroke="#e5e7eb"
-                      strokeWidth="1"
-                    />
-                  </g>
+                  
+                  {/* BALL – fixed at top */}
+{/* BALL */}
+<g
+  style={{
+    transformOrigin: '50% 50%',
+    transform: `rotate(${ballAngle}deg)`,
+    transition: spinning
+      ? 'transform 3.2s cubic-bezier(.18,.7,.26,1.05)'
+      : undefined,
+  }}
+>
+  <circle
+    cx="100"
+    cy="32"
+    r="5.5"
+    fill="#f9fafb"
+    stroke="#e5e7eb"
+    strokeWidth="1"
+  />
+</g>
+
+
                 </svg>
               </div>
             </div>
