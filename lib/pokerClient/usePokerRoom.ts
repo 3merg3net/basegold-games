@@ -8,10 +8,46 @@ type IncomingMessage = any;
 type SendPayload =
   | { type: "ping"; payload?: string }
   | { type: "chat"; text: string }
-  | { type: "sit"; name?: string; seatIndex?: number }
+  | { type: "sit"; name?: string; seatIndex?: number; buyIn?: number }
   | { type: "stand" }
   | { type: "start-hand" }
-  | { type: "action"; action: "fold" | "check" | "call" | "bet"; amount?: number };
+  | {
+      type: "action";
+      action: "fold" | "check" | "call" | "bet";
+      amount?: number;
+    };
+
+/**
+ * Build a WebSocket URL that is safe for:
+ * - Vercel (https → wss)
+ * - Railway
+ * - Local dev (http → ws)
+ * - Mobile Safari (hates mixed content + weird schemes)
+ */
+function buildWsUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_POKER_WS;
+
+  // SSR fallback
+  if (typeof window === "undefined") {
+    return raw || "ws://localhost:8080";
+  }
+
+  // No env set → local dev default
+  if (!raw) {
+    const isSecure = window.location.protocol === "https:";
+    return (isSecure ? "wss://" : "ws://") + "localhost:8080";
+  }
+
+  // If already ws:// or wss:// use as-is
+  if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
+    return raw;
+  }
+
+  // If someone put https:// or http:// → convert to wss/ws
+  const cleaned = raw.replace(/^https?:\/\//, "");
+  const isSecure = window.location.protocol === "https:";
+  return (isSecure ? "wss://" : "ws://") + cleaned;
+}
 
 export function usePokerRoom(roomId: string, playerId: string) {
   const [ready, setReady] = useState(false);
@@ -19,11 +55,19 @@ export function usePokerRoom(roomId: string, playerId: string) {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket(buildWsUrl());
+    // Build URL once per mount
+    const url = buildWsUrl();
+    console.log("[poker] connecting to WS:", {
+      env: process.env.NEXT_PUBLIC_POKER_WS,
+      resolvedUrl: url,
+      netConst: POKER_WS_URL,
+    });
 
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("[poker] WS opened:", POKER_WS_URL);
+      console.log("[poker] WS opened:", url);
       setReady(true);
 
       const join = {
@@ -59,34 +103,10 @@ export function usePokerRoom(roomId: string, playerId: string) {
         event.reason
       );
       setReady(false);
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
     };
-
-    function buildWsUrl(): string {
-  // 1. Read env
-  const raw = process.env.NEXT_PUBLIC_POKER_WS;
-
-  // 2. SSR fallback
-  if (typeof window === "undefined") {
-    return raw || "ws://localhost:8080";
-  }
-
-  // 3. Local dev fallback
-  if (!raw) {
-    const isSecure = window.location.protocol === "https:";
-    return (isSecure ? "wss://" : "ws://") + "localhost:8080";
-  }
-
-  // 4. If already ws:// or wss:// use as-is
-  if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
-    return raw;
-  }
-
-  // 5. If someone put https:// or http:// → convert to wss/ws
-  const cleaned = raw.replace(/^https?:\/\//, "");
-  const isSecure = window.location.protocol === "https:";
-  return (isSecure ? "wss://" : "ws://") + cleaned;
-}
-
 
     return () => {
       try {
@@ -102,6 +122,10 @@ export function usePokerRoom(roomId: string, playerId: string) {
         ws.close();
       } catch {
         // ignore cleanup errors
+      } finally {
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
       }
     };
   }, [roomId, playerId]);
