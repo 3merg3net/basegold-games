@@ -10,49 +10,53 @@ type SendPayload =
   | { type: "sit"; name?: string; seatIndex?: number; buyIn?: number }
   | { type: "stand" }
   | { type: "start-hand" }
-  | { type: "action"; action: "fold" | "check" | "call" | "bet"; amount?: number };
+  | {
+      type: "action";
+      action: "fold" | "check" | "call" | "bet";
+      amount?: number;
+    };
 
 /**
  * Build the WebSocket URL in a way that works:
  * - On Vercel + Railway (wss://…)
  * - On localhost (ws://localhost:8080)
- * - On both desktop and mobile browsers
+ * - Ignores the "<your-socket-host>" placeholder
  */
 function resolveWsUrl(): string {
-  // 1. Read env var (Vercel injects this at build time)
   let raw = process.env.NEXT_PUBLIC_POKER_WS;
 
-  // If NOTHING was provided, fall back to current origin
-  // This prevents "invalid URL" in the WebSocket constructor.
-  if (!raw || raw.trim() === "") {
-    if (typeof window !== "undefined") {
-      const isSecure = window.location.protocol === "https:";
-      return `${isSecure ? "wss" : "ws"}://${window.location.host}`;
+  // Guard against leftover tutorial placeholder
+  if (raw && raw.includes("<your-socket-host>")) {
+    console.warn(
+      "[poker] NEXT_PUBLIC_POKER_WS contains placeholder '<your-socket-host>', ignoring it."
+    );
+    raw = "";
+  }
+
+  // If env is set and not empty → normalize it
+  if (raw && raw.trim() !== "") {
+    raw = raw.trim();
+
+    // Already ws:// or wss:// → good
+    if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
+      return raw;
     }
-    // SSR fallback
-    return "ws://localhost:8080";
+
+    // Convert https:// → wss://, http:// → ws://
+    if (raw.startsWith("https://")) {
+      return raw.replace(/^https:\/\//, "wss://");
+    }
+    if (raw.startsWith("http://")) {
+      return raw.replace(/^http:\/\//, "ws://");
+    }
+
+    // Bare domain / host → assume wss:// in prod
+    return `wss://${raw}`;
   }
 
-  raw = raw.trim();
-
-  // 2. If already ws:// or wss:// → good
-  if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
-    return raw;
-  }
-
-  // 3. If user entered https:// or http:// → convert to wss:// or ws://
-  if (raw.startsWith("https://")) {
-    return raw.replace(/^https:\/\//, "wss://");
-  }
-  if (raw.startsWith("http://")) {
-    return raw.replace(/^http:\/\//, "ws://");
-  }
-
-  // 4. If it's just a bare domain/subdomain → prepend protocol
-  const isSecure =
-    typeof window !== "undefined" &&
-    window.location.protocol === "https:";
-  return `${isSecure ? "wss://" : "ws://"}${raw}`;
+  // No env (or placeholder) → dev default
+  // This is what makes local dev work with a localhost coordinator.
+  return "ws://localhost:8080";
 }
 
 export function usePokerRoom(roomId: string, playerId: string) {

@@ -49,7 +49,8 @@ const PAYTABLE: Record<SymbolId, number> = {
 // slightly cooled down from 0.22 → 0.12
 const FORCED_ALIGN_CHANCE = 0.12
 
-const SPIN_TICK_MS = 55
+// Slightly slower tick so the spin reads more clearly on mobile
+const SPIN_TICK_MS = 90
 const FIRST_REEL_SPIN_MS = 1100
 const REEL_STAGGER_MS = 260
 
@@ -404,6 +405,36 @@ export default function GoldenAlignmentArcadeMachine() {
             </div>
           </div>
         </div>
+
+        {/* COMPACT BET BUTTONS WHEN IN FULLSCREEN MOBILE */}
+        {fullscreenMobile && (
+          <div className="mt-2">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80 text-center mb-1">
+              Bet Per Spin
+            </div>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {BET_OPTIONS.map(v => {
+                const active = v === betPerSpin
+                const disabled = v > credits && credits > 0
+                return (
+                  <button
+                    key={v}
+                    onClick={() => !disabled && setBetPerSpin(v)}
+                    className={[
+                      'rounded-full px-3 py-1 text-[11px] font-semibold border',
+                      active
+                        ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_8px_rgba(250,204,21,0.7)]'
+                        : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
+                      disabled ? 'opacity-40 cursor-not-allowed' : '',
+                    ].join(' ')}
+                  >
+                    {v}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -460,7 +491,7 @@ export default function GoldenAlignmentArcadeMachine() {
         {/* LEFT: CABINET + STATUS */}
         {cabinetPanel}
 
-        {/* RIGHT: BETTING + PAYTABLE / HOW TO PLAY (hidden in fullscreen) */}
+        {/* RIGHT: BETTING + PAYTABLE / HOW TO PLAY */}
         <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4">
           {/* Bet selector */}
           <div>
