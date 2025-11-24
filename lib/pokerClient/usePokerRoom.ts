@@ -12,9 +12,6 @@ type SendPayload =
   | { type: "start-hand" }
   | { type: "action"; action: "fold" | "check" | "call" | "bet"; amount?: number };
 
-// Read the env that Vercel injects at build time
-const WS_ENV = process.env.NEXT_PUBLIC_POKER_WS;
-
 /**
  * Build the WebSocket URL in a way that works:
  * - On Vercel + Railway (wss://…)
@@ -22,30 +19,40 @@ const WS_ENV = process.env.NEXT_PUBLIC_POKER_WS;
  * - On both desktop and mobile browsers
  */
 function resolveWsUrl(): string {
-  // SSR / Next.js server side: just return env or localhost
-  if (typeof window === "undefined") {
-    return WS_ENV || "ws://localhost:8080";
+  // 1. Read env var (Vercel injects this at build time)
+  let raw = process.env.NEXT_PUBLIC_POKER_WS;
+
+  // If NOTHING was provided, fall back to current origin
+  // This prevents "invalid URL" in the WebSocket constructor.
+  if (!raw || raw.trim() === "") {
+    if (typeof window !== "undefined") {
+      const isSecure = window.location.protocol === "https:";
+      return `${isSecure ? "wss" : "ws"}://${window.location.host}`;
+    }
+    // SSR fallback
+    return "ws://localhost:8080";
   }
 
-  // No env set → fall back to current host (useful in dev)
-  if (!WS_ENV) {
-    const isSecure = window.location.protocol === "https:";
-    const defaultHost =
-      window.location.hostname === "localhost"
-        ? "localhost:8080"
-        : window.location.host;
-    return `${isSecure ? "wss" : "ws"}://${defaultHost}`;
+  raw = raw.trim();
+
+  // 2. If already ws:// or wss:// → good
+  if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
+    return raw;
   }
 
-  // If env is already ws:// or wss://, use as-is
-  if (WS_ENV.startsWith("ws://") || WS_ENV.startsWith("wss://")) {
-    return WS_ENV;
+  // 3. If user entered https:// or http:// → convert to wss:// or ws://
+  if (raw.startsWith("https://")) {
+    return raw.replace(/^https:\/\//, "wss://");
+  }
+  if (raw.startsWith("http://")) {
+    return raw.replace(/^http:\/\//, "ws://");
   }
 
-  // If env is http(s)://, convert to ws(s)://
-  const cleaned = WS_ENV.replace(/^https?:\/\//, "");
-  const isSecure = window.location.protocol === "https:";
-  return `${isSecure ? "wss" : "ws"}://${cleaned}`;
+  // 4. If it's just a bare domain/subdomain → prepend protocol
+  const isSecure =
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:";
+  return `${isSecure ? "wss://" : "ws://"}${raw}`;
 }
 
 export function usePokerRoom(roomId: string, playerId: string) {
@@ -55,13 +62,14 @@ export function usePokerRoom(roomId: string, playerId: string) {
 
   useEffect(() => {
     const url = resolveWsUrl();
-    const ws = new WebSocket(url);
-    wsRef.current = ws; // 🔥 CRUCIAL: wire into ref so send() works
 
-    console.log("[poker] opening WS:", url);
+    console.log("[poker] Attempting WS →", url);
+
+    const ws = new WebSocket(url);
+    wsRef.current = ws; // REQUIRED so send() can use it
 
     ws.onopen = () => {
-      console.log("[poker] WS opened");
+      console.log("[poker] WS OPEN:", url);
       setReady(true);
 
       const join = {
@@ -74,18 +82,18 @@ export function usePokerRoom(roomId: string, playerId: string) {
       ws.send(JSON.stringify(join));
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (ev) => {
       try {
-        const data = JSON.parse(event.data);
-        console.log("[poker] incoming:", data);
+        const data = JSON.parse(ev.data);
+        // console.log("[poker] incoming:", data);
         setMessages((prev) => [...prev, data]);
       } catch (err) {
-        console.error("[poker] Failed to parse WS message", err);
+        console.error("[poker] bad message:", err);
       }
     };
 
-    ws.onerror = (event) => {
-      console.error("[poker] WS error", event);
+    ws.onerror = (err) => {
+      console.error("[poker] WS ERROR:", err);
     };
 
     ws.onclose = (event) => {
@@ -97,7 +105,6 @@ export function usePokerRoom(roomId: string, playerId: string) {
         event.reason
       );
       setReady(false);
-      wsRef.current = null;
     };
 
     return () => {
@@ -114,8 +121,6 @@ export function usePokerRoom(roomId: string, playerId: string) {
         ws.close();
       } catch {
         // ignore cleanup errors
-      } finally {
-        wsRef.current = null;
       }
     };
   }, [roomId, playerId]);
