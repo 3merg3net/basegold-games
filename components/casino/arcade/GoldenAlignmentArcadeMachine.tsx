@@ -123,144 +123,155 @@ export default function GoldenAlignmentArcadeMachine() {
   const canSpin = !spinning && credits > 0 && betPerSpin > 0
 
   function spin() {
-    if (spinning) return
+  if (spinning) return
 
-    const stake = Math.max(1, betPerSpin)
+  const stake = Math.max(1, betPerSpin)
 
-    if (credits <= 0) {
-      setStatus('Out of demo credits in your arcade wallet.')
-      return
-    }
-    if (stake > credits) {
-      setStatus('Not enough demo credits for that bet size.')
-      return
-    }
+  if (credits <= 0) {
+    setStatus('Out of demo credits in your arcade wallet.')
+    return
+  }
+  if (stake > credits) {
+    setStatus('Not enough demo credits for that bet size.')
+    return
+  }
 
-    setSpinning(true)
-    setStatus('Spinning reels… aligning gold…')
-    setLastNet(0)
-    setLastPayout(0)
-    setLastMainSymbol(null)
-    setLastLinesHit(0)
+  setSpinning(true)
+  setStatus('Spinning reels… aligning gold…')
+  setLastNet(0)
+  setLastPayout(0)
+  setLastMainSymbol(null)
+  setLastLinesHit(0)
 
-    // Choose raw stops
-    let stops: number[] = [0, 1, 2].map(
-      () => Math.floor(Math.random() * STRIP_LENGTH)
-    )
+  // Choose raw stops
+  let stops: number[] = [0, 1, 2].map(
+    () => Math.floor(Math.random() * STRIP_LENGTH)
+  )
 
-    // Occasionally force a full alignment on one of the three rows
-    if (Math.random() < FORCED_ALIGN_CHANCE) {
-      const targetRow = Math.floor(Math.random() * 3) // 0 top,1 mid,2 bottom
-      const targetIndex = Math.floor(Math.random() * STRIP_LENGTH)
+  // Occasionally force a full alignment on one of the three rows
+  if (Math.random() < FORCED_ALIGN_CHANCE) {
+    const targetRow = Math.floor(Math.random() * 3) // 0 top,1 mid,2 bottom
+    const targetIndex = Math.floor(Math.random() * STRIP_LENGTH)
 
-      const makeCenterForRow = (row: number): number => {
-        if (row === 0) return wrapIndex(targetIndex + 1, STRIP_LENGTH) // top row shows targetIndex
-        if (row === 1) return wrapIndex(targetIndex, STRIP_LENGTH) // mid
-        return wrapIndex(targetIndex - 1, STRIP_LENGTH) // bottom
-      }
-
-      const forcedCenter = makeCenterForRow(targetRow)
-      stops = [forcedCenter, forcedCenter, forcedCenter]
+    const makeCenterForRow = (row: number): number => {
+      if (row === 0) return wrapIndex(targetIndex + 1, STRIP_LENGTH) // top row shows targetIndex
+      if (row === 1) return wrapIndex(targetIndex, STRIP_LENGTH) // mid
+      return wrapIndex(targetIndex - 1, STRIP_LENGTH) // bottom
     }
 
-    // Animate reels
-    const N = STRIP_LENGTH
+    const forcedCenter = makeCenterForRow(targetRow)
+    stops = [forcedCenter, forcedCenter, forcedCenter]
+  }
 
-    stops.forEach((finalCenter, i) => {
-      reelIntervals.current[i] = setInterval(() => {
-        setReelCenters(prev => {
-          const next = [...prev]
-          // always rotate at least; full spin feel over time
-          next[i] = wrapIndex(next[i] + 1, N)
-          return next
-        })
-      }, SPIN_TICK_MS)
+  // Animate reels
+  const N = STRIP_LENGTH
 
-      const fullSpins = 2 + i // ensures visible movement each time
-      const stopDelay =
-        FIRST_REEL_SPIN_MS +
-        i * REEL_STAGGER_MS +
-        fullSpins * 200 // extra time for more rotations
+  // 🔥 Make fullscreen mobile a bit more “Las Vegas”
+  const tickMs = fullscreenMobile ? 70 : SPIN_TICK_MS
+  const baseFullSpins = fullscreenMobile ? 3 : 2 // slightly longer spin on fullscreen
 
-      setTimeout(() => {
-        const intervalId = reelIntervals.current[i]
-        if (intervalId) {
-          clearInterval(intervalId)
-          reelIntervals.current[i] = null
-        }
+  stops.forEach((finalCenter, i) => {
+    reelIntervals.current[i] = setInterval(() => {
+      setReelCenters(prev => {
+        const next = [...prev]
+        // always rotate at least; full spin feel over time
+        next[i] = wrapIndex(next[i] + 1, N)
+        return next
+      })
+    }, tickMs)
 
-        setReelCenters(prev => {
-          const next = [...prev]
-          next[i] = wrapIndex(finalCenter, N)
-          return next
-        })
-      }, stopDelay)
-    })
-
-    // Precompute final symbols for eval (top/mid/bottom for each reel)
-    const getTopIdx = (s: number) => wrapIndex(s - 1, N)
-    const getMidIdx = (s: number) => wrapIndex(s, N)
-    const getBotIdx = (s: number) => wrapIndex(s + 1, N)
-
-    const topRowSyms: SymbolId[] = []
-    const midRowSyms: SymbolId[] = []
-    const botRowSyms: SymbolId[] = []
-
-    for (let i = 0; i < 3; i++) {
-      const s = stops[i]
-      topRowSyms.push(STRIP_SYMBOLS[getTopIdx(s)])
-      midRowSyms.push(STRIP_SYMBOLS[getMidIdx(s)])
-      botRowSyms.push(STRIP_SYMBOLS[getBotIdx(s)])
-    }
-
-    const topRes = evalLine(topRowSyms, stake)
-    const midRes = evalLine(midRowSyms, stake)
-    const botRes = evalLine(botRowSyms, stake)
-
-    const payout = topRes.payout + midRes.payout + botRes.payout
-    const linesHit =
-      (topRes.payout > 0 ? 1 : 0) +
-      (midRes.payout > 0 ? 1 : 0) +
-      (botRes.payout > 0 ? 1 : 0)
-
-    const mainSymbol: SymbolId | null =
-      midRes.symbol ?? topRes.symbol ?? botRes.symbol ?? null
-
-    const net = payout - stake
-
-    // Record with arcade wallet
-    recordSpin({ wager: stake, payout })
-
-    const resultDelay =
-      FIRST_REEL_SPIN_MS + 2 * REEL_STAGGER_MS + 3 * 200 + 260
+    const fullSpins = baseFullSpins + i // later reels spin a bit longer
+    const stopDelay =
+      FIRST_REEL_SPIN_MS +
+      i * REEL_STAGGER_MS +
+      fullSpins * 200 // extra time for more rotations
 
     setTimeout(() => {
-      setSpinning(false)
-      setLastNet(net)
-      setLastPayout(payout)
-      setLastMainSymbol(mainSymbol)
-      setLastLinesHit(linesHit)
-
-      if (payout > 0 && linesHit > 0) {
-        const symLabel =
-          mainSymbol === 'BGLD'
-            ? 'BGLD Coin'
-            : mainSymbol === 'VAULT'
-            ? 'Vault'
-            : 'Nugget'
-
-        setStatus(
-          `Golden Alignment hit! ${linesHit} payline${
-            linesHit > 1 ? 's' : ''
-          } with ${symLabel} slices aligned. Total payout ${payout} credits (net ${
-            net >= 0 ? '+' : ''
-          }${net}).`
-        )
-      } else {
-        setStatus(`No full image alignment this spin. Net -${stake}.`)
+      const intervalId = reelIntervals.current[i]
+      if (intervalId) {
+        clearInterval(intervalId)
+        reelIntervals.current[i] = null
       }
-    }, resultDelay)
+
+      setReelCenters(prev => {
+        const next = [...prev]
+        next[i] = wrapIndex(finalCenter, N)
+        return next
+      })
+    }, stopDelay)
+  })
+
+  // Precompute final symbols for eval (top/mid/bottom for each reel)
+  const getTopIdx = (s: number) => wrapIndex(s - 1, N)
+  const getMidIdx = (s: number) => wrapIndex(s, N)
+  const getBotIdx = (s: number) => wrapIndex(s + 1, N)
+
+  const topRowSyms: SymbolId[] = []
+  const midRowSyms: SymbolId[] = []
+  const botRowSyms: SymbolId[] = []
+
+  for (let i = 0; i < 3; i++) {
+    const s = stops[i]
+    topRowSyms.push(STRIP_SYMBOLS[getTopIdx(s)])
+    midRowSyms.push(STRIP_SYMBOLS[getMidIdx(s)])
+    botRowSyms.push(STRIP_SYMBOLS[getBotIdx(s)])
   }
+
+  const topRes = evalLine(topRowSyms, stake)
+  const midRes = evalLine(midRowSyms, stake)
+  const botRes = evalLine(botRowSyms, stake)
+
+  const payout = topRes.payout + midRes.payout + botRes.payout
+  const linesHit =
+    (topRes.payout > 0 ? 1 : 0) +
+    (midRes.payout > 0 ? 1 : 0) +
+    (botRes.payout > 0 ? 1 : 0)
+
+  const mainSymbol: SymbolId | null =
+    midRes.symbol ?? topRes.symbol ?? botRes.symbol ?? null
+
+  const net = payout - stake
+
+  // Record with arcade wallet
+  recordSpin({ wager: stake, payout })
+
+  // make sure result text lands AFTER the last reel stops
+  const lastReelIndex = 2
+  const lastReelFullSpins = baseFullSpins + lastReelIndex
+  const resultDelay =
+    FIRST_REEL_SPIN_MS +
+    lastReelIndex * REEL_STAGGER_MS +
+    lastReelFullSpins * 200 +
+    260
+
+  setTimeout(() => {
+    setSpinning(false)
+    setLastNet(net)
+    setLastPayout(payout)
+    setLastMainSymbol(mainSymbol)
+    setLastLinesHit(linesHit)
+
+    if (payout > 0 && linesHit > 0) {
+      const symLabel =
+        mainSymbol === 'BGLD'
+          ? 'BGLD Coin'
+          : mainSymbol === 'VAULT'
+          ? 'Vault'
+          : 'Nugget'
+
+      setStatus(
+        `Golden Alignment hit! ${linesHit} payline${
+          linesHit > 1 ? 's' : ''
+        } with ${symLabel} slices aligned. Total payout ${payout} credits (net ${
+          net >= 0 ? '+' : ''
+        }${net}).`
+      )
+    } else {
+      setStatus(`No full image alignment this spin. Net -${stake}.`)
+    }
+  }, resultDelay)
+}
+
 
   /* ---------- CABINET PANEL (re-used in normal + fullscreen) ---------- */
 
