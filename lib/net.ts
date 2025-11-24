@@ -1,6 +1,25 @@
 // lib/poker/net.ts
 import { io, type Socket } from "socket.io-client";
-import type { Card, Player, Street } from "./types";
+
+/**
+ * Lightweight local types so this module doesn't depend on ./types.
+ * These are only used for typing snapshots/actions on the client.
+ */
+
+export type Card = string;
+
+export type Street = "preflop" | "flop" | "turn" | "river" | "showdown";
+
+export type Player = {
+  seat: number;
+  id?: string;
+  name?: string;
+  stack: number;
+  inHand: boolean;
+  committed: number;
+  hasFolded?: boolean;
+  isHero?: boolean;
+};
 
 export type NetSnapshot = {
   tableId: string;
@@ -26,7 +45,8 @@ export type NetAction =
 
 export function connectSocket(): Socket | null {
   const url = process.env.NEXT_PUBLIC_POKER_WS;
-  if (!url) return null; // allows local demo w/out server
+  if (!url) return null; // allows local demo without a running server
+
   const s: Socket = io(url, { transports: ["websocket"] });
   return s;
 }

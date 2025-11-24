@@ -17,15 +17,15 @@ export type ArcadeWalletContextValue = {
   recordSpin: (opts: { wager: number; payout: number }) => void
   resetWallet: () => void
   recordReset: () => void
-  // ✅ extra helpers used by some games (e.g. BaccaratDemo)
   addWin: (amount: number) => void
   addLoss: (amount: number) => void
+  // ✅ used by mint buttons / reload
+  addCredits: (amount: number) => void
 }
 
 const ArcadeWalletContext = createContext<ArcadeWalletContextValue | null>(null)
 
-// ✅ Safe fallback so using the hook without a provider
-// during prerender *does not* crash the build.
+// Fallback so using the hook without a provider doesn’t crash, but it’s inert.
 function useArcadeWalletFallback(): ArcadeWalletContextValue {
   return {
     credits: 0,
@@ -39,6 +39,7 @@ function useArcadeWalletFallback(): ArcadeWalletContextValue {
     recordReset: () => {},
     addWin: () => {},
     addLoss: () => {},
+    addCredits: () => {},
   }
 }
 
@@ -50,7 +51,6 @@ export function ArcadeWalletProvider({ children }: { children: React.ReactNode }
   const [wins, setWins] = useState(0)
   const [resets, setResets] = useState(0)
 
-  // generic “spin” record (used by most games)
   const recordSpin: ArcadeWalletContextValue['recordSpin'] = ({ wager, payout }) => {
     setCredits(prev => prev - wager + payout)
 
@@ -60,7 +60,6 @@ export function ArcadeWalletProvider({ children }: { children: React.ReactNode }
     if (delta > 0) setWins(prev => prev + 1)
   }
 
-  // baccarat-style helpers: explicit win/loss
   const addWin: ArcadeWalletContextValue['addWin'] = (amount: number) => {
     if (amount <= 0) return
     setCredits(prev => prev + amount)
@@ -74,7 +73,6 @@ export function ArcadeWalletProvider({ children }: { children: React.ReactNode }
     setCredits(prev => Math.max(0, prev - amount))
     setNet(prev => prev - amount)
     setSpins(prev => prev + 1)
-    // no win increment on a loss
   }
 
   const resetWallet = () => {
@@ -86,6 +84,15 @@ export function ArcadeWalletProvider({ children }: { children: React.ReactNode }
   }
 
   const recordReset = () => setResets(prev => prev + 1)
+
+  // ✅ Mint / reload chips (NO impact on P&L)
+const addCredits: ArcadeWalletContextValue['addCredits'] = (amount: number) => {
+  if (amount <= 0) return
+  setCredits(prev => prev + amount)
+  // Do NOT update net — this prevents mint being counted as a win.
+}
+
+
 
   const value: ArcadeWalletContextValue = useMemo(
     () => ({
@@ -100,6 +107,7 @@ export function ArcadeWalletProvider({ children }: { children: React.ReactNode }
       recordReset,
       addWin,
       addLoss,
+      addCredits,
     }),
     [credits, initialCredits, net, spins, wins, resets]
   )

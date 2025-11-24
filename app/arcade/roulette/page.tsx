@@ -1,63 +1,81 @@
 // app/arcade/roulette/page.tsx
+'use client'
 
-import RouletteArcadeMachine from '@/components/casino/arcade/RouletteArcadeMachine'
-import Link from 'next/link'
-import { ArcadeWalletProvider } from '@/lib/useArcadeWallet'
+import Image from 'next/image'
+import CasinoStatusStrip from '@/components/casino/layout/CasinoStatusStrip'
+import CasinoModeSwitcher from '@/components/casino/layout/CasinoModeSwitcher'
+import CasinoLiveStats from '@/components/casino/layout/CasinoLiveStats'
+
 import ArcadeWalletHUD from '@/components/casino/arcade/ArcadeWalletHUD'
-
-const TOKEN_SYMBOL = process.env.NEXT_PUBLIC_TOKEN_SYMBOL ?? 'BGRC'
+import RouletteArcadeMachine from '@/components/casino/arcade/RouletteArcadeMachine'
 
 export default function RouletteArcadePage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black via-[#050509] to-black text-white">
-      <section className="border-b border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.18),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.16),_transparent_50%)]">
-        <div className="mx-auto max-w-6xl px-4 py-6 md:py-8">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-black/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
-                Demo Arcade • Roulette
+    <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
+      <section className="relative border-b border-white/10">
+        {/* Background image */}
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="/images/arcade-hero-main.png"
+            alt="Base Gold Rush roulette arcade"
+            fill
+            sizes="100vw"
+            className="object-cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.86),rgba(0,0,0,0.97))]" />
+        </div>
+
+        <div className="relative mx-auto max-w-6xl px-4 py-8 md:py-10">
+          {/* Top status + mode switcher */}
+          <CasinoStatusStrip mode="arcade" />
+          <CasinoModeSwitcher active="arcade" />
+
+          
+            <div className="mt-4 space-y-4">
+              {/* Intro copy + wallet HUD + light stats */}
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
+                    Golden Wheel Roulette{' '}
+                    <span className="text-[#FFD700]">• Arcade Floor</span>
+                  </h1>
+                  <p className="text-xs sm:text-sm md:text-base text-white/80 max-w-xl">
+                    Spin the{' '}
+                    <span className="font-semibold text-[#FFD700]">
+                      Base Gold Rush
+                    </span>{' '}
+                    wheel with BGRC arcade chips and feel exactly how the on-chain
+                    roulette tables will hit once they&apos;re wired into live
+                    contracts on Base.
+                  </p>
+                  <p className="text-[11px] md:text-xs text-white/60 max-w-xl">
+                    Same layout, same multipliers, same pacing — this machine is the
+                    pre-mainnet model for the full{' '}
+                    <span className="font-semibold text-sky-300">
+                      Base Gold Rush roulette pit
+                    </span>
+                    . We&apos;re using it to dial in UX and flow before we flip the
+                    contracts live.
+                  </p>
+                </div>
+
+                {/* Shared arcade wallet HUD (BGRC credits) */}
+                <ArcadeWalletHUD />
+
+                <div className="max-w-xs">
+                  <CasinoLiveStats variant="arcade" />
+                </div>
               </div>
-              <h1 className="mt-3 text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                Golden Wheel Roulette{' '}
-                <span className="text-emerald-300">Demo Machine</span>
-              </h1>
-              <p className="mt-2 max-w-xl text-xs md:text-sm text-white/70">
-                This is the full-featured arcade version of Base Gold Rush roulette. All
-                multipliers, all bets, all vibes — using free demo credits instead of real{' '}
-                {TOKEN_SYMBOL}. On-chain testnet and future Base mainnet contracts will
-                follow this exact flow.
-              </p>
+
+              {/* Main game: full-width machine, not shoved into a sidebar */}
+              <div className="w-full">
+                <RouletteArcadeMachine />
+              </div>
             </div>
-            <div className="text-right text-[11px] md:text-xs text-white/60 space-y-1">
-              <div>
-                <Link
-                  href="/"
-                  className="rounded-full border border-white/30 bg-black/60 px-3 py-1.5 text-[11px] font-semibold hover:bg-white/5"
-                >
-                  ← Back to Casino Lobby
-                </Link>
-              </div>
-              <div>
-                On-chain roulette is live on{' '}
-                <Link
-                  href="/play/roulette"
-                  className="text-[#FFD700] underline-offset-2 hover:underline"
-                >
-                  Base Sepolia
-                </Link>
-                . This page is pure demo: no wallet required.
-              </div>
-            </div>
-          </div>
+          
         </div>
       </section>
-
-      <ArcadeWalletProvider>
-        <section className="mx-auto max-w-6xl px-4 py-6 md:py-8">
-          <ArcadeWalletHUD />
-          <RouletteArcadeMachine />
-        </section>
-      </ArcadeWalletProvider>
     </main>
   )
 }

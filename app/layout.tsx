@@ -9,6 +9,10 @@ import { WalletBarProvider } from '@/components/wallet/WalletBarProvider'
 import AgeGateOverlay from '@/components/legal/AgeGateOverlay'
 import { TestnetBanner } from '@/components/legal/TestnetBanner'
 import RiskBanner from '@/components/legal/RiskBanner'
+import { PlayerProfileProvider } from "@/lib/player/PlayerProfileProvider";
+import { CasinoChipsProvider } from '@/lib/useCasinoChips'
+import ArcadeRootClient from '@/components/casino/layout/ArcadeRootClient'
+
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://casino.basereserve.gold"), // <-- update to final domain
@@ -67,8 +71,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <TestnetBanner />
 
               <main className="flex-1">
-                <RootClient>{children}</RootClient>
-              </main>
+  <RootClient>
+    <PlayerProfileProvider>
+      <CasinoChipsProvider>
+        <ArcadeRootClient>
+          {children}
+        </ArcadeRootClient>
+      </CasinoChipsProvider>
+    </PlayerProfileProvider>
+  </RootClient>
+</main>
+
 
               <RiskBanner />
               <SiteFooter />

@@ -21,7 +21,6 @@ type GameCard = {
 }
 
 const games: GameCard[] = [
-  // (same list as before, unchanged) ...
   {
     href: '/play/slots-v2',
     label: 'Gold Rush Slots',
@@ -110,36 +109,36 @@ const games: GameCard[] = [
     icon: '/icons/game-dice.png',
     mode: 'onchain',
   },
-  // Arcade (for counts only now)
+  // Arcade
   {
     href: '/arcade/roulette',
     label: 'Roulette (Arcade)',
-    tag: 'Demo Machine',
-    desc: 'Full multipliers, free demo credits, and a bar-top roulette vibe.',
+    tag: 'Arcade Wheel',
+    desc: 'Full multipliers and a bar-top roulette vibe using BGRC chips for free play.',
     icon: '/icons/game-roulette1.png',
     mode: 'arcade',
   },
   {
     href: '/arcade/slots-arcade',
     label: 'Gold Rush Slots (Arcade)',
-    tag: 'Demo Machine',
-    desc: 'Hyper-real video slot cabinet with free-play BGRC demo chips.',
+    tag: 'Arcade Slots',
+    desc: 'Hyper-real video slot cabinet using BGRC chips in casino arcade mode.',
     icon: '/icons/game-slots.png',
     mode: 'arcade',
   },
   {
     href: '/arcade/craps',
     label: 'Craps (Arcade)',
-    tag: 'Demo Table',
-    desc: 'Full craps table with pass line, field, props, and hardways on BGRC demo credits.',
+    tag: 'Arcade Table',
+    desc: 'Full craps table with pass line, field, props, and hardways running on BGRC chips.',
     icon: '/icons/game-craps1.png',
     mode: 'arcade',
   },
   {
     href: '/arcade/blackjack',
     label: 'Blackjack (Arcade)',
-    tag: 'Demo Table',
-    desc: 'Multi-seat video blackjack with splits, doubles, and surrender using BGRC demo credits.',
+    tag: 'Arcade Table',
+    desc: 'Multi-seat video blackjack with splits, doubles, and surrender using BGRC chips.',
     icon: '/icons/game-blackjack1.png',
     mode: 'arcade',
   },
@@ -147,31 +146,31 @@ const games: GameCard[] = [
     href: '/arcade/war',
     label: 'War (Arcade)',
     tag: 'High Card',
-    desc: 'High-card vs the house on a packed rail with instant flips.',
+    desc: 'High-card vs the house on a packed rail with instant flips using BGRC chips.',
     icon: '/icons/game-war.png',
     mode: 'arcade',
   },
   {
     href: '/arcade/baccarat',
     label: 'Baccarat (Arcade)',
-    tag: 'Demo Table',
-    desc: 'Full baccarat table with Player, Banker, Tie and Pair side bets using free-play chips.',
+    tag: 'Arcade Table',
+    desc: 'Player, Banker, Tie and Pair side bets using BGRC chips on the arcade rail.',
     icon: '/icons/game-baccarat.png',
     mode: 'arcade',
   },
   {
     href: '/arcade/video-poker',
     label: 'Video Poker (Arcade)',
-    tag: 'Demo Machine',
-    desc: 'Bar-top Jacks or Better with free-play BGRC credits.',
+    tag: 'Arcade Bar-Top',
+    desc: 'Bar-top Jacks or Better running BGRC chips for free play.',
     icon: '/icons/game-video-poker1.png',
     mode: 'arcade',
   },
   {
     href: '/arcade/three-card-poker',
     label: 'Three Card Poker (Arcade)',
-    tag: 'Demo Table',
-    desc: 'Ante, Pair Plus, and Play bets vs the dealer on a full three-card layout.',
+    tag: 'Arcade Feature',
+    desc: 'Ante, Pair Plus, and Play bets vs the dealer mapped to BGRC chip flow.',
     icon: '/icons/game-three-card-poker.png',
     mode: 'arcade',
   },
@@ -180,6 +179,65 @@ const games: GameCard[] = [
 const onchainGames = games.filter(g => g.mode === 'onchain')
 const arcadeGames = games.filter(g => g.mode === 'arcade')
 
+// Featured strip just under hero – puts table games + arcade in your face
+const featuredGameHrefs = [
+  '/play/blackjack',
+  '/play/roulette',
+  '/arcade/blackjack',
+  '/arcade/craps',
+  '/arcade/three-card-poker',
+]
+const featuredGames = games.filter(g => featuredGameHrefs.includes(g.href))
+
+function FeaturedGameTile({ game }: { game: GameCard }) {
+  const isArcade = game.mode === 'arcade'
+  return (
+    <Link
+      href={game.href}
+      className="min-w-[210px] flex-1 rounded-2xl border border-white/12 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.14),_transparent_55%),#020617] p-3 flex flex-col gap-2 hover:border-[#FFD700]/60 hover:shadow-[0_0_22px_rgba(251,191,36,0.4)] transition snap-start"
+    >
+      <div className="flex items-center gap-3">
+        <div className="relative w-12 h-12 rounded-xl border border-white/15 bg-black/80 overflow-hidden flex-shrink-0">
+          <Image
+            src={game.icon}
+            alt={game.label}
+            fill
+            sizes="48px"
+            className="object-contain p-1.5"
+          />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-white">
+              {game.label}
+            </span>
+            <span className="text-[10px] uppercase font-semibold text-[#FFD700]/90">
+              {game.tag}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[11px] text-white/65 line-clamp-2">
+            {game.desc}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-white/55 pt-1">
+        <span>
+          {isArcade ? 'Casino Arcade • BGRC chips for free play' : `On-Chain • ${TOKEN_SYMBOL} chips`}
+        </span>
+        <span
+          className={
+            isArcade
+              ? 'text-emerald-300 group-hover:translate-x-0.5 transition-transform'
+              : 'text-[#FFD700] group-hover:translate-x-0.5 transition-transform'
+          }
+        >
+          Play →
+        </span>
+      </div>
+    </Link>
+  )
+}
+
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#050509] to-black text-white">
@@ -187,27 +245,27 @@ export default function HomePage() {
 
       {/* HERO */}
       <section className="relative overflow-hidden border-b border-white/10 text-white">
-  {/* Hero background image */}
-  <div className="absolute inset-0 -z-10">
-    <Image
-      src="/images/bg-goldrush-hero-V2.png"
-      alt="Base Gold Rush casino floor"
-      fill
-      priority
-      sizes="100vw"
-      className="object-cover md:object-cover"
-    />
-    <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.82),rgba(0,0,0,0.96))]" />
-  </div>
+        {/* Hero background image */}
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="/images/bg-goldrush-hero-V2.png"
+            alt="Base Gold Rush casino floor"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover md:object-cover"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.82),rgba(0,0,0,0.96))]" />
+        </div>
 
         {/* subtle gold/blue overlay */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.18),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.16),_transparent_60%)]" />
 
-        <div className="relative z-10 mx-auto flex min-h-[520px] max-w-6xl flex-col gap-8 px-4 py-8 md:flex-row md:items-center md:py-14">
+        <div className="relative z-10 mx-auto flex min-h-[460px] max-w-6xl flex-col gap-8 px-4 py-8 md:flex-row md:items-center md:py-12">
           <div className="flex-1 space-y-4">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD700]/40 bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-[#FFD700]/90">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Base Gold Rush • On-Chain Casino & Demo Arcade
+              Base Gold Rush • On-Chain Casino & Casino Arcade
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white drop-shadow">
@@ -219,11 +277,13 @@ export default function HomePage() {
               <span className="font-semibold text-[#FFD700]">
                 {TOKEN_NAME} ({TOKEN_SYMBOL})
               </span>{' '}
-              ecosystem. Start in the free{' '}
-              <span className="font-semibold text-emerald-300">Demo Arcade</span>, step into
-              the <span className="font-semibold">on-chain testnet casino</span>, and
-              soon, sit down at fully on-chain{' '}
-              <span className="font-semibold text-sky-300">live multiplayer tables</span>.
+              ecosystem. Play in the{' '}
+              <span className="font-semibold text-emerald-300">Casino Arcade</span> with BGRC
+              chips for free play, step into the{' '}
+              <span className="font-semibold">on-chain testnet casino</span>, and sit down
+              at fully on-chain{' '}
+              <span className="font-semibold text-sky-300">live multiplayer tables</span> as
+              they come online.
             </p>
 
             {/* Testnet guide banner */}
@@ -234,8 +294,8 @@ export default function HomePage() {
               >
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div className="font-semibold text-sky-300">
-                    🧭 New to Base Sepolia? Learn how to add the network, get testnet ETH, and
-                    mint {TOKEN_SYMBOL} chips.
+                    🧭 New to Base Sepolia? Learn how to add the network, get testnet ETH for gas, and
+                    mint {TOKEN_SYMBOL} chips for On-Chain Games.
                   </div>
                   <div className="text-[11px] sm:text-xs font-bold text-white bg-sky-500/20 border border-sky-300/40 px-3 py-1 rounded-full text-center">
                     Read the Guide →
@@ -244,8 +304,30 @@ export default function HomePage() {
               </Link>
             </section>
 
+            {/* Quick floor pills */}
+            <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+              <Link
+                href="/live-tables"
+                className="rounded-full border border-amber-300/70 bg-amber-900/40 px-3 py-1 font-semibold text-amber-100 hover:bg-amber-800/70"
+              >
+                🃏 Poker Room & Live Tables
+              </Link>
+              <Link
+                href="/arcade"
+                className="rounded-full border border-emerald-300/70 bg-emerald-900/60 px-3 py-1 font-semibold text-emerald-100 hover:bg-emerald-800/80"
+              >
+                🎡 Casino Arcade (Free Play)
+              </Link>
+              <Link
+                href="/onchain"
+                className="rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 font-semibold text-[#FFD700] hover:bg-[#111827]"
+              >
+                🎰 On-Chain Casino (Testnet)
+              </Link>
+            </div>
+
             {/* pipeline strip */}
-            <div className="mt-2 grid gap-2 text-[11px] md:text-xs">
+            <div className="mt-3 grid gap-2 text-[11px] md:text-xs">
               <div className="rounded-xl border border-white/10 bg-black/70 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="font-semibold text-emerald-300">
                   Phase 1 — On-Chain Testnet
@@ -256,10 +338,11 @@ export default function HomePage() {
               </div>
               <div className="rounded-xl border border-emerald-400/40 bg-emerald-900/50 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="font-semibold text-emerald-200">
-                  Phase 2 — Demo Arcade Flow
+                  Phase 2 — Casino Arcade Flow
                 </div>
                 <div className="text-emerald-50/85">
-                  Off-chain demo machines to tune UX, odds, and pacing before final contracts.
+                  Off-chain arcade floor tuned with BGRC chips before wiring the cashier and
+                  contracts.
                 </div>
               </div>
               <div className="rounded-xl border border-[#FFD700]/60 bg-[#111827]/85 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -267,7 +350,8 @@ export default function HomePage() {
                   Phase 3 — Base Mainnet Casino
                 </div>
                 <div className="text-white/80">
-                  Regulated mainnet rollout for real-value chips, live tables, and tournaments.
+                  Regulated mainnet rollout for real-value chips, live tables, and tournaments
+                  using BGRC/BGLD through the cashier.
                 </div>
               </div>
             </div>
@@ -284,7 +368,7 @@ export default function HomePage() {
               </div>
               <div className="rounded-xl border border-white/10 bg-black/55 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wide text-white/40">
-                  Demo Arcade
+                  Casino Arcade
                 </div>
                 <div className="text-sm font-bold text-emerald-300">
                   {arcadeGames.length}+ Machines
@@ -294,100 +378,82 @@ export default function HomePage() {
                 <div className="text-[10px] uppercase tracking-wide text-white/40">
                   Chain
                 </div>
-                <div className="text-sm font-bold text-[#60a5fa]">
-                  Base
-                </div>
+                <div className="text-sm font-bold text-[#60a5fa]">Base</div>
               </div>
             </div>
 
-            {/* CTA buttons */}
-            <div className="flex flex-wrap gap-3 pt-3">
-              <Link
-                href="/arcade"
-                className="rounded-full bg-gradient-to-r from-[#22c55e] to-[#4ade80] px-5 py-2.5 text-sm font-bold text-black shadow-[0_0_20px_rgba(34,197,94,0.7)] hover:brightness-110"
-              >
-                🎡 Enter the Demo Arcade
-              </Link>
-              <Link
-                href="/onchain"
-                className="rounded-full border border-[#FFD700]/80 bg-black/80 px-4 py-2.5 text-sm font-semibold text-[#FFD700] hover:bg-[#111827]"
-              >
-                🎰 Explore On-Chain Games
-              </Link>
-              <Link
-                href="/live-tables"
-                className="rounded-full border border-amber-300/80 bg-amber-900/40 px-4 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-800/70"
-              >
-                🃏 Preview Live Tables
-              </Link>
-            </div>
-
             <div className="mt-3 text-[11px] text-white/55 max-w-lg">
-              Demo arcade games are wallet-free. Connect a wallet from the header when you’re
-              ready to mint testnet chips and play on-chain. Every demo flow you see here is
-              being prepared to become a fully on-chain, provably fair Base casino game.
+              Arcade games are wallet-free for now. Connect a wallet from the header when
+              you’re ready to mint testnet chips and play on-chain. Every arcade layout and
+              table you see here is being prepared to become a fully on-chain, provably fair
+              Base casino game.
             </div>
           </div>
 
           {/* Right-side hero pedestal */}
-<div className="relative z-0 flex-1 flex items-center justify-center mt-4 md:mt-0">
-  <div className="relative w-[260px] sm:w-[320px] md:w-[420px]">
-    {/* Pedestal + chip */}
-    <div className="relative h-[220px] sm:h-[260px] md:h-[320px] rounded-3xl overflow-hidden border border-[#FFD700]/35 bg-black shadow-[0_30px_90px_rgba(0,0,0,0.95)]">
-      {/* Pedestal background */}
-      <Image
-        src="/images/hero-pedestal.png" // ← save your pedestal image here
-        alt="Base Gold Rush chip pedestal"
-        fill
-        priority
-        sizes="420px"
-        className="object-cover"
-      />
+          <div className="relative z-0 flex-1 flex items-center justify-center mt-4 md:mt-0">
+            <div className="relative w-[260px] sm:w-[320px] md:w-[420px]">
+              <div className="relative h-[220px] sm:h-[260px] md:h-[320px] rounded-3xl overflow-hidden border border-[#FFD700]/35 bg-black shadow-[0_30px_90px_rgba(0,0,0,0.95)]">
+                <Image
+                  src="/images/hero-pedestal.png"
+                  alt="Base Gold Rush chip pedestal"
+                  fill
+                  priority
+                  sizes="420px"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(253,224,71,0.35),transparent_65%)]" />
+                <div className="absolute inset-x-0 bottom-14 flex justify-center">
+                  <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-60 md:h-60">
+                    <Image
+                      src="/chips/chip-bgrc-main.png"
+                      alt={`${TOKEN_SYMBOL} chip`}
+                      fill
+                      className="object-contain chip-hero-anim select-none drop-shadow-[0_18px_40px_rgba(0,0,0,0.9)]"
+                    />
+                  </div>
+                </div>
+              </div>
 
-      {/* Soft gold glow over the scene */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(253,224,71,0.35),transparent_65%)]" />
-
-      {/* Spinning BGRC chip on the pedestal */}
-      <div className="absolute inset-x-0 bottom-14 flex justify-center">
-        <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-60 md:h-60">
-
-          <Image
-            src="/chips/chip-bgrc-main.png" // or any existing chip art you have
-            alt={`${TOKEN_SYMBOL} chip`}
-            fill
-            className="object-contain chip-hero-anim select-none drop-shadow-[0_18px_40px_rgba(0,0,0,0.9)]"
-
-          />
-        </div>
-      </div>
-    </div>
-
-    {/* Label card under pedestal stays the same */}
-    <div className="relative -mt-4 rounded-2xl border border-white/15 bg-black/85 px-4 py-3 text-xs text-white/70 shadow-[0_12px_30px_rgba(0,0,0,0.9)]">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-[0.18em] text-white/50">
-          {TOKEN_SYMBOL} Chip
-        </span>
-        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-          Testnet Live
-        </span>
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-white font-semibold">
-          Base Gold Rush
-        </span>
-        <span className="text-[#FFD700] text-[11px] font-bold text-right">
-          Demo Arcade → On-Chain Casino → Live Tables
-        </span>
-      </div>
-    </div>
-  </div>
-</div>
-
+              <div className="relative -mt-4 rounded-2xl border border-white/15 bg-black/85 px-4 py-3 text-xs text-white/70 shadow-[0_12px_30px_rgba(0,0,0,0.9)]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-white/50">
+                    {TOKEN_SYMBOL} Chip
+                  </span>
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    Testnet Live
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-white font-semibold">Base Gold Rush</span>
+                  <span className="text-[#FFD700] text-[11px] font-bold text-right">
+                    Arcade Floor → On-Chain Casino → Live Tables
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* HUB CARDS SECTION */}
+      {/* FEATURED TABLE / ARCADE STRIP – right under hero */}
+      <section className="mx-auto max-w-6xl px-4 pt-6 md:pt-8">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h2 className="text-sm md:text-base font-semibold text-white">
+            Tonight’s Featured Tables & Arcade
+          </h2>
+          <span className="text-[11px] text-white/50">
+            Blackjack, roulette, craps & three-card poker — arcade and on-chain.
+          </span>
+        </div>
+        <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+          {featuredGames.map(game => (
+            <FeaturedGameTile key={game.href} game={game} />
+          ))}
+        </div>
+      </section>
+
+      {/* HUB CARDS SECTION (Live Tables, Arcade, On-Chain) */}
       <section className="mx-auto max-w-6xl px-4 py-8 md:py-10">
         <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -395,8 +461,9 @@ export default function HomePage() {
               Choose your floor
             </h2>
             <p className="text-xs md:text-sm text-white/65">
-              Start with free-play demo machines, step into real on-chain testnet play,
-              and soon join fully on-chain live tables — all powered by Base.
+              Start in the Casino Arcade with BGRC chips for free play, step into real
+              on-chain testnet tables, and then join fully on-chain live pits — all powered
+              by Base.
             </p>
           </div>
           <div className="text-[11px] text-white/50">
@@ -405,12 +472,50 @@ export default function HomePage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
+          {/* Live tables card */}
+          <Link
+            href="/live-tables"
+            className="group relative overflow-hidden rounded-3xl border border-amber-300/60 bg-black/85 shadow-[0_22px_60px_rgba(0,0,0,0.95)]"
+          >
+            <div className="relative h-40 sm:h-48 md:h-56">
+              <Image
+                src="/images/live-tables-card-bg.png"
+                alt="Live tables pit"
+                fill
+                sizes="(min-width: 1024px) 33vw, 100vw"
+                className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+              <div className="absolute left-4 bottom-3">
+                <div className="text-[11px] uppercase tracking-[0.24em] text-amber-200/90">
+                  Live Table Games
+                </div>
+                <div className="text-lg sm:text-xl font-bold text-white">
+                  Poker Room & Pits
+                </div>
+              </div>
+            </div>
+            <div className="px-4 py-3 text-[11px] sm:text-xs text-white/75 space-y-2">
+              <p>
+                Texas Hold’em first, then blackjack, craps, baccarat and more — real players
+                sharing a rail, with Base contracts handling the final settlement layer.
+              </p>
+              <CasinoLiveStats variant="live" />
+            </div>
+            <div className="px-4 pb-4 text-[11px] text-amber-200 flex items-center justify-between">
+              <span>Poker Room is live now — more tables light up from here.</span>
+              <span className="font-semibold group-hover:translate-x-0.5 transition-transform">
+                Enter Live Floor →
+              </span>
+            </div>
+          </Link>
+
           {/* Arcade card */}
           <Link
             href="/arcade"
             className="group relative overflow-hidden rounded-3xl border border-emerald-300/50 bg-black/80 shadow-[0_22px_60px_rgba(0,0,0,0.9)]"
           >
-            <div className="relative h-30 sm:h-48 md:h-56">
+            <div className="relative h-40 sm:h-48 md:h-56">
               <Image
                 src="/images/arcade-card-bg1.png"
                 alt="Arcade floor"
@@ -421,7 +526,7 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
               <div className="absolute left-4 bottom-3">
                 <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-200/90">
-                  Demo Arcade
+                  Casino Arcade
                 </div>
                 <div className="text-lg sm:text-xl font-bold text-white">
                   Free-Play Machines
@@ -432,16 +537,14 @@ export default function HomePage() {
               <p>
                 Spin slots, flip cards, and roll dice with{' '}
                 <span className="font-semibold text-emerald-300">
-                  BGRC demo credits
-                </span>{' '}
-                only. No wallet required — just pure Vegas Vibes while we tune the On-Chain flow.
+                  BGRC chips for free play
+                </span>
+                . No wallet required — this is the blueprint for the full Base mainnet pit.
               </p>
               <CasinoLiveStats variant="arcade" />
             </div>
             <div className="px-4 pb-4 text-[11px] text-emerald-200 flex items-center justify-between">
-              <span>
-                {arcadeGames.length}+ demo machines & tables ready to play.
-              </span>
+              <span>{arcadeGames.length}+ arcade machines & tables ready to play.</span>
               <span className="font-semibold group-hover:translate-x-0.5 transition-transform">
                 Enter Arcade →
               </span>
@@ -477,8 +580,8 @@ export default function HomePage() {
                 <span className="font-semibold text-sky-300">
                   {TOKEN_SYMBOL} chips
                 </span>{' '}
-                on Base Sepolia. All outcomes are resolved by smart contracts — the dry run
-                of the full Base mainnet casino.
+                on Base Sepolia. These contracts are the dry run of the full Base mainnet
+                casino and future BGRC/BGLD cashier.
               </p>
               <CasinoLiveStats variant="onchain" />
             </div>
@@ -489,48 +592,41 @@ export default function HomePage() {
               </span>
             </div>
           </Link>
-
-          {/* Live tables card */}
-          <Link
-            href="/live-tables"
-            className="group relative overflow-hidden rounded-3xl border border-amber-300/60 bg-black/85 shadow-[0_22px_60px_rgba(0,0,0,0.95)]"
-          >
-            <div className="relative h-40 sm:h-48 md:h-56">
-              <Image
-                src="/images/live-tables-card-bg.png"
-                alt="Live tables pit"
-                fill
-                sizes="(min-width: 1024px) 33vw, 100vw"
-                className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
-              <div className="absolute left-4 bottom-3">
-                <div className="text-[11px] uppercase tracking-[0.24em] text-amber-200/90">
-                  Live Table Games
-                </div>
-                <div className="text-lg sm:text-xl font-bold text-white">
-                  Multiplayer Alpha
-                </div>
-              </div>
-            </div>
-            <div className="px-4 py-3 text-[11px] sm:text-xs text-white/75 space-y-2">
-              <p>
-                Full pits of Texas Hold’em, blackjack, baccarat and more — where real players
-                share a table. WebSockets carry the action; on-chain contracts will settle it.
-              </p>
-              <CasinoLiveStats variant="live" />
-            </div>
-            <div className="px-4 pb-4 text-[11px] text-amber-200 flex items-center justify-between">
-              <span>Live multiplayer is in active dev — you’re early to the rail.</span>
-              <span className="font-semibold group-hover:translate-x-0.5 transition-transform">
-                Preview Tables →
-              </span>
-            </div>
-          </Link>
         </div>
       </section>
 
-      {/* Soft footer strip stays same as before */}
+      {/* CHIP FLOW STRIP */}
+      <section className="mx-auto max-w-6xl px-4 pb-6 md:pb-8 text-[11px] md:text-sm text-white/70 space-y-3">
+        <div className="rounded-2xl border border-white/12 bg-black/80 p-4 md:p-5 shadow-[0_18px_50px_rgba(0,0,0,0.85)]">
+          <div className="text-xs md:text-sm font-semibold text-[#FFD700] mb-2">
+            How BGRC chips flow through the Base Gold Rush casino
+          </div>
+          <p>
+            <span className="font-semibold text-emerald-300">1. Casino Arcade:</span>{' '}
+            You start with BGRC chips in free-play mode. No wallet, no gas — just feeling
+            the true pacing of the slots, tables, and poker room before cash ever touches
+            the felt.
+          </p>
+          <p>
+            <span className="font-semibold text-sky-300">2. On-chain testnet:</span>{' '}
+            The same games are wired into Base Sepolia with {TOKEN_SYMBOL} chips and smart
+            contracts. This is where we dial in odds, edge, randomness and settlement.
+          </p>
+          <p>
+            <span className="font-semibold text-[#FACC15]">3. BGRC/BGLD cashier:</span>{' '}
+            Once the protocol is battle-tested, the cashier opens on Base mainnet. BGRC /
+            BGLD flow through the same tables and arcade layouts you&apos;re playing with
+            right now — same UX, same games, fully on-chain.
+          </p>
+          <p className="text-white/55 mt-2">
+            If you&apos;re here early and playing with the free BGRC stack, you&apos;re
+            literally helping shape how the first full Base-native Vegas floor is going to
+            feel when real chips hit the table.
+          </p>
+        </div>
+      </section>
+
+      {/* Soft footer strip */}
       <section className="border-t border-white/10 bg-black/90">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-[11px] text-white/50 md:flex-row md:items-center md:justify-between">
           <div>

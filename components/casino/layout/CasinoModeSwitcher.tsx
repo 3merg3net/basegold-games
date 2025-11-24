@@ -14,7 +14,7 @@ export default function CasinoModeSwitcher({
     'flex-1 rounded-full px-3 py-1.5 text-[11px] sm:text-xs font-semibold border transition flex items-center justify-center gap-1'
 
   const modes: { key: Mode; label: string; href: string; emoji: string }[] = [
-    { key: 'arcade', label: 'Demo Arcade', href: '/arcade', emoji: '🎡' },
+    { key: 'arcade', label: 'Casino Arcade', href: '/arcade', emoji: '🎡' },
     { key: 'onchain', label: 'On-Chain Casino', href: '/onchain', emoji: '🎰' },
     { key: 'live', label: 'Live Tables', href: '/live-tables', emoji: '🃏' },
   ]
