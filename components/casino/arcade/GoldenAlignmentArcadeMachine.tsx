@@ -79,13 +79,6 @@ function evalLine(symbols: SymbolId[], stake: number): LineResult {
 
 /* ---------- MAIN COMPONENT ---------- */
 
-type SpinHistoryItem = {
-  rows: SymbolId[][]
-  net: number
-  linesHit: number
-  mainSymbol: SymbolId | null
-}
-
 const BET_OPTIONS = [1, 2, 5, 10, 25, 50]
 
 export default function GoldenAlignmentArcadeMachine() {
@@ -105,8 +98,6 @@ export default function GoldenAlignmentArcadeMachine() {
   const [lastMainSymbol, setLastMainSymbol] = useState<SymbolId | null>(null)
   const [lastLinesHit, setLastLinesHit] = useState(0)
 
-  const [spinHistory, setSpinHistory] = useState<SpinHistoryItem[]>([])
-
   const sessionPnL = useMemo(
     () => credits - initialCredits,
     [credits, initialCredits]
@@ -118,7 +109,7 @@ export default function GoldenAlignmentArcadeMachine() {
     null,
   ])
 
-  // mobile fullscreen
+  // mobile fullscreen overlay
   const [fullscreenMobile, setFullscreenMobile] = useState(false)
 
   useEffect(() => {
@@ -250,16 +241,6 @@ export default function GoldenAlignmentArcadeMachine() {
       setLastMainSymbol(mainSymbol)
       setLastLinesHit(linesHit)
 
-      const rows: SymbolId[][] = [topRowSyms, midRowSyms, botRowSyms]
-
-      setSpinHistory(prev => {
-        const next: SpinHistoryItem[] = [
-          { rows, net, linesHit, mainSymbol },
-          ...prev,
-        ]
-        return next.slice(0, 10)
-      })
-
       if (payout > 0 && linesHit > 0) {
         const symLabel =
           mainSymbol === 'BGLD'
@@ -281,59 +262,65 @@ export default function GoldenAlignmentArcadeMachine() {
     }, resultDelay)
   }
 
+  // ROOT WRAPPER — goes full overlay when fullscreenMobile
   return (
     <div
       className={[
         'mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
         fullscreenMobile
-          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-y-auto'
+          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-hidden flex flex-col'
           : '',
       ].join(' ')}
     >
-      {/* HEADER STRIP */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
-            Base Gold Rush Casino
+      {/* HEADER STRIP – hidden in fullscreen mode to give pure cabinet view */}
+      {!fullscreenMobile && (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
+              Base Gold Rush Casino
+            </div>
+            <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
+              Golden Alignment <span className="text-[#facc15]">• Arcade</span>
+            </div>
+            <div className="text-xs text-white/60 mt-1 max-w-sm">
+              Three reels, three rows. Line up matching slices of BGLD coin,
+              gold nugget, or the vault across any row to complete the image and
+              get paid. Near-miss tease, full-image dopamine.
+            </div>
           </div>
-          <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
-            Golden Alignment <span className="text-[#facc15]">• Arcade</span>
-          </div>
-          <div className="text-xs text-white/60 mt-1 max-w-sm">
-            Three reels, three rows. Line up matching slices of BGLD coin, gold
-            nugget, or the vault across any row to complete the image and get
-            paid. Near-miss tease, full-image dopamine.
-          </div>
-        </div>
 
-        <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
-          <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
-              Demo Credits
+          <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
+            <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
+                Demo Credits
+              </div>
+              <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
+                {credits.toLocaleString()}
+              </div>
             </div>
-            <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
-              {credits.toLocaleString()}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full md:w-auto">
+              <MiniStat label="Bet / Spin" value={betPerSpin} />
+              <MiniStat label="Last Net" value={lastNet} colored />
+              <MiniStat label="Session P&L" value={sessionPnL} colored />
             </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full md:w-auto">
-            <MiniStat label="Bet / Spin" value={betPerSpin} />
-            <MiniStat label="Last Net" value={lastNet} colored />
-            <MiniStat label="Session P&L" value={sessionPnL} colored />
           </div>
         </div>
-      </div>
+      )}
 
       {/* MAIN: CABINET + CONTROLS */}
       <div
         className={[
           'grid gap-4 md:gap-6 md:grid-cols-[minmax(360px,1.25fr)_minmax(260px,0.75fr)]',
-          fullscreenMobile
-            ? 'md:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]'
-            : '',
+          fullscreenMobile ? 'flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]' : '',
         ].join(' ')}
       >
         {/* LEFT: CABINET + REELS + STATUS */}
-        <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-2 sm:p-3 space-y-3">
+        <div
+          className={[
+            'rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-2 sm:p-3 space-y-3',
+            fullscreenMobile ? 'h-full flex flex-col' : '',
+          ].join(' ')}
+        >
           <div className="flex items-center justify-between text-[11px] mb-1">
             <div className="uppercase tracking-[0.3em] text-white/60">
               Cabinet View
@@ -364,7 +351,7 @@ export default function GoldenAlignmentArcadeMachine() {
             />
 
             {/* TOP RESULT PILL */}
-            <div className="absolute inset-x-[12%] top-[24%] flex justify-center">
+            <div className="absolute inset-x-[22%] top-[24%] flex justify-center">
               <div
                 className={[
                   'rounded-full border px-3 py-1.5 text-[11px] sm:text-xs font-semibold flex items-center gap-2 bg-black/75 shadow-[0_0_18px_rgba(0,0,0,0.9)]',
@@ -390,7 +377,7 @@ export default function GoldenAlignmentArcadeMachine() {
               </div>
             </div>
 
-            {/* Reel Window (your tweaked values) */}
+            {/* Reel Window (kept your exact tweaked values) */}
             <div className="absolute inset-x-[5%] top-[30%] mx-auto flex justify-center gap-3 sm:gap-4">
               {(['LEFT', 'CENTER', 'RIGHT'] as ReelSide[]).map((side, i) => (
                 <ReelColumn
@@ -401,7 +388,7 @@ export default function GoldenAlignmentArcadeMachine() {
               ))}
             </div>
 
-            {/* Payline indicator glows (your tweaked values) */}
+            {/* Payline indicator glows (kept your exact tweaked values) */}
             <div className="pointer-events-none absolute inset-x-[20%] top-[35%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/80 to-transparent shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
             <div className="pointer-events-none absolute inset-x-[20%] top-[42%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/70 to-transparent shadow-[0_0_8px_rgba(250,204,21,0.5)]" />
             <div className="pointer-events-none absolute inset-x-[20%] top-[49%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/80 to-transparent shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
@@ -410,7 +397,7 @@ export default function GoldenAlignmentArcadeMachine() {
             <button
               onClick={spin}
               disabled={!canSpin}
-              className="absolute inset-x-[5%] bottom-[14%] mx-auto w-[56%] max-w-sm h-9 sm:h-10 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-[11px] sm:text-sm font-extrabold tracking-[0.26em] uppercase shadow-[0_0_22px_rgba(250,204,21,0.95)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute inset-x-[0%] bottom-[17%] mx-auto w-[28%] max-w-sm h-9 sm:h-14 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-[11px] sm:text-sm font-extrabold tracking-[0.26em] uppercase shadow-[0_0_22px_rgba(250,204,21,0.95)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {spinning
                 ? 'Spinning…'
@@ -418,46 +405,12 @@ export default function GoldenAlignmentArcadeMachine() {
                 ? 'No Demo Credits'
                 : betPerSpin > credits
                 ? 'Lower Bet'
-                : 'Spin for Alignment'}
+                : 'Spin'}
             </button>
           </div>
 
-          {/* UNDER-CABINET CONTROLS + STATUS */}
-          <div className="space-y-2 mt-2">
-            {/* Bet selector moved here, tight under cabinet/spin */}
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
-                Bet Per Spin
-              </div>
-              <div className="mt-1 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                {BET_OPTIONS.map(v => {
-                  const active = v === betPerSpin
-                  const disabled = v > credits && credits > 0
-                  return (
-                    <button
-                      key={v}
-                      onClick={() => !disabled && setBetPerSpin(v)}
-                      className={[
-                        'rounded-full px-2.5 py-1.5 text-[11px] font-semibold border text-center',
-                        active
-                          ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
-                          : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
-                        disabled ? 'opacity-40 cursor-not-allowed' : '',
-                      ].join(' ')}
-                    >
-                      {v}
-                    </button>
-                  )
-                })}
-              </div>
-              {credits <= 0 && (
-                <div className="mt-1 text-[11px] text-rose-300">
-                  You&apos;re out of demo credits. Top up from the arcade
-                  wallet HUD to keep spinning.
-                </div>
-              )}
-            </div>
-
+          {/* STATUS + EXPLAINER UNDER CABINET – NO HISTORY, JUST CURRENT RESULT INFO */}
+          <div className="space-y-1 mt-2">
             <div className="text-[10px] text-emerald-100/80 text-center">
               Each spin uses your arcade wallet. Only rows with all slices
               aligned into a full BGLD coin, nugget, or vault image pay.
@@ -500,100 +453,104 @@ export default function GoldenAlignmentArcadeMachine() {
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <div className="uppercase tracking-[0.16em] text-white/50">
-                    Spin History
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {spinHistory.length === 0 && (
-                      <span className="text-[11px] text-white/40">
-                        Spin to build history.
-                      </span>
-                    )}
-                    {spinHistory.map((h, i) => (
-                      <span
-                        key={i}
-                        className={[
-                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border',
-                          h.net > 0
-                            ? 'border-emerald-300 text-emerald-200 bg-emerald-900/40'
-                            : h.net < 0
-                            ? 'border-rose-300 text-rose-200 bg-rose-900/40'
-                            : 'border-slate-300 text-slate-100 bg-slate-800/40',
-                        ].join(' ')}
-                      >
-                        {h.rows.map(row => row.join('/')).join(' | ')} ·{' '}
-                        {h.linesHit}L · {h.net > 0 ? '+' : ''}
-                        {h.net}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT: PAYTABLE / HOW TO PLAY (no bet buttons here now) */}
-        <div
-          className={[
-            'rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4',
-            fullscreenMobile ? 'hidden md:block' : '',
-          ].join(' ')}
-        >
-          {/* Paytable */}
-          <div className="rounded-2xl border border-emerald-200/60 bg-black/40 p-3 space-y-2">
-            <div className="text-sm font-semibold text-emerald-50">
-              Paytable — Golden Alignment (per payline)
+        {/* RIGHT: BETTING + PAYTABLE / HOW TO PLAY
+            Hidden entirely in fullscreen overlay so cabinet is the only thing visible */}
+        {!fullscreenMobile && (
+          <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4">
+            {/* Bet selector */}
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
+                Bet Per Spin
+              </div>
+              <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                {BET_OPTIONS.map(v => {
+                  const active = v === betPerSpin
+                  const disabled = v > credits && credits > 0
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => !disabled && setBetPerSpin(v)}
+                      className={[
+                        'rounded-full px-2.5 py-1.5 text-[11px] font-semibold border text-center',
+                        active
+                          ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
+                          : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
+                        disabled ? 'opacity-40 cursor-not-allowed' : '',
+                      ].join(' ')}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              {credits <= 0 && (
+                <div className="mt-1 text-[11px] text-rose-300">
+                  You&apos;re out of demo credits. Top up from the arcade
+                  wallet HUD to keep spinning.
+                </div>
+              )}
             </div>
-            <ul className="space-y-1 text-emerald-50/85 text-[11px] sm:text-xs list-disc list-inside">
-              <li>
-                <span className="font-semibold">BGLD Coin</span> — complete
-                coin across a row • pays 12× bet per spin
-              </li>
-              <li>
-                <span className="font-semibold">Vault</span> — complete vault
-                door across a row • pays 8×
-              </li>
-              <li>
-                <span className="font-semibold">Gold Nugget</span> — complete
-                nugget across a row • pays 5×
-              </li>
-              <li>
-                Multiple rows can hit at once; all paying lines stack.
-              </li>
-            </ul>
-            <div className="text-[11px] text-emerald-100/80 pt-1">
-              Only perfectly aligned slices (left / center / right) count — no
-              partial image credit. Forced-align logic occasionally nudges
-              reels into a full image to keep the cabinet feeling hot without
-              being reckless.
-            </div>
-          </div>
 
-          {/* How to play */}
-          <div className="rounded-2xl border border-white/12 bg-black/40 p-3 space-y-2">
-            <div className="text-sm font-semibold text-white">
-              How To Play
+            {/* Paytable */}
+            <div className="rounded-2xl border border-emerald-200/60 bg-black/40 p-3 space-y-2">
+              <div className="text-sm font-semibold text-emerald-50">
+                Paytable — Golden Alignment (per payline)
+              </div>
+              <ul className="space-y-1 text-emerald-50/85 text-[11px] sm:text-xs list-disc list-inside">
+                <li>
+                  <span className="font-semibold">BGLD Coin</span> — complete
+                  coin across a row • pays 12× bet per spin
+                </li>
+                <li>
+                  <span className="font-semibold">Vault</span> — complete vault
+                  door across a row • pays 8×
+                </li>
+                <li>
+                  <span className="font-semibold">Gold Nugget</span> — complete
+                  nugget across a row • pays 5×
+                </li>
+                <li>
+                  Multiple rows can hit at once; all paying lines stack.
+                </li>
+              </ul>
+              <div className="text-[11px] text-emerald-100/80 pt-1">
+                Only perfectly aligned slices (left / center / right) count — no
+                partial image credit. Forced-align logic occasionally nudges
+                reels into a full image to keep the cabinet feeling hot without
+                being reckless.
+              </div>
             </div>
-            <ul className="space-y-1 text-white/75 list-disc list-inside">
-              <li>Choose your Bet per Spin with the buttons under the cabinet.</li>
-              <li>
-                Hit <span className="font-semibold">Spin for Alignment</span> to
-                fire all three reels. They spin vertically and settle
-                left-to-right like a real slot cabinet.
-              </li>
-              <li>
-                Watch for the full BGLD coin, nugget, or vault image landing
-                across any horizontal row — that&apos;s Golden Alignment.
-              </li>
-              <li>
-                This is a demo-only cabinet using BGRC-style credits; mainnet
-                BGLD play will wire this exact cabinet into Base contracts.
-              </li>
-            </ul>
+
+            {/* How to play */}
+            <div className="rounded-2xl border border-white/12 bg-black/40 p-3 space-y-2">
+              <div className="text-sm font-semibold text-white">
+                How To Play
+              </div>
+              <ul className="space-y-1 text-white/75 list-disc list-inside">
+                <li>Choose your Bet per Spin with the buttons above.</li>
+                <li>
+                  Hit{' '}
+                  <span className="font-semibold">Spin for Alignment</span> to
+                  fire all three reels. They spin vertically and settle
+                  left-to-right like a real slot cabinet.
+                </li>
+                <li>
+                  Watch for the full BGLD coin, nugget, or vault image landing
+                  across any horizontal row — that&apos;s Golden Alignment.
+                </li>
+                <li>
+                  This is a demo-only cabinet using BGRC-style credits; mainnet
+                  BGLD play will wire this exact cabinet into Base contracts.
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
