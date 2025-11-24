@@ -19,8 +19,8 @@ export function usePokerRoom(roomId: string, playerId: string) {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket(POKER_WS_URL);
-    wsRef.current = ws;
+    const ws = new WebSocket(buildWsUrl());
+
 
     ws.onopen = () => {
       console.log("[poker] WS opened:", POKER_WS_URL);
@@ -60,6 +60,33 @@ export function usePokerRoom(roomId: string, playerId: string) {
       );
       setReady(false);
     };
+
+    function buildWsUrl(): string {
+  // 1. Read env
+  const raw = process.env.NEXT_PUBLIC_POKER_WS;
+
+  // 2. SSR fallback
+  if (typeof window === "undefined") {
+    return raw || "ws://localhost:8080";
+  }
+
+  // 3. Local dev fallback
+  if (!raw) {
+    const isSecure = window.location.protocol === "https:";
+    return (isSecure ? "wss://" : "ws://") + "localhost:8080";
+  }
+
+  // 4. If already ws:// or wss:// use as-is
+  if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
+    return raw;
+  }
+
+  // 5. If someone put https:// or http:// → convert to wss/ws
+  const cleaned = raw.replace(/^https?:\/\//, "");
+  const isSecure = window.location.protocol === "https:";
+  return (isSecure ? "wss://" : "ws://") + cleaned;
+}
+
 
     return () => {
       try {
