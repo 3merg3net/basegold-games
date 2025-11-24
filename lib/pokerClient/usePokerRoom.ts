@@ -1,3 +1,4 @@
+// lib/pokerClient/usePokerRoom.ts
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -16,47 +17,30 @@ type SendPayload =
       amount?: number;
     };
 
+// Hard-coded production WS URL for now.
+// This avoids all the "wss://<your-socket-host>" / env weirdness.
+const PROD_WS_URL = "wss://bgld-poker-coordinator-production.up.railway.app";
+
 /**
- * Build the WebSocket URL in a way that works:
- * - On Vercel + Railway (wss://…)
- * - On localhost (ws://localhost:8080)
- * - Ignores the "<your-socket-host>" placeholder
+ * Very simple, robust WS URL resolver:
+ * - localhost → ws://localhost:8080
+ * - anything else (Vercel, mobile, etc.) → PROD_WS_URL
  */
 function resolveWsUrl(): string {
-  let raw = process.env.NEXT_PUBLIC_POKER_WS;
-
-  // Guard against leftover tutorial placeholder
-  if (raw && raw.includes("<your-socket-host>")) {
-    console.warn(
-      "[poker] NEXT_PUBLIC_POKER_WS contains placeholder '<your-socket-host>', ignoring it."
-    );
-    raw = "";
+  if (typeof window === "undefined") {
+    // SSR fallback – doesn't actually open sockets on server
+    return "ws://localhost:8080";
   }
 
-  // If env is set and not empty → normalize it
-  if (raw && raw.trim() !== "") {
-    raw = raw.trim();
+  const host = window.location.hostname;
 
-    // Already ws:// or wss:// → good
-    if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
-      return raw;
-    }
-
-    // Convert https:// → wss://, http:// → ws://
-    if (raw.startsWith("https://")) {
-      return raw.replace(/^https:\/\//, "wss://");
-    }
-    if (raw.startsWith("http://")) {
-      return raw.replace(/^http:\/\//, "ws://");
-    }
-
-    // Bare domain / host → assume wss:// in prod
-    return `wss://${raw}`;
+  // Local dev
+  if (host === "localhost" || host === "127.0.0.1") {
+    return "ws://localhost:8080";
   }
 
-  // No env (or placeholder) → dev default
-  // This is what makes local dev work with a localhost coordinator.
-  return "ws://localhost:8080";
+  // Deployed (Vercel, custom domain, etc.)
+  return PROD_WS_URL;
 }
 
 export function usePokerRoom(roomId: string, playerId: string) {
@@ -66,7 +50,6 @@ export function usePokerRoom(roomId: string, playerId: string) {
 
   useEffect(() => {
     const url = resolveWsUrl();
-
     console.log("[poker] Attempting WS →", url);
 
     const ws = new WebSocket(url);
