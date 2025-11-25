@@ -1,4 +1,3 @@
-// lib/pokerClient/usePokerRoom.ts
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -11,36 +10,44 @@ type SendPayload =
   | { type: "sit"; name?: string; seatIndex?: number; buyIn?: number }
   | { type: "stand" }
   | { type: "start-hand" }
-  | {
-      type: "action";
-      action: "fold" | "check" | "call" | "bet";
-      amount?: number;
-    };
-
-// Hard-coded production WS URL for now.
-// This avoids all the "wss://<your-socket-host>" / env weirdness.
-const PROD_WS_URL = "wss://bgld-poker-coordinator-production.up.railway.app";
+  | { type: "action"; action: "fold" | "check" | "call" | "bet"; amount?: number };
 
 /**
- * Very simple, robust WS URL resolver:
- * - localhost → ws://localhost:8080
- * - anything else (Vercel, mobile, etc.) → PROD_WS_URL
+ * Build the WebSocket URL:
+ * - Vercel + Railway: uses NEXT_PUBLIC_POKER_WS (wss://...)
+ * - Local dev: falls back to ws://localhost:8080
  */
 function resolveWsUrl(): string {
-  if (typeof window === "undefined") {
-    // SSR fallback – doesn't actually open sockets on server
+  const raw = process.env.NEXT_PUBLIC_POKER_WS;
+
+  // 1) If env is set, use it as-is (after trimming)
+  if (raw && raw.trim().length > 0) {
+    const trimmed = raw.trim();
+    // Allow either ws(s):// or http(s):// in env:
+    if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) {
+      return trimmed;
+    }
+    if (trimmed.startsWith("https://")) {
+      return trimmed.replace(/^https:\/\//, "wss://");
+    }
+    if (trimmed.startsWith("http://")) {
+      return trimmed.replace(/^http:\/\//, "ws://");
+    }
+    // Bare host like "bgld-poker-coordinator-production.up.railway.app"
+    const isSecure =
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:";
+    return `${isSecure ? "wss://" : "ws://"}${trimmed}`;
+  }
+
+  // 2) No env → local dev fallback
+  if (typeof window !== "undefined") {
+    // Assume local coordinator on 8080
     return "ws://localhost:8080";
   }
 
-  const host = window.location.hostname;
-
-  // Local dev
-  if (host === "localhost" || host === "127.0.0.1") {
-    return "ws://localhost:8080";
-  }
-
-  // Deployed (Vercel, custom domain, etc.)
-  return PROD_WS_URL;
+  // 3) SSR fallback (never actually used by the browser)
+  return "ws://localhost:8080";
 }
 
 export function usePokerRoom(roomId: string, playerId: string) {
@@ -53,7 +60,7 @@ export function usePokerRoom(roomId: string, playerId: string) {
     console.log("[poker] Attempting WS →", url);
 
     const ws = new WebSocket(url);
-    wsRef.current = ws; // REQUIRED so send() can use it
+    wsRef.current = ws; // make send() work
 
     ws.onopen = () => {
       console.log("[poker] WS OPEN:", url);
@@ -65,7 +72,6 @@ export function usePokerRoom(roomId: string, playerId: string) {
         playerId,
         type: "join-room" as const,
       };
-
       ws.send(JSON.stringify(join));
     };
 
