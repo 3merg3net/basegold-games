@@ -1,4 +1,3 @@
-// lib/pokerClient/usePokerRoom.ts
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -13,52 +12,35 @@ type SendPayload =
   | { type: "start-hand" }
   | { type: "action"; action: "fold" | "check" | "call" | "bet"; amount?: number };
 
+// 🔒 Single source of truth for production
+const PROD_HOST = "casino.basereserve.gold";
+const PROD_WS_URL = "wss://bgld-poker-coordinator-production.up.railway.app";
+
 /**
- * Build the WebSocket URL in a way that works:
- * - On Vercel + Railway (wss://…)
- * - On localhost (ws://localhost:8080)
- * - Avoids leftover "<your-socket-host>" placeholders
+ * Build the WebSocket URL:
+ * - In prod on Vercel → always use Railway WSS
+ * - In dev/local → ws://localhost:8080
+ * - On SSR → fall back to env or localhost
  */
 function resolveWsUrl(): string {
-  let raw = process.env.NEXT_PUBLIC_POKER_WS || "";
-
-  // If someone left the template "<your-socket-host>" in env, ignore it
-  if (raw.includes("<your-socket-host>")) {
-    raw = "";
-  }
-
-  raw = raw.trim();
-
-  // No env / empty → choose a sensible default
-  if (!raw) {
-    // In the browser, default to localhost:8080 for dev
-    if (typeof window !== "undefined") {
-      const isSecure = window.location.protocol === "https:";
-      // Local dev → you usually run `node src/server.ts` on 8080
-      return `${isSecure ? "wss" : "ws"}://localhost:8080`;
+  // SSR / build time: no window
+  if (typeof window === "undefined") {
+    const raw = process.env.NEXT_PUBLIC_POKER_WS;
+    if (raw && raw.trim().length > 0) {
+      return raw.trim();
     }
-    // SSR fallback
     return "ws://localhost:8080";
   }
 
-  // Already ws:// or wss:// → use as-is
-  if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
-    return raw;
+  const host = window.location.hostname;
+
+  // ✅ Production domain → Railway
+  if (host === PROD_HOST) {
+    return PROD_WS_URL;
   }
 
-  // If user entered https:// or http:// → convert to ws:// or wss://
-  if (raw.startsWith("https://")) {
-    return raw.replace(/^https:\/\//, "wss://");
-  }
-  if (raw.startsWith("http://")) {
-    return raw.replace(/^http:\/\//, "ws://");
-  }
-
-  // If it's just a bare domain/subdomain → prepend protocol appropriate to page
-  const isSecure =
-    typeof window !== "undefined" &&
-    window.location.protocol === "https:";
-  return `${isSecure ? "wss://" : "ws://"}${raw}`;
+  // ✅ Anything else (localhost, 192.168.x.x, etc.) → local coordinator
+  return "ws://localhost:8080";
 }
 
 export function usePokerRoom(roomId: string, playerId: string) {
@@ -90,8 +72,7 @@ export function usePokerRoom(roomId: string, playerId: string) {
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
-        // Debug if needed:
-        // console.log("[poker] incoming:", data);
+        console.log("[poker] incoming:", data);
         setMessages((prev) => [...prev, data]);
       } catch (err) {
         console.error("[poker] bad message:", err);
