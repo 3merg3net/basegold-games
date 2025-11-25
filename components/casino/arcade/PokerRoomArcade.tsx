@@ -621,17 +621,60 @@ export default function PokerRoomArcade() {
 
   // Dynamic seat positions – only for players actually seated
   const activeSeats = seats.filter((s) => s.playerId);
-  const RING_POSITIONS: Array<Partial<React.CSSProperties>> = [
-    { top: "6%", left: "50%", transform: "translate(-50%, 0)" },
-    { top: "20%", left: "12%", transform: "translate(0, 0)" },
-    { top: "20%", right: "12%", transform: "translate(0, 0)" },
-    { top: "45%", left: "4%", transform: "translate(0, -50%)" },
-    { top: "45%", right: "4%", transform: "translate(0, -50%)" },
-    { bottom: "24%", left: "10%", transform: "translate(0, 0)" },
-    { bottom: "24%", right: "10%", transform: "translate(0, 0)" },
-    { bottom: "10%", left: "30%", transform: "translate(-50%, 0)" },
-    { bottom: "10%", left: "70%", transform: "translate(-50%, 0)" },
-  ];
+
+  // 9-max layout, tuned for tall mobile table and wide desktop
+  const SEAT_POSITIONS: Record<number, React.CSSProperties> = {
+    // Hero seat (bottom center)
+    0: {
+      bottom: "20%",
+      left: "50%",
+      transform: "translate(-50%, 0)",
+    },
+    // Bottom left / right
+    1: {
+      bottom: "24%",
+      left: "22%",
+      transform: "translate(-50%, 0)",
+    },
+    2: {
+      bottom: "24%",
+      left: "78%",
+      transform: "translate(-50%, 0)",
+    },
+    // Mid left / right
+    3: {
+      top: "52%",
+      left: "10%",
+      transform: "translate(0, -50%)",
+    },
+    4: {
+      top: "52%",
+      right: "10%",
+      transform: "translate(0, -50%)",
+    },
+    // Upper left / right
+    5: {
+      top: "30%",
+      left: "20%",
+      transform: "translate(-50%, -50%)",
+    },
+    6: {
+      top: "30%",
+      right: "20%",
+      transform: "translate(50%, -50%)",
+    },
+    // Top left-center / right-center
+    7: {
+      top: "12%",
+      left: "36%",
+      transform: "translate(-50%, 0)",
+    },
+    8: {
+      top: "12%",
+      right: "36%",
+      transform: "translate(50%, 0)",
+    },
+  };
 
   return (
     <>
@@ -742,7 +785,7 @@ export default function PokerRoomArcade() {
 
               <div className="pointer-events-none absolute inset-[6%] md:inset-[8%] rounded-[999px] border border-[#FFD700]/25 shadow-[0_0_40px_rgba(250,204,21,0.35)]" />
 
-              {/* Center content: pot + board (pulled up a bit) */}
+              {/* Center content: pot + board */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 {/* Pot, above board */}
                 {pot > 0 && (
@@ -775,7 +818,7 @@ export default function PokerRoomArcade() {
                 </div>
               </div>
 
-              {/* Hero hand anchored near bottom (clubGG style) */}
+              {/* Hero hand anchored near bottom (GG-style) */}
               {heroHand && (
                 <div className="absolute bottom-[8%] left-1/2 -translate-x-1/2 flex gap-1.5 text-xs text-[#FFD700] z-10 pointer-events-none">
                   {heroHand.map((c, i) => (
@@ -791,7 +834,7 @@ export default function PokerRoomArcade() {
 
               {/* Seats */}
               <div className="absolute inset-0 text-[11px] text-white/80">
-                {activeSeats.map((seat, idx) => {
+                {activeSeats.map((seat) => {
                   const label =
                     seat.playerId && seat.name
                       ? seat.name
@@ -811,7 +854,8 @@ export default function PokerRoomArcade() {
                   );
 
                   const pos =
-                    RING_POSITIONS[idx] ?? RING_POSITIONS[0];
+                    SEAT_POSITIONS[seat.seatIndex] ??
+                    SEAT_POSITIONS[0];
 
                   const committed =
                     committedBySeat[seat.seatIndex] ?? 0;
