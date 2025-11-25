@@ -253,6 +253,10 @@ export default function PokerRoomArcade() {
   const { profile, updateProfile, chips, setChips } =
     usePlayerProfileContext() as any;
 
+  // Optional avatar URL (from profile or null)
+  const avatarUrl: string | null =
+    (profile as any)?.avatarUrl ?? null;
+
   // Player ID derived from profile name if present
   const playerId = useMemo(() => {
     const nm = profile?.name ?? "";
@@ -607,7 +611,7 @@ export default function PokerRoomArcade() {
   const [openHowPlay, setOpenHowPlay] = useState(false);
   const [openFreeOnchain, setOpenFreeOnchain] = useState(false);
 
-  // Avatar initials for display in sidebar
+  // Avatar initials for fallback text (if we ever need it)
   const initials =
     profile?.avatarInitials ||
     (profile?.name
@@ -619,10 +623,7 @@ export default function PokerRoomArcade() {
           .slice(0, 3)
       : "??");
 
-  // Dynamic seat positions – only for players actually seated
-  const activeSeats = seats.filter((s) => s.playerId);
-
-  // 9-max layout, tuned for tall mobile table and wide desktop
+  // Dynamic seat positions – 9-max layout
   const SEAT_POSITIONS: Record<number, React.CSSProperties> = {
     // Hero seat (bottom center)
     0: {
@@ -676,6 +677,8 @@ export default function PokerRoomArcade() {
     },
   };
 
+  const activeSeats = seats.filter((s) => s.playerId);
+
   return (
     <>
       <div className="space-y-6 pb-16 md:pb-4">
@@ -696,7 +699,7 @@ export default function PokerRoomArcade() {
                 </div>
                 <div className="text-sm md:text-base text-white/80">
                   Room ID:{" "}
-                  <span className="font-mono text-[#FFD700]/90">
+                    <span className="font-mono text-[#FFD700]/90">
                     bgld-holdem-demo-room
                   </span>
                 </div>
@@ -878,7 +881,7 @@ export default function PokerRoomArcade() {
                         </div>
                       )}
                       <div
-                        className={`px-2 py-1 rounded-full border text-[10px] flex items-center gap-1 ${seatStyle} ${
+                        className={`px-2 py-0.5 rounded-full border text-[9px] flex items-center gap-1 ${seatStyle} ${
                           isHeroSeat
                             ? "border-[#FFD700]/80 text-[#FFD700]"
                             : seat.playerId
@@ -889,21 +892,29 @@ export default function PokerRoomArcade() {
                         }`}
                       >
                         {isHeroSeat && (
-                          <span
-                            className="h-4 w-4 rounded-full flex items-center justify-center text-[8px] font-bold text-black mr-1"
-                            style={{
-                              backgroundColor:
-                                profile?.avatarColor ?? "#facc15",
-                            }}
-                          >
-                            {initials.slice(0, 2).toUpperCase()}
-                          </span>
+                          avatarUrl ? (
+                            <Image
+                              src={avatarUrl}
+                              alt="Player avatar"
+                              width={16}
+                              height={16}
+                              className="rounded-full mr-1"
+                            />
+                          ) : (
+                            <Image
+                              src="/avatars/bgld-avatar.png"
+                              alt="BGLD avatar"
+                              width={16}
+                              height={16}
+                              className="rounded-full mr-1"
+                            />
+                          )
                         )}
-                        <span className="max-w-[110px] truncate">
+                        <span className="max-w-[80px] truncate">
                           {label}
                         </span>
                         {seat.playerId && (
-                          <span className="ml-1 rounded-full bg-black/60 px-1.5 py-[1px] text-[9px] border border-white/25">
+                          <span className="ml-1 rounded-full bg-black/60 px-1.5 py-[1px] text-[8px] border border-white/25">
                             {seat.chips ?? 1000}
                           </span>
                         )}
@@ -1030,13 +1041,24 @@ export default function PokerRoomArcade() {
                     table.
                   </div>
                 </div>
-                <div
-                  className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold text-black shadow-[0_0_20px_rgba(250,204,21,0.7)]"
-                  style={{
-                    backgroundColor: profile?.avatarColor ?? "#facc15",
-                  }}
-                >
-                  {initials.slice(0, 3).toUpperCase()}
+                <div className="h-10 w-10 rounded-full overflow-hidden shadow-[0_0_20px_rgba(250,204,21,0.7)] flex items-center justify-center bg-[#facc15]">
+                  {avatarUrl ? (
+                    <Image
+                      src={avatarUrl}
+                      alt="Player avatar"
+                      width={40}
+                      height={40}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src="/avatars/bgld-avatar.png"
+                      alt="BGLD avatar"
+                      width={40}
+                      height={40}
+                      className="object-cover"
+                    />
+                  )}
                 </div>
               </div>
 
