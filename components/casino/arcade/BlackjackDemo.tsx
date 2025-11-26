@@ -140,6 +140,9 @@ export default function BlackjackDemo() {
   const approxUsd = (b: number) =>
     priceUsd ? `~$${(b * priceUsd).toFixed(b * priceUsd < 1 ? 4 : 2)}` : ''
 
+  // 🔲 Full-screen mobile mode
+  const [fullscreenMobile, setFullscreenMobile] = useState(false)
+
   /* ---------- derived helpers ---------- */
 
   const currentHand = players[currentIndex] ?? null
@@ -595,12 +598,12 @@ export default function BlackjackDemo() {
   const renderCard = (card: Card | null, faceDown?: boolean) => {
     if (!card || faceDown) {
       return (
-        <div className="w-[64px] h-[92px] md:w-[80px] md:h-[116px] rounded-xl bg-[repeating-linear-gradient(135deg,#0b1120,#0b1120_6px,#1f2937_6px,#1f2937_12px)] border border-slate-700 shadow-[0_6px_20px_rgba(0,0,0,0.85)]" />
+        <div className="w-[60px] h-[86px] md:w-[80px] md:h-[116px] rounded-xl bg-[repeating-linear-gradient(135deg,#0b1120,#0b1120_6px,#1f2937_6px,#1f2937_12px)] border border-slate-700 shadow-[0_6px_20px_rgba(0,0,0,0.85)]" />
       )
     }
     const isRed = card.suit === '♥' || card.suit === '♦'
     return (
-      <div className="w-[64px] h-[92px] md:w-[80px] md:h-[116px] rounded-xl bg-white border border-slate-300 shadow-[0_8px_26px_rgba(0,0,0,0.9)] flex flex-col justify-between p-2">
+      <div className="w-[60px] h-[86px] md:w-[80px] md:h-[116px] rounded-xl bg-white border border-slate-300 shadow-[0_8px_26px_rgba(0,0,0,0.9)] flex flex-col justify-between p-2">
         <div
           className={[
             'text-xs font-bold',
@@ -674,10 +677,17 @@ export default function BlackjackDemo() {
     )
   }
 
-  /* ---------- RENDER: SINGLE COLUMN LAYOUT, TIGHT TABLE ---------- */
+  /* ---------- RENDER ---------- */
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div
+      className={[
+        'mx-auto max-w-5xl space-y-4',
+        fullscreenMobile
+          ? 'fixed inset-0 z-40 max-w-none bg-black/95 px-2 pt-2 pb-3 overflow-y-auto'
+          : '',
+      ].join(' ')}
+    >
       {/* TOP: TITLE + ARCADE SUMMARY */}
       <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-black/70 via-[#020617] to-black/80 p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -751,23 +761,37 @@ export default function BlackjackDemo() {
       </div>
 
       {/* TABLE: DEALER DIRECTLY ABOVE PLAYER, ONE BOX */}
-      <div className="relative rounded-[28px] border border-emerald-400/40 bg-[radial-gradient(circle_at_10%_0%,#064e3b,transparent_55%),radial-gradient(circle_at_90%_0%,#047857,transparent_55%),#022c22] shadow-[0_18px_45px_rgba(0,0,0,0.9)] p-4 md:p-5 space-y-4 overflow-hidden">
+      <div
+        className={[
+          'relative rounded-[28px] border border-emerald-400/40 bg-[radial-gradient(circle_at_10%_0%,#064e3b,transparent_55%),radial-gradient(circle_at_90%_0%,#047857,transparent_55%),#022c22] shadow-[0_18px_45px_rgba(0,0,0,0.9)] p-4 md:p-5 space-y-4 overflow-hidden',
+        ].join(' ')}
+      >
         {/* glow */}
         <div className="pointer-events-none absolute inset-x-0 -top-10 h-28 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.35),transparent_65%)]" />
 
         <div className="relative z-10 space-y-4">
-          {/* DEALER + STATUS – lowered, centered */}
+          {/* DEALER + STATUS */}
           <div className="rounded-3xl border border-emerald-300/40 bg-[radial-gradient(circle_at_50%_0%,#064e3b,#022c22_65%,#01120f_100%)] px-3 pt-4 pb-3 md:px-6 md:pt-4 md:pb-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-50/85">
                 Dealer
               </div>
-              <div className="text-[11px] text-emerald-100/80">
-                {dealerCards.length > 0 && dealerReveal
-                  ? `Total: ${dealerTotal.total}`
-                  : dealerCards.length > 0
-                  ? 'Showing…'
-                  : 'Waiting for deal'}
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] text-emerald-100/80">
+                  {dealerCards.length > 0 && dealerReveal
+                    ? `Total: ${dealerTotal.total}`
+                    : dealerCards.length > 0
+                    ? 'Showing…'
+                    : 'Waiting for deal'}
+                </div>
+                {/* Full-screen toggle (mobile only) */}
+                <button
+                  type="button"
+                  onClick={() => setFullscreenMobile(fs => !fs)}
+                  className="md:hidden rounded-full border border-white/30 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80"
+                >
+                  {fullscreenMobile ? 'Exit Full Screen' : 'Full Screen'}
+                </button>
               </div>
             </div>
 
@@ -797,7 +821,7 @@ export default function BlackjackDemo() {
             </div>
           </div>
 
-          {/* PLAYER HAND(S) DIRECTLY BELOW DEALER */}
+          {/* PLAYER HAND(S) */}
           <div className="space-y-2">
             <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-50/80 text-center">
               Your Hand
@@ -844,11 +868,11 @@ export default function BlackjackDemo() {
                           {label}
                         </span>
                         <span className="text-base md:text-lg font-extrabold text-[#facc15] drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]">
-    {total?.total ?? '--'}{' '}
-    <span className="text-[9px] md:text-[10px] font-semibold text-emerald-100/90">
-      {total?.isSoft ? '(soft)' : ''}
-    </span>
-  </span>
+                          {total?.total ?? '--'}{' '}
+                          <span className="text-[9px] md:text-[10px] font-semibold text-emerald-100/90">
+                            {total?.isSoft ? '(soft)' : ''}
+                          </span>
+                        </span>
                       </div>
 
                       <div className="flex items-end gap-2 mt-1">
@@ -875,7 +899,7 @@ export default function BlackjackDemo() {
             </div>
           </div>
 
-          {/* ACTION BAR – directly under hands, good on mobile */}
+          {/* ACTION BAR */}
           <div className="mt-2 rounded-2xl border border-emerald-200/50 bg-black/55 px-3 py-3 flex flex-col gap-3">
             {/* action buttons */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
@@ -983,27 +1007,29 @@ export default function BlackjackDemo() {
         </div>
       </div>
 
-      {/* RULES CARD BELOW TABLE */}
-      <div className="rounded-2xl border border-white/12 bg-gradient-to-b from-[#111827] via-[#020617] to-black p-4 md:p-5 text-xs space-y-2">
-        <div className="text-sm font-semibold text-white">
-          Table Rules (Demo)
+      {/* RULES CARD BELOW TABLE – hidden in full-screen to keep everything tight */}
+      {!fullscreenMobile && (
+        <div className="rounded-2xl border border-white/12 bg-gradient-to-b from-[#111827] via-[#020617] to-black p-4 md:p-5 text-xs space-y-2">
+          <div className="text-sm font-semibold text-white">
+            Table Rules (Demo)
+          </div>
+          <ul className="space-y-1 text-white/70 list-disc list-inside">
+            <li>6-deck shoe (simulated)</li>
+            <li>Dealer stands on all 17</li>
+            <li>
+              Blackjack pays <span className="text-[#facc15] font-semibold">3:2</span>
+            </li>
+            <li>Standard hits, stands, double down &amp; split</li>
+            <li>Surrender on first decision, ties push</li>
+          </ul>
+          <div className="text-[11px] text-white/50 pt-1">
+            Front-end only demonstration of gameplay &amp; UX. Future{' '}
+            <span className="font-semibold text-[#facc15]">BGLD / BGRC</span>{' '}
+            blackjack contracts will mirror these mechanics on-chain with
+            verifiable randomness &amp; true payouts.
+          </div>
         </div>
-        <ul className="space-y-1 text-white/70 list-disc list-inside">
-          <li>6-deck shoe (simulated)</li>
-          <li>Dealer stands on all 17</li>
-          <li>
-            Blackjack pays <span className="text-[#facc15] font-semibold">3:2</span>
-          </li>
-          <li>Standard hits, stands, double down &amp; split</li>
-          <li>Surrender on first decision, ties push</li>
-        </ul>
-        <div className="text-[11px] text-white/50 pt-1">
-          Front-end only demonstration of gameplay &amp; UX. Future{' '}
-          <span className="font-semibold text-[#facc15]">BGLD / BGRC</span>{' '}
-          blackjack contracts will mirror these mechanics on-chain with
-          verifiable randomness &amp; true payouts.
-        </div>
-      </div>
+      )}
     </div>
   )
 }

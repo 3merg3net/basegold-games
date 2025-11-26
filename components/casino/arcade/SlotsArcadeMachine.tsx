@@ -56,10 +56,10 @@ const PAYTABLE: Record<SymbolId, number> = {
 
 /* ---------- ANIMATION CONSTANTS ---------- */
 
-const SPIN_TICK_MS = 55            // how fast the symbols step while spinning
-const FIRST_REEL_SPIN_MS = 1100    // base total spin time for reel 1
-const REEL_STAGGER_MS = 240        // additional time per reel (L → R)
-const FORCED_HIT_CHANCE = 0.3      // ~30% of spins will hit at least 1 payline
+const SPIN_TICK_MS = 55 // how fast the symbols step while spinning
+const FIRST_REEL_SPIN_MS = 1100 // base total spin time for reel 1
+const REEL_STAGGER_MS = 240 // additional time per reel (L → R)
+const FORCED_HIT_CHANCE = 0.3 // ~30% of spins will hit at least 1 payline
 
 /* ---------- HELPERS ---------- */
 
@@ -96,9 +96,9 @@ export default function SlotsArcadeMachine() {
   const [lastNet, setLastNet] = useState(0)
   const [lastWinGross, setLastWinGross] = useState(0)
   const [lastSymbolId, setLastSymbolId] = useState<SymbolId | null>(null)
-  const [spinHistory, setSpinHistory] = useState<
-    { net: number; sym: SymbolId | null; linesHit: number }[]
-  >([])
+
+  // mobile full-screen overlay state
+  const [fullscreenMobile, setFullscreenMobile] = useState(false)
 
   const sessionPnL = useMemo(
     () => credits - initialCredits,
@@ -121,12 +121,6 @@ export default function SlotsArcadeMachine() {
   }, [])
 
   const betOptions = [1, 2, 5, 10, 25, 50]
-
-  function evaluatePayout(symbolId: SymbolId, stake: number): number {
-    const mul = PAYTABLE[symbolId] ?? 0
-    if (mul <= 0) return 0
-    return stake * mul
-  }
 
   function spin() {
     if (spinning) return
@@ -164,9 +158,9 @@ export default function SlotsArcadeMachine() {
       //   topIdx = s-1, midIdx = s, botIdx = s+1 (all mod N),
       // where s = center index.
       const makeCenterForLine = (line: number): number => {
-        if (line === 0) return wrapIndex(symIndex + 1, N)  // top = symIndex
-        if (line === 1) return wrapIndex(symIndex, N)      // middle = symIndex
-        return wrapIndex(symIndex - 1, N)                  // bottom = symIndex
+        if (line === 0) return wrapIndex(symIndex + 1, N) // top = symIndex
+        if (line === 1) return wrapIndex(symIndex, N) // middle = symIndex
+        return wrapIndex(symIndex - 1, N) // bottom = symIndex
       }
 
       const forcedCenter = makeCenterForLine(winningLine)
@@ -237,19 +231,13 @@ export default function SlotsArcadeMachine() {
     const net = payout - stake
 
     // Wait for reels to finish: base + 2 staggers + small buffer.
-    const resultDelay =
-      FIRST_REEL_SPIN_MS + 2 * REEL_STAGGER_MS + 220
+    const resultDelay = FIRST_REEL_SPIN_MS + 2 * REEL_STAGGER_MS + 220
 
     setTimeout(() => {
       setSpinning(false)
       setLastNet(net)
       setLastWinGross(payout)
       setLastSymbolId(headlineSym)
-
-      setSpinHistory(prev => {
-        const next = [{ net, sym: headlineSym, linesHit }, ...prev]
-        return next.slice(0, 10)
-      })
 
       if (payout > 0 && linesHit > 0) {
         setStatus(
@@ -266,48 +254,80 @@ export default function SlotsArcadeMachine() {
   const canSpin = !spinning && credits > 0 && betPerSpin > 0
 
   return (
-    <div className="mx-auto w-full max-w-4xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4">
-      {/* HEADER STRIP */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
-            Base Gold Rush Casino
+    <div
+      className={[
+        'mx-auto w-full max-w-4xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
+        fullscreenMobile
+          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-hidden flex flex-col p-3'
+          : '',
+      ].join(' ')}
+    >
+      {/* HEADER STRIP – hidden in fullscreen for pure cabinet mode */}
+      {!fullscreenMobile && (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
+              Base Gold Rush Casino
+            </div>
+            <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
+              Triple Stake Slots{' '}
+              <span className="text-[#facc15]">• Arcade</span>
+            </div>
+            <div className="text-xs text-white/60 mt-1 max-w-sm">
+              Cinematic 3-reel cabinet with three horizontal paylines. Demo
+              credits only — no real BGLD on this machine.
+            </div>
           </div>
-          <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
-            Triple Stake Slots <span className="text-[#facc15]">• Arcade</span>
-          </div>
-          <div className="text-xs text-white/60 mt-1 max-w-sm">
-            Cinematic 3-reel cabinet with three horizontal paylines. Demo credits
-            only — no real BGLD on this machine.
+          <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
+            <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
+                Demo Credits
+              </div>
+              <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
+                {credits.toLocaleString()}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full md:w-auto">
+              <MiniStat label="Bet / Spin" value={betPerSpin} />
+              <MiniStat label="Last Net" value={lastNet} colored />
+              <MiniStat label="Session P&L" value={sessionPnL} colored />
+            </div>
           </div>
         </div>
-        <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
-          <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
-              Demo Credits
-            </div>
-            <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
-              {credits.toLocaleString()}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full md:w-auto">
-            <MiniStat label="Bet / Spin" value={betPerSpin} />
-            <MiniStat label="Last Net" value={lastNet} colored />
-            <MiniStat label="Session P&L" value={sessionPnL} colored />
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* MAIN: CABINET + CONTROLS */}
-      <div className="grid gap-4 md:gap-6 md:grid-cols-[minmax(260px,0.95fr)_minmax(260px,1.05fr)]">
+      <div
+        className={[
+          'grid gap-4 md:gap-6 md:grid-cols-[minmax(260px,0.95fr)_minmax(260px,1.05fr)]',
+          fullscreenMobile ? 'flex-1 grid-cols-1' : '',
+        ].join(' ')}
+      >
         {/* LEFT: CABINET + REELS + STATUS */}
-        <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-3 sm:p-4 space-y-3">
+        <div
+          className={[
+            'rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-3 sm:p-4 space-y-3',
+            fullscreenMobile ? 'h-full flex flex-col' : '',
+          ].join(' ')}
+        >
           <div className="flex items-center justify-between text-[11px] mb-1">
             <div className="uppercase tracking-[0.3em] text-white/60">
               Cabinet View
             </div>
-            <div className="text-white/50">
-              3 paylines • reels step downwards
+            <div className="flex items-center gap-2">
+              {!fullscreenMobile && (
+                <div className="text-white/50 hidden sm:block">
+                  3 paylines • reels step downwards
+                </div>
+              )}
+              {/* MOBILE FULLSCREEN TOGGLE */}
+              <button
+                type="button"
+                onClick={() => setFullscreenMobile(fs => !fs)}
+                className="md:hidden rounded-full border border-white/30 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80"
+              >
+                {fullscreenMobile ? 'Exit Full Screen' : 'Full Screen'}
+              </button>
             </div>
           </div>
 
@@ -320,20 +340,20 @@ export default function SlotsArcadeMachine() {
               className="object-contain select-none pointer-events-none"
             />
 
-            {/* Reel window — stays where you liked it */}
+            {/* Reel window */}
             <div className="absolute inset-x-0 top-[36%] mx-auto flex justify-center gap-1 sm:gap-1.5 px-4">
               {reelCenters.map((centerIndex, i) => (
                 <ReelColumn key={i} centerIndex={centerIndex} />
               ))}
             </div>
 
-            {/* 3 payline indicators restored to previous positions */}
+            {/* 3 payline indicators */}
             <div className="pointer-events-none absolute inset-x-[12%] top-[41%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/80 to-transparent shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
             <div className="pointer-events-none absolute inset-x-[12%] top-[51%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/70 to-transparent shadow-[0_0_8px_rgba(250,204,21,0.5)]" />
             <div className="pointer-events-none absolute inset-x-[12%] top-[62%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/80 to-transparent shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
           </div>
 
-          {/* Spin button tight under cabinet */}
+          {/* Spin button + status under cabinet */}
           <div className="space-y-1 mt-1">
             <button
               onClick={spin}
@@ -389,30 +409,17 @@ export default function SlotsArcadeMachine() {
                 </div>
                 <div className="flex-1">
                   <div className="uppercase tracking-[0.16em] text-white/50">
-                    Spin History
+                    Last Payout
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {spinHistory.length === 0 && (
-                      <span className="text-[11px] text-white/40">
-                        Spin to build history.
-                      </span>
-                    )}
-                    {spinHistory.map((h, i) => (
-                      <span
-                        key={i}
-                        className={[
-                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border',
-                          h.net > 0
-                            ? 'border-emerald-300 text-emerald-200 bg-emerald-900/40'
-                            : h.net < 0
-                            ? 'border-rose-300 text-rose-200 bg-rose-900/40'
-                            : 'border-slate-300 text-slate-100 bg-slate-800/40',
-                        ].join(' ')}
-                      >
-                        {h.sym ?? '—'} · {h.linesHit}L · {h.net > 0 ? '+' : ''}
-                        {h.net}
-                      </span>
-                    ))}
+                  <div
+                    className={
+                      lastWinGross > 0
+                        ? 'text-emerald-300 text-lg font-bold'
+                        : 'text-slate-200 text-lg font-bold'
+                    }
+                  >
+                    {lastWinGross > 0 ? '+' : ''}
+                    {lastWinGross.toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -420,83 +427,85 @@ export default function SlotsArcadeMachine() {
           </div>
         </div>
 
-        {/* RIGHT: BETTING + PAYTABLE */}
-        <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4">
-          {/* Bet selector */}
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
-              Bet Per Spin
-            </div>
-            <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-              {betOptions.map(v => {
-                const active = v === betPerSpin
-                const disabled = v > credits && credits > 0
-                return (
-                  <button
-                    key={v}
-                    onClick={() => !disabled && setBetPerSpin(v)}
-                    className={[
-                      'rounded-full px-2.5 py-1.5 text-[11px] font-semibold border text-center',
-                      active
-                        ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
-                        : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
-                      disabled ? 'opacity-40 cursor-not-allowed' : '',
-                    ].join(' ')}
-                  >
-                    {v}
-                  </button>
-                )
-              })}
-            </div>
-            {credits <= 0 && (
-              <div className="mt-1 text-[11px] text-rose-300">
-                You&apos;re out of demo credits. Top up from the arcade
-                wallet HUD to keep spinning.
+        {/* RIGHT: BETTING + PAYTABLE – hidden in fullscreen mode */}
+        {!fullscreenMobile && (
+          <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4">
+            {/* Bet selector */}
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
+                Bet Per Spin
               </div>
-            )}
-          </div>
+              <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                {betOptions.map(v => {
+                  const active = v === betPerSpin
+                  const disabled = v > credits && credits > 0
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => !disabled && setBetPerSpin(v)}
+                      className={[
+                        'rounded-full px-2.5 py-1.5 text-[11px] font-semibold border text-center',
+                        active
+                          ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
+                          : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
+                        disabled ? 'opacity-40 cursor-not-allowed' : '',
+                      ].join(' ')}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              {credits <= 0 && (
+                <div className="mt-1 text-[11px] text-rose-300">
+                  You&apos;re out of demo credits. Top up from the arcade
+                  wallet HUD to keep spinning.
+                </div>
+              )}
+            </div>
 
-          {/* Paytable */}
-          <div className="rounded-2xl border border-emerald-200/60 bg-black/40 p-3 space-y-2">
-            <div className="text-sm font-semibold text-emerald-50">
-              Paytable — 3 Horizontal Paylines (3-of-a-kind)
+            {/* Paytable */}
+            <div className="rounded-2xl border border-emerald-200/60 bg-black/40 p-3 space-y-2">
+              <div className="text-sm font-semibold text-emerald-50">
+                Paytable — 3 Horizontal Paylines (3-of-a-kind)
+              </div>
+              <ul className="space-y-1 text-emerald-50/85 text-[11px] sm:text-xs list-disc list-inside">
+                <li>PICKAXE • pays 2× total (1:1 net)</li>
+                <li>GOLD BAR • pays 3× total</li>
+                <li>BGRC CHIP • pays 4× total</li>
+                <li>HORSESHOE • pays 5× total</li>
+                <li>LANTERN • pays 6× total</li>
+                <li>GOLD NUGGET • pays 8× total</li>
+                <li>LUCKY 7 • pays 10× total (9:1 net)</li>
+              </ul>
+              <div className="text-[11px] text-emerald-100/80 pt-1">
+                All three horizontal rows can hit. On-chain versions can add
+                angled paylines, wilds, and bonus features.
+              </div>
             </div>
-            <ul className="space-y-1 text-emerald-50/85 text-[11px] sm:text-xs list-disc list-inside">
-              <li>PICKAXE • pays 2× total (1:1 net)</li>
-              <li>GOLD BAR • pays 3× total</li>
-              <li>BGRC CHIP • pays 4× total</li>
-              <li>HORSESHOE • pays 5× total</li>
-              <li>LANTERN • pays 6× total</li>
-              <li>GOLD NUGGET • pays 8× total</li>
-              <li>LUCKY 7 • pays 10× total (9:1 net)</li>
-            </ul>
-            <div className="text-[11px] text-emerald-100/80 pt-1">
-              All three horizontal rows can hit. On-chain versions can add
-              angled paylines, wilds, and bonus features.
-            </div>
-          </div>
 
-          {/* Explainer */}
-          <div className="rounded-2xl border border-white/12 bg-black/40 p-3 space-y-2">
-            <div className="text-sm font-semibold text-white">
-              How To Play
+            {/* Explainer */}
+            <div className="rounded-2xl border border-white/12 bg-black/40 p-3 space-y-2">
+              <div className="text-sm font-semibold text-white">
+                How To Play
+              </div>
+              <ul className="space-y-1 text-white/75 list-disc list-inside">
+                <li>
+                  All spins use your shared BGRC demo credits from the arcade
+                  wallet.
+                </li>
+                <li>
+                  Any payline that shows 3-of-a-kind pays according to the
+                  table above; multiple lines can hit at once.
+                </li>
+                <li>
+                  Your arcade wallet tracks net wins/losses across all demo
+                  games, including this cabinet.
+                </li>
+              </ul>
             </div>
-            <ul className="space-y-1 text-white/75 list-disc list-inside">
-              <li>
-                All spins use your shared BGRC demo credits from the arcade
-                wallet.
-              </li>
-              <li>
-                Any payline that shows 3-of-a-kind pays according to the
-                table above; multiple lines can hit at once.
-              </li>
-              <li>
-                Your arcade wallet tracks net wins/losses across all demo
-                games, including this cabinet.
-              </li>
-            </ul>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

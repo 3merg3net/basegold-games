@@ -10,37 +10,42 @@ type SendPayload =
   | { type: "sit"; name?: string; seatIndex?: number; buyIn?: number }
   | { type: "stand" }
   | { type: "start-hand" }
-  | { type: "action"; action: "fold" | "check" | "call" | "bet"; amount?: number };
-
-// 🔒 Single source of truth for production
-const PROD_HOST = "casino.basereserve.gold";
-const PROD_WS_URL = "wss://bgld-poker-coordinator-production.up.railway.app";
+  | {
+      type: "action";
+      action: "fold" | "check" | "call" | "bet";
+      amount?: number;
+    };
 
 /**
- * Build the WebSocket URL:
- * - In prod on Vercel → always use Railway WSS
- * - In dev/local → ws://localhost:8080
- * - On SSR → fall back to env or localhost
+ * SUPER SIMPLE URL RESOLVER
+ * - Local dev: ws://localhost:8080 (coordinator)
+ * - Vercel: uses NEXT_PUBLIC_POKER_WS (wss://your-railway)
  */
 function resolveWsUrl(): string {
-  // SSR / build time: no window
-  if (typeof window === "undefined") {
-    const raw = process.env.NEXT_PUBLIC_POKER_WS;
-    if (raw && raw.trim().length > 0) {
-      return raw.trim();
-    }
+  const raw = process.env.NEXT_PUBLIC_POKER_WS;
+
+  // Local default: coordinator on :8080
+  if (!raw || raw.trim() === "") {
     return "ws://localhost:8080";
   }
 
-  const host = window.location.hostname;
+  const v = raw.trim();
 
-  // ✅ Production domain → Railway
-  if (host === PROD_HOST) {
-    return PROD_WS_URL;
+  // Already a ws:// or wss:// URL → use as-is
+  if (v.startsWith("ws://") || v.startsWith("wss://")) {
+    return v;
   }
 
-  // ✅ Anything else (localhost, 192.168.x.x, etc.) → local coordinator
-  return "ws://localhost:8080";
+  // Convert http(s) → ws(s)
+  if (v.startsWith("https://")) {
+    return v.replace(/^https:\/\//, "wss://");
+  }
+  if (v.startsWith("http://")) {
+    return v.replace(/^http:\/\//, "ws://");
+  }
+
+  // Bare host like "bgld-poker-coordinator-production.up.railway.app"
+  return `wss://${v}`;
 }
 
 export function usePokerRoom(roomId: string, playerId: string) {
@@ -53,7 +58,7 @@ export function usePokerRoom(roomId: string, playerId: string) {
     console.log("[poker] Attempting WS →", url);
 
     const ws = new WebSocket(url);
-    wsRef.current = ws; // REQUIRED so send() can use it
+    wsRef.current = ws;
 
     ws.onopen = () => {
       console.log("[poker] WS OPEN:", url);
@@ -72,7 +77,7 @@ export function usePokerRoom(roomId: string, playerId: string) {
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
-        console.log("[poker] incoming:", data);
+        // console.log("[poker] incoming:", data);
         setMessages((prev) => [...prev, data]);
       } catch (err) {
         console.error("[poker] bad message:", err);

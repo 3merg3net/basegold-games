@@ -1,31 +1,22 @@
 // app/poker-demo/page.tsx
-'use client'
+import PokerRoomArcade from "@/components/casino/arcade/PokerRoomArcade";
 
-import PokerRoomArcade from '@/components/casino/arcade/PokerRoomArcade'
-
-export default function PokerDemoPage() {
+export default function PokerDemoDefaultPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
-      <section className="mx-auto max-w-6xl px-4 py-8 md:py-10 space-y-4">
-        <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-              Base Gold Rush • Hold’em Poker Room
-            </h1>
-            <p className="mt-1 text-sm text-white/70 max-w-xl">
-              Multiplayer Texas Hold’em Free Play table running on BGRC credits. This room
-              is wired for full multi-player flow and designed to graduate into live
-              on-chain poker on Base using BGLD.
-            </p>
-          </div>
-          <div className="text-xs text-white/55 text-right">
-            Free Play only • No real-value tokens yet • Gameplay and flow may evolve
-            before mainnet.
-          </div>
-        </header>
+    <main className="max-w-6xl mx-auto px-4 py-6 text-white">
+      <h1 className="text-2xl md:text-3xl font-extrabold tracking-wide mb-4">
+        Base Gold Rush • Hold&apos;em Demo Room
+      </h1>
+      <p className="text-sm text-white/60 mb-4">
+        This is the default public BGRC free play room. To spin up private
+        tables like ClubGG, use a custom URL such as{" "}
+        <code className="font-mono bg-white/10 px-1.5 py-0.5 rounded">
+          /poker-demo/your-club-code
+        </code>{" "}
+        and share that link with friends.
+      </p>
 
-        <PokerRoomArcade />
-      </section>
+      <PokerRoomArcade roomId="bgld-holdem-demo-room" />
     </main>
-  )
+  );
 }

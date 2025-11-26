@@ -15,15 +15,8 @@ type LiveGameCard = {
   status: 'live' | 'coming'
 }
 
+// Poker is now THE hero — roadmap is only future tables.
 const liveGames: LiveGameCard[] = [
-  {
-    href: '/poker-demo',
-    label: 'Poker Room',
-    tag: 'Texas Hold’em',
-    desc: 'Sit down, see the boards, and vibe with the first Base Gold Rush live table.',
-    icon: '/icons/game-poker-room.png',
-    status: 'live',
-  },
   {
     label: 'Blackjack Tables',
     tag: '21 Live',
@@ -78,70 +71,110 @@ export default function LiveTablesPage() {
             <CasinoModeSwitcher active="live" />
 
             <div className="mt-4 grid gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
-              {/* LEFT: POKER ROOM CALLOUT */}
+              {/* LEFT: SUPER-FOCUSED POKER ROOM CALLOUT */}
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
-                    Live Tables •{' '}
-                    <span className="text-[#FFD700]">Poker Room</span>{' '}
-                    is live.
-                  </h1>
-                  <p className="text-xs sm:text-sm md:text-base text-white/80 max-w-xl">
-                    Sit down in the{' '}
-                    <span className="font-semibold text-[#FFD700]">
-                      Base Gold Rush Poker Room
-                    </span>
-                    , watch the boards roll, and vibe at the first live table in the casino.
-                    This is where the rail starts to fill up.
-                  </p>
-                  <p className="text-[11px] md:text-xs text-white/60 max-w-xl">
-                    Live multiplayer logic is rolling out across poker and table games. Poker
-                    is up first — blackjack, craps, baccarat and more are lining up in the pit
-                    right behind it.
-                  </p>
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div className="space-y-2">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
+                      Live Tables •{' '}
+                      <span className="text-[#FFD700]">Poker Room</span>{' '}
+                      is officially open.
+                    </h1>
+                    <p className="text-xs sm:text-sm md:text-base text-white/80 max-w-xl">
+                      Sit down in the{' '}
+                      <span className="font-semibold text-[#FFD700]">
+                        Base Gold Rush Poker Room
+                      </span>
+                      , watch full boards roll, and feel how the live pit moves
+                      before the rest of Base finds the floor.
+                    </p>
+                    <p className="text-[11px] md:text-xs text-white/60 max-w-xl">
+                      This is our flagship live table — real multiplayer logic, synced
+                      action across devices, and the template for every other live
+                      game we&apos;re lighting up.
+                    </p>
+                  </div>
+
+                  {/* Hero CTA in header */}
+                  <div className="flex md:flex-col items-end gap-2 text-[11px] md:text-xs">
+                    <div className="text-right text-white/60 hidden md:block">
+                      <div>Flagship live room</div>
+                      <div className="font-mono text-[#FFD700]">
+                        bgld-holdem-demo-room
+                      </div>
+                    </div>
+                    <Link
+                      href="/poker-demo"
+                      className="inline-flex items-center justify-center rounded-full bg-[#FFD700] px-4 py-2 text-[11px] md:text-xs font-semibold text-black shadow-[0_18px_45px_rgba(250,204,21,0.85)] hover:bg-yellow-400"
+                    >
+                      Enter Poker Room →
+                    </Link>
+                  </div>
                 </div>
 
                 {/* BIG POKER ROOM HERO CARD */}
                 <Link
                   href="/poker-demo"
-                  className="group relative block overflow-hidden rounded-3xl border border-amber-300/70 bg-black/85 shadow-[0_26px_80px_rgba(0,0,0,0.95)]"
+                  className="group relative block overflow-hidden rounded-3xl border border-amber-300/80 bg-black/90 shadow-[0_26px_90px_rgba(0,0,0,1)]"
                 >
-                  <div className="relative h-40 sm:h-48 md:h-56">
+                  <div className="relative h-44 sm:h-52 md:h-60">
                     <Image
-                      src="/images/live-poker-hero.png"
+                      src="/images/live-poker-hero1.png"
                       alt="Base Gold Rush live poker room"
                       fill
                       sizes="480px"
-                      className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                      className="object-cover group-hover:scale-[1.04] transition-transform duration-500"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
                     <div className="absolute left-4 bottom-3 right-4 flex items-end justify-between gap-3">
                       <div>
-                        <div className="text-[11px] uppercase tracking-[0.28em] text-amber-200/90">
-                          Live Play Now
+                        <div className="inline-flex items-center gap-2 rounded-full bg-black/70 border border-emerald-400/70 px-2.5 py-1 mb-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-[10px] uppercase tracking-[0.26em] text-emerald-100">
+                            Live Table • Open Now
+                          </span>
                         </div>
-                        <div className="text-lg sm:text-xl font-bold text-white">
+                        <div className="text-lg sm:text-xl md:text-2xl font-bold text-white">
                           Poker Room • Texas Hold’em
                         </div>
-                        <div className="mt-1 text-[11px] sm:text-xs text-white/75 max-w-xs">
-                          Join the table, sweat the flop, and feel how Base live games are
-                          going to run.
+                        <div className="mt-1 text-[11px] sm:text-xs text-white/80 max-w-xs">
+                          Full-hole cards, shared board, synced betting order, and a
+                          ClubGG-style action bar — all running on Base Gold Rush.
                         </div>
                       </div>
                       <div className="hidden sm:flex flex-col items-end gap-1">
-                        <span className="rounded-full bg-amber-500/20 border border-amber-300/70 px-3 py-1 text-[11px] font-semibold text-amber-100">
+                        <span className="rounded-full bg-amber-500/30 border border-amber-200/80 px-3 py-1 text-[11px] font-semibold text-amber-50">
                           Join the table & vibe →
+                        </span>
+                        <span className="text-[10px] text-amber-100/80">
+                          Each browser/device = a unique seat.
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="px-4 py-3 text-[11px] sm:text-xs text-white/75 flex items-center justify-between gap-3">
-                    <span>
-                      This room is our live table blueprint — cards, seats, action, all
-                      syncing through a shared room.
-                    </span>
-                    <span className="sm:hidden font-semibold text-amber-200 group-hover:translate-x-0.5 transition-transform">
-                      Enter room →
+
+                  {/* Under-card info strip: hard highlight on live status */}
+                  <div className="px-4 py-3 border-t border-amber-300/40 bg-black/90 text-[11px] sm:text-xs text-white/80 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/60 px-2.5 py-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="font-semibold text-emerald-100">
+                          Live now
+                        </span>
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-black/70 border border-white/25 px-2.5 py-1">
+                        Mode:{' '}
+                        <span className="ml-1 font-mono text-[#FFD700]">
+                          BGRC free play
+                        </span>
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-black/70 border border-white/25 px-2.5 py-1">
+                        Seats:{' '}
+                        <span className="ml-1 font-mono">2–9 players</span>
+                      </span>
+                    </div>
+                    <span className="hidden sm:inline text-white/60">
+                      This room is the blueprint for every on-chain cash table we launch.
                     </span>
                   </div>
                 </Link>
@@ -151,39 +184,36 @@ export default function LiveTablesPage() {
                 </div>
               </div>
 
-              {/* RIGHT: UPCOMING LIVE TABLES LIST */}
+              {/* RIGHT: UPCOMING LIVE TABLES LIST (FUTURE PIT) */}
               <div className="space-y-4">
-                <div className="rounded-3xl border border-amber-200/70 bg-black/85 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-4 sm:p-5">
+                <div className="rounded-3xl border border-amber-200/60 bg-black/85 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div>
                       <div className="text-[11px] uppercase tracking-[0.26em] text-amber-200/90">
-                        Live Pit Roadmap
+                        Next up in the pit
                       </div>
                       <div className="text-sm sm:text-base font-bold text-white">
-                        Blackjack is next up on the felt.
+                        Blackjack, dice, and baccarat are on deck.
                       </div>
                     </div>
                     <div className="hidden sm:flex flex-col items-end text-[11px] text-amber-100/80">
-                      <span>Live multiplayer</span>
+                      <span>Live roadmap</span>
                       <span className="text-amber-300 font-semibold">
-                        Poker → Blackjack → Craps → Baccarat
+                        Poker (live) → Blackjack → Craps → Baccarat
                       </span>
                     </div>
                   </div>
 
                   <p className="text-[11px] sm:text-xs text-white/70 mb-3">
-                    We&apos;re rolling out live tables one pit at a time. Poker is open,
-                    blackjack is hot on its heels, and the dice/baccarat rails are lining
-                    up for Base.
+                    The poker room is live today. These rails are next — all sharing the
+                    same multiplayer spine and eventually the same BGLD/BGRC cashier.
                   </p>
 
                   <div className="space-y-3">
                     {liveGames.map(game => {
                       const isLive = game.status === 'live'
                       const Wrapper: React.ElementType = game.href ? Link : 'div'
-                      const wrapperProps = game.href
-                        ? { href: game.href }
-                        : {}
+                      const wrapperProps = game.href ? { href: game.href } : {}
 
                       return (
                         <Wrapper
@@ -254,8 +284,8 @@ export default function LiveTablesPage() {
             light up across this page.
           </p>
           <p>
-            Join the poker room now, get a feel for how live Base tables move, and claim your
-            spot on the rail before the rest of Base finds the floor.
+            Jump into the poker room now, get a feel for how live Base tables move, and
+            claim your spot on the rail before the rest of Base finds the floor.
           </p>
         </section>
       </main>

@@ -166,20 +166,21 @@ export default function GoldenAlignmentArcadeMachine() {
     // Animate reels
     const N = STRIP_LENGTH
 
-    // 🔥 Fullscreen mobile gets a slower, more visible spin step
+    // 🔥 Only tweak timing based on fullscreenMobile; sizing/layout untouched
     const tickMs = fullscreenMobile ? 120 : SPIN_TICK_MS
-    const baseFullSpins = fullscreenMobile ? 3 : 2 // a bit more travel in fullscreen
+    const baseFullSpins = fullscreenMobile ? 3 : 2
 
     stops.forEach((finalCenter, i) => {
       reelIntervals.current[i] = setInterval(() => {
         setReelCenters(prev => {
           const next = [...prev]
+          // always rotate at least; full spin feel over time
           next[i] = wrapIndex(next[i] + 1, N)
           return next
         })
       }, tickMs)
 
-      const fullSpins = baseFullSpins + i // later reels spin a little longer
+      const fullSpins = baseFullSpins + i // ensures visible movement each time
       const stopDelay =
         FIRST_REEL_SPIN_MS +
         i * REEL_STAGGER_MS +
@@ -277,7 +278,7 @@ export default function GoldenAlignmentArcadeMachine() {
       className={[
         'relative mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
         fullscreenMobile
-          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-hidden flex flex-col'
+          ? 'fixed inset-0 z-50 max-w-none rounded-none overflow-hidden flex flex-col bg-black'
           : '',
       ].join(' ')}
     >
@@ -366,7 +367,7 @@ export default function GoldenAlignmentArcadeMachine() {
           <div className="relative mx-auto w-full max-w-[560px] sm:max-w-[620px] aspect-[3/4]">
             {/* Cabinet Art */}
             <Image
-              src="/images/slots/golden-alignment-cabinet.png"
+              src="/images/slots/golden-alignment-cabinet2.png"
               alt="Golden Alignment cabinet"
               fill
               className="object-contain select-none pointer-events-none"
@@ -399,8 +400,8 @@ export default function GoldenAlignmentArcadeMachine() {
               </div>
             </div>
 
-            {/* Reel Window (your tweaked values, unchanged) */}
-            <div className="absolute inset-x-[5%] top-[30%] mx-auto flex justify-center gap-3 sm:gap-4">
+            {/* Reel Window (exact values you dialed in) */}
+            <div className="absolute inset-x-[5%] top-[31%] mx-auto flex justify-center gap-3 sm:gap-4">
               {(['LEFT', 'CENTER', 'RIGHT'] as ReelSide[]).map((side, i) => (
                 <ReelColumn
                   key={side}
@@ -410,16 +411,16 @@ export default function GoldenAlignmentArcadeMachine() {
               ))}
             </div>
 
-            {/* Payline indicator glows (your tweaked values, unchanged) */}
+            {/* Payline indicator glows (your exact values) */}
             <div className="pointer-events-none absolute inset-x-[20%] top-[35%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/80 to-transparent shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
             <div className="pointer-events-none absolute inset-x-[20%] top-[42%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/70 to-transparent shadow-[0_0_8px_rgba(250,204,21,0.5)]" />
             <div className="pointer-events-none absolute inset-x-[20%] top-[49%] h-[2px] bg-gradient-to-r from-transparent via-yellow-300/80 to-transparent shadow-[0_0_10px_rgba(250,204,21,0.9)]" />
 
-            {/* SPIN BUTTON SITTING ON CABINET UNDER REELS (your tweaked values) */}
+            {/* SPIN BUTTON SITTING ON CABINET UNDER REELS (your exact values) */}
             <button
               onClick={spin}
               disabled={!canSpin}
-              className="absolute inset-x-[0%] bottom-[17%] mx-auto w-[28%] max-w-sm h-9 sm:h-14 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-[11px] sm:text-sm font-extrabold tracking-[0.26em] uppercase shadow-[0_0_22px_rgba(250,204,21,0.95)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute inset-x-[0%] bottom-[26%] mx-auto w-[28%] max-w-sm h-9 sm:h-14 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-[11px] sm:text-sm font-extrabold tracking-[0.26em] uppercase shadow-[0_0_22px_rgba(250,204,21,0.95)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {spinning
                 ? 'Spinning…'
@@ -477,31 +478,6 @@ export default function GoldenAlignmentArcadeMachine() {
                 </div>
               </div>
             </div>
-
-            {/* MOBILE FULLSCREEN: INLINE BET STRIP SO YOU CAN STILL CHANGE BETS */}
-            {fullscreenMobile && (
-              <div className="mt-2 flex flex-wrap justify-center gap-2">
-                {BET_OPTIONS.map(v => {
-                  const active = v === betPerSpin
-                  const disabled = v > credits && credits > 0
-                  return (
-                    <button
-                      key={v}
-                      onClick={() => !disabled && setBetPerSpin(v)}
-                      className={[
-                        'rounded-full px-3 py-1.5 text-[11px] font-semibold border text-center',
-                        active
-                          ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
-                          : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
-                        disabled ? 'opacity-40 cursor-not-allowed' : '',
-                      ].join(' ')}
-                    >
-                      {v}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
           </div>
         </div>
 

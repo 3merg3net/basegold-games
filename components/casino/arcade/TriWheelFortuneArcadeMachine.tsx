@@ -62,13 +62,6 @@ function getColor(n: number): WheelColor {
 
 type SideBetType = 'RED' | 'BLACK' | 'ODD' | 'EVEN'
 
-type SpinSummary = {
-  wheels: number[]
-  net: number
-  comboLabel: string | null
-  sideBetHit: boolean | null
-}
-
 const BET_OPTIONS = [1, 2, 5, 10, 25, 50]
 
 function evalTriWheelCombo(
@@ -176,10 +169,11 @@ export default function TriWheelFortuneArcadeMachine() {
   const [lastCombo, setLastCombo] = useState<string | null>(null)
   const [lastSideBetHit, setLastSideBetHit] = useState<boolean | null>(null)
 
-  const [spinHistory, setSpinHistory] = useState<SpinSummary[]>([])
-
   const [sideBetType, setSideBetType] = useState<SideBetType | null>(null)
   const [sideBetEnabled, setSideBetEnabled] = useState(false)
+
+  // mobile full-screen overlay
+  const [fullscreenMobile, setFullscreenMobile] = useState(false)
 
   const sessionPnL = useMemo(
     () => credits - initialCredits,
@@ -267,19 +261,6 @@ export default function TriWheelFortuneArcadeMachine() {
       setLastCombo(comboLabel)
       setLastSideBetHit(stakeSide > 0 ? sideHit : null)
 
-      setSpinHistory(prev => {
-        const next: SpinSummary[] = [
-          {
-            wheels: finalResults,
-            net,
-            comboLabel,
-            sideBetHit: stakeSide > 0 ? sideHit : null,
-          },
-          ...prev,
-        ]
-        return next.slice(0, 10)
-      })
-
       let msg = `Results: ${finalResults.join(' • ')}. `
       if (comboLabel && mainPayout > 0) {
         msg += `${comboLabel}! `
@@ -297,52 +278,85 @@ export default function TriWheelFortuneArcadeMachine() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4">
-      {/* HEADER STRIP */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
-            Base Gold Rush Casino
+    <div
+      className={[
+        'mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
+        fullscreenMobile
+          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-hidden flex flex-col p-3'
+          : '',
+      ].join(' ')}
+    >
+      {/* HEADER STRIP – hidden in fullscreen mode for pure cabinet view */}
+      {!fullscreenMobile && (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
+              Base Gold Rush Casino
+            </div>
+            <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
+              Tri-Wheel Fortune <span className="text-[#facc15]">• Arcade</span>
+            </div>
+            <div className="text-xs text-white/60 mt-1 max-w-sm">
+              Three mini roulette wheels spin together. One main bet on the
+              combo, plus an optional side bet on the center wheel (red/black
+              or odd/even).
+            </div>
           </div>
-          <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
-            Tri-Wheel Fortune <span className="text-[#facc15]">• Arcade</span>
-          </div>
-          <div className="text-xs text-white/60 mt-1 max-w-sm">
-            Three mini roulette wheels spin together. One main bet on the
-            combo, plus an optional side bet on the center wheel (red/black
-            or odd/even).
-          </div>
-        </div>
 
-        <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
-          <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
-              Demo Credits
+          <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
+            <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
+                Demo Credits
+              </div>
+              <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
+                {credits.toLocaleString()}
+              </div>
             </div>
-            <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
-              {credits.toLocaleString()}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full md:w-auto">
+              <MiniStat label="Bet / Spin" value={betPerSpin} />
+              <MiniStat label="Last Net" value={lastNet} colored />
+              <MiniStat label="Session P&L" value={sessionPnL} colored />
             </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full md:w-auto">
-            <MiniStat label="Bet / Spin" value={betPerSpin} />
-            <MiniStat label="Last Net" value={lastNet} colored />
-            <MiniStat label="Session P&L" value={sessionPnL} colored />
           </div>
         </div>
-      </div>
+      )}
 
       {/* MAIN: CABINET + CONTROLS */}
-      <div className="grid gap-4 md:gap-6 md:grid-cols-[minmax(380px,1.3fr)_minmax(260px,0.7fr)]">
+      <div
+        className={[
+          'grid gap-4 md:gap-6 md:grid-cols-[minmax(380px,1.3fr)_minmax(260px,0.7fr)]',
+          fullscreenMobile ? 'flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]' : '',
+        ].join(' ')}
+      >
         {/* LEFT: CABINET + WHEELS + STATUS */}
-        <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-1.5 sm:p-2 space-y-3">
+        <div
+          className={[
+            'rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-1.5 sm:p-2 space-y-3',
+            fullscreenMobile ? 'h-full flex flex-col' : '',
+          ].join(' ')}
+        >
           <div className="flex items-center justify-between text-[11px] mb-1">
             <div className="uppercase tracking-[0.3em] text-white/60">
               Cabinet View
             </div>
-            <div className="text-white/50">3 roulette wheels • fast spins</div>
+            <div className="flex items-center gap-2">
+              {!fullscreenMobile && (
+                <div className="text-white/50 hidden sm:block">
+                  3 roulette wheels • fast spins
+                </div>
+              )}
+              {/* MOBILE FULLSCREEN TOGGLE */}
+              <button
+                type="button"
+                onClick={() => setFullscreenMobile(fs => !fs)}
+                className="md:hidden rounded-full border border-white/30 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80"
+              >
+                {fullscreenMobile ? 'Exit Full Screen' : 'Full Screen'}
+              </button>
+            </div>
           </div>
 
-          {/* CABINET + WHEELS + OVERLAYS */}
+          {/* CABINET + WHEELS + OVERLAYS (layout unchanged) */}
           <div className="relative mx-auto w-full max-w-[620px] sm:max-w-[700px] aspect-[3/4]">
             {/* Cabinet PNG */}
             <Image
@@ -390,7 +404,7 @@ export default function TriWheelFortuneArcadeMachine() {
               </div>
             </div>
 
-            {/* 3 mini wheels – placed where you liked them */}
+            {/* 3 mini wheels */}
             <div className="absolute inset-x-0 top-[39%] mx-auto flex justify-center gap-2 sm:gap-3 px-2">
               {[0, 1, 2].map(i => (
                 <MiniRouletteWheel
@@ -468,168 +482,141 @@ export default function TriWheelFortuneArcadeMachine() {
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <div className="uppercase tracking-[0.16em] text-white/50">
-                    Spin History
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {spinHistory.length === 0 && (
-                      <span className="text-[11px] text-white/40">
-                        Spin to build history.
-                      </span>
-                    )}
-                    {spinHistory.map((h, i) => (
-                      <span
-                        key={i}
-                        className={[
-                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border',
-                          h.net > 0
-                            ? 'border-emerald-300 text-emerald-200 bg-emerald-900/40'
-                            : h.net < 0
-                            ? 'border-rose-300 text-rose-200 bg-rose-900/40'
-                            : 'border-slate-300 text-slate-100 bg-slate-800/40',
-                        ].join(' ')}
-                      >
-                        {h.wheels.join('-')} · {h.comboLabel ?? '—'} ·{' '}
-                        {h.net > 0 ? '+' : ''}
-                        {h.net}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT: BETTING + PAYTABLE */}
-        <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4">
-          {/* Bet selector */}
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
-              Bet Per Spin
-            </div>
-            <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-              {BET_OPTIONS.map(v => {
-                const active = v === betPerSpin
-                const disabled = v > credits && credits > 0
-                return (
-                  <button
-                    key={v}
-                    onClick={() => !disabled && setBetPerSpin(v)}
-                    className={[
-                      'rounded-full px-2.5 py-1.5 text-[11px] font-semibold border text-center',
-                      active
-                        ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
-                        : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
-                      disabled ? 'opacity-40 cursor-not-allowed' : '',
-                    ].join(' ')}
-                  >
-                    {v}
-                  </button>
-                )
-              })}
-            </div>
-            {credits <= 0 && (
-              <div className="mt-1 text-[11px] text-rose-300">
-                You&apos;re out of demo credits. Top up from the arcade
-                wallet HUD to keep spinning.
-              </div>
-            )}
-          </div>
-
-          {/* Side bet selector */}
-          <div className="rounded-2xl border border-emerald-200/60 bg-black/35 p-3 space-y-2">
-            <div className="flex items-center justify_between gap-2">
+        {/* RIGHT: BETTING + PAYTABLE — hidden entirely in fullscreen */}
+        {!fullscreenMobile && (
+          <div className="rounded-[24px] border border-emerald-400/40 bg-gradient-to-b from-[#064e3b] via-[#022c22] to-black p-4 md:p-5 text-xs text-white space-y-4">
+            {/* Bet selector */}
+            <div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
-                Side Bet — Center Wheel
+                Bet Per Spin
               </div>
-              <button
-                type="button"
-                onClick={() => setSideBetEnabled(v => !v)}
-                className={[
-                  'text-[10px] px-2 py-1 rounded-full border',
-                  sideBetEnabled
-                    ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100'
-                    : 'border-slate-400/70 bg-slate-900/60 text-slate-200',
-                ].join(' ')}
-              >
-                {sideBetEnabled ? 'On' : 'Off'}
-              </button>
+              <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                {BET_OPTIONS.map(v => {
+                  const active = v === betPerSpin
+                  const disabled = v > credits && credits > 0
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => !disabled && setBetPerSpin(v)}
+                      className={[
+                        'rounded-full px-2.5 py-1.5 text-[11px] font-semibold border text-center',
+                        active
+                          ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100 shadow-[0_0_12px_rgba(250,204,21,0.7)]'
+                          : 'border-emerald-200/60 bg-emerald-900/40 text-emerald-100 hover:bg-emerald-800/60',
+                        disabled ? 'opacity-40 cursor-not-allowed' : '',
+                      ].join(' ')}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              {credits <= 0 && (
+                <div className="mt-1 text-[11px] text-rose-300">
+                  You&apos;re out of demo credits. Top up from the arcade
+                  wallet HUD to keep spinning.
+                </div>
+              )}
             </div>
-            <div className="mt-1 grid grid-cols-4 gap-1.5">
-              {(['RED', 'BLACK', 'ODD', 'EVEN'] as SideBetType[]).map(opt => {
-                const active = sideBetType === opt && sideBetEnabled
-                const colorClass =
-                  opt === 'RED'
-                    ? 'bg-red-700/80 border-red-300/80'
-                    : opt === 'BLACK'
-                    ? 'bg-black/80 border-slate-300/80'
-                    : 'bg-emerald-900/80 border-emerald-300/80'
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setSideBetType(opt)}
-                    className={[
-                      'rounded-full px-2 py-1 text-[10px] font-semibold border text-center',
-                      colorClass,
-                      active
-                        ? 'ring-2 ring-yellow-300 shadow-[0_0_14px_rgba(250,204,21,0.9)]'
-                        : 'hover:bg-emerald-800/70',
-                    ].join(' ')}
-                  >
-                    {opt}
-                  </button>
-                )
-              })}
-            </div>
-            <div className="text-[11px] text-emerald-100/80">
-              Side bet uses the same stake as Bet per Spin and pays 2× total
-              (1:1 net) when correct. 0 always loses the side bet.
-            </div>
-          </div>
 
-          {/* Combo paytable */}
-          <div className="rounded-2xl border border-emerald-200/60 bg-black/40 p-3 space-y-2">
-            <div className="text-sm font-semibold text-emerald-50">
-              Combo Paytable — Main Bet
+            {/* Side bet selector */}
+            <div className="rounded-2xl border border-emerald-200/60 bg-black/35 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-100/80">
+                  Side Bet — Center Wheel
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSideBetEnabled(v => !v)}
+                  className={[
+                    'text-[10px] px-2 py-1 rounded-full border',
+                    sideBetEnabled
+                      ? 'border-yellow-300 bg-yellow-400/20 text-yellow-100'
+                      : 'border-slate-400/70 bg-slate-900/60 text-slate-200',
+                  ].join(' ')}
+                >
+                  {sideBetEnabled ? 'On' : 'Off'}
+                </button>
+              </div>
+              <div className="mt-1 grid grid-cols-4 gap-1.5">
+                {(['RED', 'BLACK', 'ODD', 'EVEN'] as SideBetType[]).map(opt => {
+                  const active = sideBetType === opt && sideBetEnabled
+                  const colorClass =
+                    opt === 'RED'
+                      ? 'bg-red-700/80 border-red-300/80'
+                      : opt === 'BLACK'
+                      ? 'bg-black/80 border-slate-300/80'
+                      : 'bg-emerald-900/80 border-emerald-300/80'
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setSideBetType(opt)}
+                      className={[
+                        'rounded-full px-2 py-1 text-[10px] font-semibold border text-center',
+                        colorClass,
+                        active
+                          ? 'ring-2 ring-yellow-300 shadow-[0_0_14px_rgba(250,204,21,0.9)]'
+                          : 'hover:bg-emerald-800/70',
+                      ].join(' ')}
+                    >
+                      {opt}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="text-[11px] text-emerald-100/80">
+                Side bet uses the same stake as Bet per Spin and pays 2× total
+                (1:1 net) when correct. 0 always loses the side bet.
+              </div>
             </div>
-            <ul className="space-y-1 text-emerald-50/85 text-[11px] sm:text-xs list-disc list-inside">
-              <li>TRIPLE MATCH JACKPOT • all three same number • pays 50×</li>
-              <li>DOUBLE MATCH • any two same number • pays 8×</li>
-              <li>STRAIGHT RUN • three in a row (e.g. 7-8-9) • pays 10×</li>
-              <li>ALL RED / ALL BLACK • three non-zero, same color • pays 4×</li>
-              <li>ZERO MAGIC • any wheel hits 0 • pays 2×</li>
-            </ul>
-            <div className="text-[11px] text-emerald-100/80 pt-1">
-              Only the highest combo per spin pays (no stacking). On-chain
-              versions can add extra side bets for specific patterns.
-            </div>
-          </div>
 
-          {/* How to play */}
-          <div className="rounded-2xl border border-white/12 bg-black/40 p-3 space-y-2">
-            <div className="text-sm font-semibold text-white">
-              How To Play
+            {/* Combo paytable */}
+            <div className="rounded-2xl border border-emerald-200/60 bg-black/40 p-3 space-y-2">
+              <div className="text-sm font-semibold text-emerald-50">
+                Combo Paytable — Main Bet
+              </div>
+              <ul className="space-y-1 text-emerald-50/85 text-[11px] sm:text-xs list-disc list-inside">
+                <li>TRIPLE MATCH JACKPOT • all three same number • pays 50×</li>
+                <li>DOUBLE MATCH • any two same number • pays 8×</li>
+                <li>STRAIGHT RUN • three in a row (e.g. 7-8-9) • pays 10×</li>
+                <li>ALL RED / ALL BLACK • three non-zero, same color • pays 4×</li>
+                <li>ZERO MAGIC • any wheel hits 0 • pays 2×</li>
+              </ul>
+              <div className="text-[11px] text-emerald-100/80 pt-1">
+                Only the highest combo per spin pays (no stacking). On-chain
+                versions can add extra side bets for specific patterns.
+              </div>
             </div>
-            <ul className="space-y-1 text-white/75 list-disc list-inside">
-              <li>Choose your Bet per Spin and optional side bet.</li>
-              <li>
-                Hit <span className="font-semibold">Spin All Three</span> to
-                fire all wheels at once; they settle left to right.
-              </li>
-              <li>
-                Main bet pays based on tri-wheel combos. Side bet pays only on
-                the center wheel.
-              </li>
-              <li>
-                Your arcade wallet tracks wins/losses across all Base Gold Rush
-                demo games.
-              </li>
-            </ul>
+
+            {/* How to play */}
+            <div className="rounded-2xl border border-white/12 bg-black/40 p-3 space-y-2">
+              <div className="text-sm font-semibold text-white">
+                How To Play
+              </div>
+              <ul className="space-y-1 text-white/75 list-disc list-inside">
+                <li>Choose your Bet per Spin and optional side bet.</li>
+                <li>
+                  Hit <span className="font-semibold">Spin All Three</span> to
+                  fire all wheels at once; they settle left to right.
+                </li>
+                <li>
+                  Main bet pays based on tri-wheel combos. Side bet pays only on
+                  the center wheel.
+                </li>
+                <li>
+                  Your arcade wallet tracks wins/losses across all Base Gold
+                  Rush demo games.
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
