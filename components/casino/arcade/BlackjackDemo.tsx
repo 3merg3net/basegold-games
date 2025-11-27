@@ -142,6 +142,11 @@ export default function BlackjackDemo() {
 
   // 🔲 Full-screen mobile mode
   const [fullscreenMobile, setFullscreenMobile] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false)
+
+const shellClass = isFullScreen
+  ? 'fixed inset-0 z-[95] bg-black flex items-center justify-center p-2 md:p-4'
+  : 'mx-auto w-full max-w-5xl p-4 md:p-6'
 
   /* ---------- derived helpers ---------- */
 

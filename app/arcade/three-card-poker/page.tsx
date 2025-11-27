@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArcadeWalletProvider } from '@/lib/useArcadeWallet'
+
 import ArcadeWalletHUD from '@/components/casino/arcade/ArcadeWalletHUD'
 import CasinoStatusStrip from '@/components/casino/layout/CasinoStatusStrip'
 import CasinoModeSwitcher from '@/components/casino/layout/CasinoModeSwitcher'
@@ -10,7 +10,7 @@ import ThreeCardPokerArcade from '@/components/casino/arcade/ThreeCardPokerArcad
 
 export default function ThreeCardPokerArcadePage() {
   return (
-    <ArcadeWalletProvider>
+    
       <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
         
         {/* HERO WRAPPER */}
@@ -112,6 +112,6 @@ export default function ThreeCardPokerArcadePage() {
           </div>
         </section>
       </main>
-    </ArcadeWalletProvider>
+    
   )
 }

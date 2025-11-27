@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
 type Phase = 'betting' | 'rolling' | 'resolving'
 
@@ -35,7 +36,6 @@ type Player = {
   name: string
   seat: string
   color: string
-  credits: number
   sessionPnL: number
 }
 
@@ -58,7 +58,6 @@ const initialPlayers: Player[] = [
     name: 'Shooter 1',
     seat: 'Stick Left',
     color: '#facc15',
-    credits: 1_000,
     sessionPnL: 0,
   },
   {
@@ -66,7 +65,6 @@ const initialPlayers: Player[] = [
     name: 'Shooter 2',
     seat: 'Stick Right',
     color: '#22c55e',
-    credits: 1_000,
     sessionPnL: 0,
   },
   {
@@ -74,7 +72,6 @@ const initialPlayers: Player[] = [
     name: 'Shooter 3',
     seat: 'Base Left',
     color: '#38bdf8',
-    credits: 1_000,
     sessionPnL: 0,
   },
   {
@@ -82,7 +79,6 @@ const initialPlayers: Player[] = [
     name: 'Shooter 4',
     seat: 'Base Right',
     color: '#f97316',
-    credits: 1_000,
     sessionPnL: 0,
   },
 ]
@@ -113,12 +109,14 @@ function sumBets(b: Bets): number {
   return total
 }
 
-export default function CrapsDemo() {
+export default function CrapsDemo({ fullscreen = false }: { fullscreen?: boolean }) {
+
+  const { credits, recordSpin } = useArcadeWallet()
+
   const [players, setPlayers] = useState<Player[]>(() => initialPlayers)
   const [activeIdx, setActiveIdx] = useState(0)
 
   const activePlayer = players[activeIdx] ?? players[0]
-  const credits = activePlayer?.credits ?? 0
   const sessionPnL = activePlayer?.sessionPnL ?? 0
 
   const [phase, setPhase] = useState<Phase>('betting')
@@ -163,13 +161,12 @@ export default function CrapsDemo() {
   const stagedTotal = useMemo(() => sumBets(bets), [bets])
   const remainingCredits = credits - stagedTotal
 
-  function updateActivePlayer(deltaCredits: number, deltaPnL: number) {
+  function updateActivePnL(deltaPnL: number) {
     setPlayers(prev =>
       prev.map((p, i) =>
         i === activeIdx
           ? {
               ...p,
-              credits: Math.max(0, p.credits + deltaCredits),
               sessionPnL: p.sessionPnL + deltaPnL,
             }
           : p
@@ -345,7 +342,13 @@ export default function CrapsDemo() {
     const grossReturned = win
     const net = grossReturned - totalStake
 
-    updateActivePlayer(-totalStake + grossReturned, net)
+    // 🔗 Record result into the shared arcade wallet
+    if (totalStake > 0) {
+      recordSpin({ wager: totalStake, payout: grossReturned })
+    }
+
+    // Update shooter PnL locally (for rail)
+    updateActivePnL(net)
 
     // clean one-roll bets
     const nextBets: Bets = cloneBets(b)
@@ -399,7 +402,7 @@ export default function CrapsDemo() {
     setDetailMsg(headline)
   }
 
-  function onRoll() {
+    function onRoll() {
     if (phase !== 'betting') return
     if (stagedTotal <= 0) {
       setTableMsg('Place at least one bet before rolling.')
@@ -407,7 +410,7 @@ export default function CrapsDemo() {
     }
     if (credits <= 0) {
       setTableMsg(
-        `${activePlayer.name} is out of credits! Switch shooter or refresh to reset demo.`
+        `${activePlayer.name} is out of credits! Mint more chips above to keep rolling.`
       )
       return
     }
@@ -417,24 +420,40 @@ export default function CrapsDemo() {
     setTableMsg('Dice are in the air…')
     setDetailMsg(point == null ? 'Come-out roll.' : `Point is ON: ${point}`)
 
-    const [r1, r2] = randomRoll()
-    const animDuration = 1200
+    // Final roll we want to land on
+    const [final1, final2] = randomRoll()
+    const finalTotal = final1 + final2
 
-    setTimeout(() => {
-      setDie1(r1)
-      setDie2(r2)
-      setRolling(false)
-      setPhase('resolving')
+    let steps = 0
+    const maxSteps = 12
+    const tickMs = 70
 
-      const total = r1 + r2
-      setLastRoll(`${r1} + ${r2} = ${total}`)
+    const spin = () => {
+      if (steps < maxSteps) {
+        const [r1, r2] = randomRoll()
+        setDie1(r1)
+        setDie2(r2)
+        setLastRoll(`${r1} + ${r2} = ${r1 + r2}`)
+        steps += 1
+        setTimeout(spin, tickMs)
+      } else {
+        // Land on final result
+        setDie1(final1)
+        setDie2(final2)
+        setLastRoll(`${final1} + ${final2} = ${finalTotal}`)
+        setRolling(false)
+        setPhase('resolving')
 
-      setTimeout(() => {
-        resolveRoll(r1, r2)
-        setPhase('betting')
-      }, 350)
-    }, animDuration)
+        setTimeout(() => {
+          resolveRoll(final1, final2)
+          setPhase('betting')
+        }, 350)
+      }
+    }
+
+    spin()
   }
+
 
   const pointStatus = point == null ? 'OFF' : `ON ${point}`
 
@@ -462,34 +481,52 @@ export default function CrapsDemo() {
     setDetailMsg('Come-out roll.')
   }
 
+    const rootClasses = fullscreen
+    ? 'h-full w-full flex flex-col space-y-4 px-2 sm:px-4 py-4'
+    : 'max-w-6xl mx-auto py-8 px-4 space-y-6'
+
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4 space-y-6">
+    <div className={rootClasses}>
       {/* Global styles for dice animation */}
-      <style jsx global>{`
+            <style jsx global>{`
         @keyframes craps-dice-throw {
           0% {
-            transform: translate3d(-40px, 40px, 0) rotate(-45deg);
+            transform: translate3d(0, 40px, 0) rotateX(35deg) rotateZ(-30deg)
+              scale(0.9);
             opacity: 0;
+            filter: blur(1px);
           }
-          30% {
-            transform: translate3d(10px, -10px, 0) rotate(120deg);
+          25% {
+            transform: translate3d(-18px, 5px, 0) rotateX(140deg) rotateZ(90deg)
+              scale(1.02);
             opacity: 1;
+            filter: blur(0.5px);
           }
-          60% {
-            transform: translate3d(40px, 0px, 0) rotate(260deg);
+          55% {
+            transform: translate3d(10px, -18px, 0) rotateX(230deg) rotateZ(220deg)
+              scale(1.03);
+            filter: blur(0.2px);
           }
           85% {
-            transform: translate3d(55px, -8px, 0) rotate(340deg);
+            transform: translate3d(0px, -4px, 0) rotateX(320deg) rotateZ(320deg)
+              scale(1);
+            filter: blur(0px);
           }
           100% {
-            transform: translate3d(60px, 0px, 0) rotate(360deg);
+            transform: translate3d(0px, 0px, 0) rotateX(360deg) rotateZ(360deg)
+              scale(1);
+            opacity: 1;
+            filter: blur(0px);
           }
         }
+
         .animate-craps-die {
-          animation: craps-dice-throw 0.9s cubic-bezier(0.25, 0.7, 0.3, 1)
+          animation: craps-dice-throw 0.9s cubic-bezier(0.23, 0.75, 0.35, 1)
             forwards;
         }
       `}</style>
+
+
 
       {/* Top HUD */}
       <div className="rounded-2xl border border-[#facc15]/40 bg-gradient-to-r from-black via-[#020617] to-black px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -539,7 +576,7 @@ export default function CrapsDemo() {
                 'flex items-center gap-2 rounded-full border px-3 py-1',
                 isActive
                   ? 'border-white bg-white/10 shadow-[0_0_14px_rgba(255,255,255,0.4)]'
-                  : 'border-white/20 bg-black/40 hover:bg-white/10',
+                  : 'border-white/20 bg-black/40 hover:bg:white/10',
               ].join(' ')}
             >
               <span
@@ -550,7 +587,11 @@ export default function CrapsDemo() {
                 {p.name}
               </span>
               <span className="text-[10px] text-white/60 hidden sm:inline">
-                {p.credits.toLocaleString()} BGRC
+                P&amp;L:{' '}
+                <span className={p.sessionPnL >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                  {p.sessionPnL >= 0 ? '+' : ''}
+                  {p.sessionPnL.toFixed(1)}
+                </span>
               </span>
             </button>
           )
@@ -559,8 +600,13 @@ export default function CrapsDemo() {
 
       {/* Main layout: table + side panel */}
       <div className="grid md:grid-cols-[minmax(360px,1.3fr)_320px] gap-5 items-start">
-        {/* TABLE */}
-        <div className="relative rounded-[30px] border border-emerald-400/50 bg-[radial-gradient(circle_at_10%_0%,#065f46,transparent_55%),radial-gradient(circle_at_90%_0%,#047857,transparent_55%),#022c22] shadow-[0_24px_60px_rgba(0,0,0,0.9)] px-4 py-5 md:px-6 md:py-6 overflow-hidden">
+                {/* BACK WALL / BUMPER */}
+        <div className="absolute inset-x-4 -top-3 h-4 rounded-t-full bg-[repeating-linear-gradient(135deg,rgba(15,23,42,0.96),rgba(15,23,42,0.96)_6px,rgba(30,64,175,0.9)_6px,rgba(30,64,175,0.9)_10px)] shadow-[0_8px_18px_rgba(0,0,0,0.85)]" />
+
+        
+        {/* TABLE SHELL (rail + bumpers) */}
+<div className="relative rounded-[30px] border border-[#a16207]/70 bg-[radial-gradient(circle_at_10%_0%,#4b3621,transparent_55%),radial-gradient(circle_at_90%_0%,#111827,transparent_55%),#02040a] shadow-[0_30px_80px_rgba(0,0,0,0.95)] px-4 py-5 md:px-6 md:py-6 overflow-hidden">
+
           {/* top glow */}
           <div className="pointer-events-none absolute inset-x-0 -top-20 h-40 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.45),transparent_60%)]" />
 
@@ -603,15 +649,30 @@ export default function CrapsDemo() {
           {/* felt main area */}
           <div className="relative rounded-[26px] border border-emerald-200/60 bg-[radial-gradient(circle_at_40%_0%,#059669,#065f46_55%,#022c22_80%)] px-3 py-4 md:px-5 md:py-5">
             {/* DIce & puck row */}
-            <div className="flex items-center justify-between mb-4 gap-3">
-              <div className="flex items-center gap-3">
-                <PointPuck point={point} />
-                <div className="text-[11px] text-emerald-50/85 max-w-xs">
-                  {detailMsg}
-                </div>
-              </div>
-              <DiceDisplay die1={die1} die2={die2} rolling={rolling} />
-            </div>
+            {/* Point / status row (no dice here anymore) */}
+<div className="flex items-center justify-between mb-4 gap-3">
+  <div className="flex items-center gap-3">
+    <PointPuck point={point} />
+    <div className="text-[11px] text-emerald-50/85 max-w-xs">
+      {detailMsg}
+    </div>
+  </div>
+  <div className="text-right text-[11px] text-emerald-50/80">
+    <div>DICE TOTAL</div>
+    <div className="font-semibold text-emerald-50">
+      {die1 && die2 ? `${die1} + ${die2} = ${die1 + die2}` : '—'}
+    </div>
+  </div>
+          {/* Dice overlay on the felt */}
+        <DiceDisplay
+          die1={die1}
+          die2={die2}
+          rolling={rolling}
+          fullscreen={fullscreen}
+        />
+
+</div>
+
 
             {/* BET GRID */}
             <div className="grid grid-rows-[auto_auto_auto] gap-3 text-[10px] md:text-[11px] text-emerald-50 font-semibold">
@@ -942,43 +1003,47 @@ function DiceDisplay({
   die1,
   die2,
   rolling,
+  fullscreen,
 }: {
   die1: number | null
   die2: number | null
   rolling: boolean
+  fullscreen?: boolean
 }) {
-  const faces = (v: number | null) => (v == null ? '•' : String(v))
+  const face = (v: number | null) => (v == null ? '•' : String(v))
+
+  const sizeClasses = fullscreen
+    ? 'w-12 h-12 md:w-14 md:h-14'
+    : 'w-9 h-9 md:w-11 md:h-11'
 
   return (
-    <div className="relative flex items-center gap-2 pr-1">
-      <div className="text-[10px] text-emerald-50/80 mr-1 text-right">
-        <div>DICE</div>
-        <div className="text-[11px] font-semibold">
-          {die1 && die2 ? `${die1} + ${die2} = ${die1 + die2}` : '—'}
-        </div>
-      </div>
-      <div className="relative flex items-center gap-2">
+    <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+      <div className="relative flex gap-3 md:gap-4">
         <div
           className={[
-            'w-9 h-9 md:w-10 md:h-10 rounded-lg bg-white flex items-center justify-center text-lg font-bold text-slate-800 shadow-[0_8px_18px_rgba(0,0,0,0.7)] border border-slate-300',
+            sizeClasses,
+            'rounded-lg bg-white flex items-center justify-center text-lg md:text-2xl font-bold text-slate-800 shadow-[0_16px_32px_rgba(0,0,0,0.9)] border border-slate-300',
             rolling ? 'animate-craps-die' : '',
           ].join(' ')}
         >
-          {faces(die1)}
+          {face(die1)}
         </div>
         <div
           className={[
-            'w-9 h-9 md:w-10 md:h-10 rounded-lg bg-white flex items-center justify-center text-lg font-bold text-slate-800 shadow-[0_8px_18px_rgba(0,0,0,0.7)] border border-slate-300',
+            sizeClasses,
+            'rounded-lg bg-white flex items-center justify-center text-lg md:text-2xl font-bold text-slate-800 shadow-[0_16px_32px_rgba(0,0,0,0.9)] border border-slate-300',
             rolling ? 'animate-craps-die' : '',
           ].join(' ')}
           style={rolling ? { animationDelay: '0.08s' } : undefined}
         >
-          {faces(die2)}
+          {face(die2)}
         </div>
       </div>
     </div>
   )
 }
+
+
 
 function PointPuck({ point }: { point: number | null }) {
   const isOn = point != null

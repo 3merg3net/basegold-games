@@ -3,15 +3,15 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArcadeWalletProvider } from '@/lib/useArcadeWallet'
+
 import BlackjackDemo from '@/components/casino/arcade/BlackjackDemo'
-import CasinoStatusStrip from '@/components/casino/layout/CasinoStatusStrip'
-import CasinoModeSwitcher from '@/components/casino/layout/CasinoModeSwitcher'
+
+
 import ArcadeWalletHUD from '@/components/casino/arcade/ArcadeWalletHUD'
 
 export default function BlackjackArcadePage() {
   return (
-    <ArcadeWalletProvider>
+    
       <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
         {/* HERO WRAPPER */}
         <section className="relative border-b border-white/10">
@@ -30,8 +30,8 @@ export default function BlackjackArcadePage() {
 
           <div className="relative mx-auto max-w-6xl px-4 py-6 md:py-8">
             {/* Status + mode switcher to keep nav consistent */}
-            <CasinoStatusStrip mode="arcade" />
-            <CasinoModeSwitcher active="arcade" />
+            
+            
 
             {/* TOP COPY + HUD */}
             <div className="space-y-4 mb-4">
@@ -130,6 +130,6 @@ export default function BlackjackArcadePage() {
           </p>
         </section>
       </main>
-    </ArcadeWalletProvider>
+    
   )
 }

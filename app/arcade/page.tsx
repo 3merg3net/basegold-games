@@ -1,9 +1,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import CasinoStatusStrip from '@/components/casino/layout/CasinoStatusStrip'
-import CasinoModeSwitcher from '@/components/casino/layout/CasinoModeSwitcher'
+
 import CasinoLiveStats from '@/components/casino/layout/CasinoLiveStats'
-import { ArcadeWalletProvider } from '@/lib/useArcadeWallet'
+
 import ArcadeWalletHUD from '@/components/casino/arcade/ArcadeWalletHUD'
 
 type ArcadeGame = {
@@ -85,10 +84,9 @@ export default function ArcadePage() {
         </div>
 
         <div className="relative mx-auto max-w-6xl px-4 py-8 md:py-10">
-          <CasinoStatusStrip mode="arcade" />
-          <CasinoModeSwitcher active="arcade" />
+          
 
-          <ArcadeWalletProvider>
+          
             <div className="mt-4 grid gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
               {/* LEFT: GAMES FRONT & CENTER */}
               <div>
@@ -277,7 +275,7 @@ export default function ArcadePage() {
                 </div>
               </div>
             </div>
-          </ArcadeWalletProvider>
+          
         </div>
       </section>
 

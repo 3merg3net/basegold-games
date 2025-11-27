@@ -59,22 +59,10 @@ export default function WarDemo() {
   useEffect(() => setMounted(true), [])
 
   // 🔗 Arcade wallet (global demo credits)
-  const { credits: arcadeCredits, net: arcadeNet, addWin, addLoss } = useArcadeWallet()
+  const { credits, net: arcadeNet, recordSpin } = useArcadeWallet()
 
-  // Local table credits + PnL
-  const [credits, setCredits] = useState(500)
+  // Local table PnL (just for this session / table)
   const [sessionPnL, setSessionPnL] = useState(0)
-  const [syncedPnL, setSyncedPnL] = useState(0)
-
-  // Sync table PnL to arcade wallet
-  useEffect(() => {
-    if (!mounted) return
-    const delta = sessionPnL - syncedPnL
-    if (delta === 0) return
-    if (delta > 0) addWin(delta)
-    else addLoss(-delta)
-    setSyncedPnL(sessionPnL)
-  }, [sessionPnL, syncedPnL, mounted, addWin, addLoss])
 
   // Single-hand state
   const [phase, setPhase] = useState<Phase>('betting')
@@ -111,9 +99,7 @@ export default function WarDemo() {
   /* ---------- core actions ---------- */
 
   function newShoe() {
-    setCredits(500)
     setSessionPnL(0)
-    setSyncedPnL(0)
     setPlayerCard(null)
     setDealerCard(null)
     setResult(null)
@@ -133,12 +119,12 @@ export default function WarDemo() {
   }
 
   function dealHand() {
-    if (!stakeReady) return
+    if (!stakeReady) {
+      setTableMessage('Not enough demo credits for that stake.')
+      return
+    }
 
-    // take stake
-    setCredits(c => c - baseBet)
-
-    // deal cards
+    // deal cards (wallet debit happens on settle for this simple arcade flow)
     const p = randomCard()
     const d = randomCard()
     setPlayerCard(p)
@@ -157,29 +143,33 @@ export default function WarDemo() {
     const playerVal = rankValue(p.rank)
     const dealerVal = rankValue(d.rank)
 
+    const stake = baseBet
     let outcome: WarResult = 'PUSH'
+    let payout = 0 // total returned to player from wallet (includes stake if win/push)
     let netChange = 0
-    let grossReturned = 0
 
     if (playerVal > dealerVal) {
       outcome = 'WIN'
-      netChange += baseBet
-      grossReturned += baseBet * 2
+      payout = stake * 2 // stake + win 1:1
+      netChange = payout - stake
     } else if (playerVal < dealerVal) {
       outcome = 'LOSE'
-      netChange -= baseBet
-      // nothing returned
+      payout = 0
+      netChange = -stake
     } else {
       // tie is WAR / push
       outcome = 'WAR'
-      grossReturned += baseBet
+      payout = stake // stake returned, no gain/loss
+      netChange = 0
     }
 
+    // 🔗 record to arcade wallet
+    recordSpin({ wager: stake, payout })
+
     setResult(outcome)
-    setCredits(c => c + grossReturned + netChange)
     setSessionPnL(prev => prev + netChange)
     setLastNet(netChange)
-    setLastPayout(grossReturned)
+    setLastPayout(payout)
 
     setLastSummary(
       netChange > 0
@@ -197,7 +187,10 @@ export default function WarDemo() {
 
   // Single primary button like blackjack
   function handlePrimaryDeal() {
-    if (!stakeReady) return
+    if (!stakeReady) {
+      setTableMessage('Not enough demo credits for that stake.')
+      return
+    }
 
     if (phase === 'settled') {
       // soft reset then deal again
@@ -304,7 +297,7 @@ export default function WarDemo() {
       <div className="pointer-events-none absolute inset-x-0 -top-12 h-32 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.4),transparent_65%)]" />
 
       {/* header / HUD */}
-      <div className="relative z-10 flex items-center justify-between mb-4">
+      <div className="relative z-10 flex items-center justify-between mb-4 gap-3">
         <div>
           <div className="text-[11px] tracking-[0.32em] uppercase text-emerald-100/85 font-semibold">
             BASE GOLD RUSH
@@ -318,7 +311,7 @@ export default function WarDemo() {
         </div>
         <div className="text-right text-[11px] text-emerald-100/80 space-y-1">
           <div>
-            Table Credits:{' '}
+            Demo Credits:{' '}
             <span className="font-bold text-[#facc15]">
               {credits.toLocaleString()} BGRC
             </span>
@@ -498,7 +491,7 @@ export default function WarDemo() {
             Arcade Stack
           </div>
           <div className="mt-1 text-xl font-extrabold text-white">
-            {arcadeCredits.toLocaleString()}{' '}
+            {credits.toLocaleString()}{' '}
             <span className="text-xs text-white/70">BGRC</span>
           </div>
           <div className="mt-1 text-[11px] text-white/55">

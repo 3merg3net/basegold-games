@@ -32,7 +32,7 @@ export default function CasinoStatusStrip({ mode }: { mode: Mode }) {
         {isDemoMode && (
           <>
             <span className="rounded-full border border-emerald-300/50 bg-emerald-900/40 px-2 py-0.5 text-emerald-100">
-              Free BGRC chips • Shared across arcade & live poker
+              Free BGRC chips • Shared across all Arcade Casino Games
             </span>
 
             <div className="flex items-center gap-2">
@@ -41,7 +41,7 @@ export default function CasinoStatusStrip({ mode }: { mode: Mode }) {
                 onClick={handleMint}
                 className="rounded-full border border-[#FFD700]/70 bg-[#FFD700]/15 px-3 py-1 text-[10px] font-semibold text-[#FFE58A] hover:bg-[#FFD700]/25 transition"
               >
-                Mint {MINT_AMOUNT.toLocaleString()} BGRC
+                Mint {MINT_AMOUNT.toLocaleString()} Add Chips
               </button>
               <span className="text-white/60">
                 Stack:{' '}

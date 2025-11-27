@@ -20,7 +20,7 @@ export default function ChipBalanceBar() {
             BGRC Arcade Chip Stack
           </div>
           <div className="text-xs text-white/70">
-            Free-play BGRC credits shared across all arcade games and the Poker Room.
+            Free-play BGRC credits shared across all arcade games.
           </div>
         </div>
       </div>
@@ -31,7 +31,7 @@ export default function ChipBalanceBar() {
           onClick={handleMint}
           className="rounded-full border border-[#FFD700]/70 bg-[#FFD700]/15 px-3 py-1 text-[10px] font-semibold text-[#FFE58A] hover:bg-[#FFD700]/25 transition"
         >
-          +{MINT_AMOUNT.toLocaleString()} BGRC
+          +{MINT_AMOUNT.toLocaleString()} Add BGRC Chips
         </button>
         <div className="text-[10px] sm:text-[11px] text-white/60">
           Stack:{' '}

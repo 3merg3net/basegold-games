@@ -2,8 +2,7 @@
 'use client'
 
 import Image from 'next/image'
-import CasinoStatusStrip from '@/components/casino/layout/CasinoStatusStrip'
-import CasinoModeSwitcher from '@/components/casino/layout/CasinoModeSwitcher'
+
 import CasinoLiveStats from '@/components/casino/layout/CasinoLiveStats'
 
 import ArcadeWalletHUD from '@/components/casino/arcade/ArcadeWalletHUD'
@@ -28,8 +27,7 @@ export default function RouletteArcadePage() {
 
         <div className="relative mx-auto max-w-6xl px-4 py-8 md:py-10">
           {/* Top status + mode switcher */}
-          <CasinoStatusStrip mode="arcade" />
-          <CasinoModeSwitcher active="arcade" />
+          
 
           
             <div className="mt-4 space-y-4">

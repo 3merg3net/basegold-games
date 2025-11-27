@@ -258,7 +258,7 @@ export default function SlotsArcadeMachine() {
       className={[
         'mx-auto w-full max-w-4xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
         fullscreenMobile
-          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-hidden flex flex-col p-3'
+          ? 'fixed inset-0 z-40 max-w-none rounded-none overflow-y-auto flex flex-col p-3 bg-black'
           : '',
       ].join(' ')}
     >
@@ -270,8 +270,7 @@ export default function SlotsArcadeMachine() {
               Base Gold Rush Casino
             </div>
             <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
-              Triple Stake Slots{' '}
-              <span className="text-[#facc15]">• Arcade</span>
+              Triple Stake Slots <span className="text-[#facc15]">• Arcade</span>
             </div>
             <div className="text-xs text-white/60 mt-1 max-w-sm">
               Cinematic 3-reel cabinet with three horizontal paylines. Demo
@@ -331,7 +330,7 @@ export default function SlotsArcadeMachine() {
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-[320px] sm:max-w-[360px] aspect-[3/4]">
+          <div className="relative mx-auto w-full max-w-[300px] sm:max-w-[360px] aspect-[3/4]">
             {/* Cabinet art */}
             <Image
               src="/images/slots/slots-cabinet-empty.png"

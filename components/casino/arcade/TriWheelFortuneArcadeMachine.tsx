@@ -367,7 +367,7 @@ export default function TriWheelFortuneArcadeMachine() {
             />
 
             {/* WINNING NUMBERS — BIG + AT TOP OF CABINET */}
-            <div className="absolute inset-x-[10%] top-[30%] flex flex-col items-center text-[11px]">
+            <div className="absolute inset-x-[10%] top-[58%] flex flex-col items-center text-[11px]">
               <div className="rounded-full bg-black/75 border border-yellow-300/80 px-3 py-1.5 shadow-[0_0_18px_rgba(250,204,21,0.7)] flex items-center gap-2">
                 <span className="hidden sm:inline text-[10px] uppercase tracking-[0.25em] text-yellow-100/80">
                   Results
@@ -421,7 +421,7 @@ export default function TriWheelFortuneArcadeMachine() {
             <button
               onClick={spin}
               disabled={!canSpin}
-              className="absolute inset-x-0 bottom-[31%] mx-auto w-[60%] max-w-xs h-10 sm:h-11 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-xs sm:text-sm font-extrabold tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(250,204,21,0.9)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute inset-x-0 bottom-[23%] mx-auto w-[20%] max-w-xs h-10 sm:h-11 rounded-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 text-black text-xs sm:text-sm font-extrabold tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(250,204,21,0.9)] hover:from-yellow-300 hover:to-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {spinning
                 ? 'Spinning…'
@@ -429,7 +429,7 @@ export default function TriWheelFortuneArcadeMachine() {
                 ? 'No Demo Credits'
                 : betPerSpin > credits
                 ? 'Lower Bet'
-                : 'Spin All Three'}
+                : 'Spin'}
             </button>
           </div>
 
