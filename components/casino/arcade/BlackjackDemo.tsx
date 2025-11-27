@@ -684,7 +684,7 @@ export default function BlackjackDemo() {
       className={[
         'mx-auto max-w-5xl space-y-4',
         fullscreenMobile
-          ? 'fixed inset-0 z-40 max-w-none bg-black/95 px-2 pt-2 pb-3 overflow-y-auto'
+          ? 'fixed inset-0 z-80 max-w-none bg-black/95 px-2 pt-2 pb-3 overflow-y-auto'
           : '',
       ].join(' ')}
     >

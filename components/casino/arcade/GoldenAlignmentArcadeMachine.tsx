@@ -278,7 +278,7 @@ export default function GoldenAlignmentArcadeMachine() {
       className={[
         'relative mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
         fullscreenMobile
-          ? 'fixed inset-0 z-50 max-w-none rounded-none overflow-hidden flex flex-col bg-black'
+          ? 'fixed inset-0 z-80 max-w-none rounded-none overflow-hidden flex flex-col bg-black'
           : '',
       ].join(' ')}
     >
