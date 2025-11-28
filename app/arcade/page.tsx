@@ -16,58 +16,34 @@ type CasinoGame = {
 
 const casinoGames: CasinoGame[] = [
   {
-    href: '/play/slots-v2',
+    href: '/arcade/slots-arcade',
     label: 'Gold Rush Slots',
     tag: 'Multi-Line',
-    desc: 'Classic Vegas-style reels with GLD chips and rich payout ladders.',
+    desc: 'Classic Vegas-style reels with GLD chip ladders and bonus hits tuned for flow.',
     icon: '/icons/game-slots.png',
     category: 'Slots',
-  },
-  {
-    href: '/arcade/slots-arcade',
-    label: 'Additional Slots',
-    tag: 'Slots Room',
-    desc: 'Extra Gold Rush themes and experimental reels mapped to GLD flow.',
-    icon: '/icons/game-slots.png',
-    category: 'Slots',
-  },
-  {
-    href: '/play/roulette',
-    label: 'Roulette',
-    tag: 'European Wheel',
-    desc: 'Red, black, and single zero — clean European layout with GLD chips.',
-    icon: '/icons/game-roulette.png',
-    category: 'Table',
   },
   {
     href: '/arcade/roulette',
-    label: 'Golden Wheel',
-    tag: 'Practice Wheel',
-    desc: 'Same layouts and payouts, tuned for early rail and pacing tests.',
+    label: 'Roulette',
+    tag: 'European Wheel',
+    desc: 'Red, black, and single zero on a smooth wheel that will map to live GLD stakes.',
     icon: '/icons/game-roulette1.png',
     category: 'Table',
   },
   {
-    href: '/play/blackjack',
+    href: '/arcade/blackjack',
     label: 'Blackjack',
     tag: '21 Table',
-    desc: 'Standard Vegas rules: hits, stands, splits, doubles, and insurance.',
-    icon: '/icons/game-blackjack.png',
-    category: 'Table',
-  },
-  {
-    href: '/arcade/blackjack',
-    label: 'Blackjack Trainer',
-    tag: 'Practice Table',
-    desc: 'Dial in your rhythm and sizing before you sit into real limits.',
+    desc: 'Dial in your hit / stand / double rhythm before you sit into real GLD limits.',
     icon: '/icons/game-blackjack1.png',
     category: 'Table',
   },
   {
     href: '/arcade/craps',
-    label: 'Craps Rail',
+    label: 'Craps',
     tag: 'Full Layout',
-    desc: 'Pass line, odds, field, props, and hardways on a full-length felt.',
+    desc: 'Pass line, odds, field, props, and hardways on a full-length felt tuned for GLD chips.',
     icon: '/icons/game-craps1.png',
     category: 'Table',
   },
@@ -75,7 +51,7 @@ const casinoGames: CasinoGame[] = [
     href: '/arcade/baccarat',
     label: 'Baccarat',
     tag: 'Rail Table',
-    desc: 'Player, Banker, Tie and Pair side bets in a classic baccarat lane.',
+    desc: 'Player, Banker, Tie and Pair side bets in a classic baccarat lane with GLD pacing.',
     icon: '/icons/game-baccarat.png',
     category: 'Table',
   },
@@ -83,7 +59,7 @@ const casinoGames: CasinoGame[] = [
     href: '/arcade/video-poker',
     label: 'Video Poker',
     tag: 'Jacks or Better',
-    desc: 'Bar-top style Jacks or Better mapped to GLD chip accounting.',
+    desc: 'Bar-top style Jacks or Better – perfect place to feel pay tables before on-chain GLD.',
     icon: '/icons/game-video-poker1.png',
     category: 'Poker',
   },
@@ -91,33 +67,9 @@ const casinoGames: CasinoGame[] = [
     href: '/arcade/three-card-poker',
     label: 'Three Card Poker',
     tag: 'Feature Table',
-    desc: 'Ante, Play, and Pair Plus bets vs the dealer on a full felt.',
+    desc: 'Ante, Play, and Pair Plus bets vs the dealer on a full felt, wired for GLD chip logic.',
     icon: '/icons/game-three-card-poker.png',
     category: 'Poker',
-  },
-  {
-    href: '/play/coinflip',
-    label: 'Coin Flip',
-    tag: 'Double or Nothing',
-    desc: 'High-voltage GLD flips with a massive coin front and center.',
-    icon: '/icons/game-coinflip.png',
-    category: 'Feature',
-  },
-  {
-    href: '/play/war',
-    label: 'War',
-    tag: 'High Card',
-    desc: 'Simple, brutal card war — higher card drags the pot.',
-    icon: '/icons/game-war.png',
-    category: 'Feature',
-  },
-  {
-    href: '/play/hilo',
-    label: 'Hi-Lo',
-    tag: 'Streak Ladder',
-    desc: 'Call higher or lower and walk the streak up the ladder.',
-    icon: '/icons/game-hilo.png',
-    category: 'Feature',
   },
 ]
 
@@ -190,7 +142,7 @@ export default function CasinoLobbyPage() {
               <div className="relative w-[260px] sm:w-[300px] md:w-[340px]">
                 <div className="relative h-[200px] sm:h-[220px] rounded-3xl border border-[#FFD700]/40 bg-black/80 shadow-[0_24px_70px_rgba(0,0,0,0.95)] overflow-hidden">
                   <Image
-                    src="/images/hero-pedestal.png"
+                    src="/images/onchain-gold.png"
                     alt="GLD casino chips"
                     fill
                     sizes="340px"
@@ -203,6 +155,7 @@ export default function CasinoLobbyPage() {
                     </span>
                     <span className="text-white/70">
                       Cash in at the cage • Track balance in your wallet profile
+                      when live
                     </span>
                   </div>
                 </div>
@@ -228,7 +181,7 @@ export default function CasinoLobbyPage() {
             </p>
           </div>
           <div className="text-[11px] text-white/50">
-            Poker runs through the PGLD rail on the live tables floor.
+            Live poker runs through the PGLD rail on the tables floor.
           </div>
         </div>
 
@@ -281,7 +234,7 @@ export default function CasinoLobbyPage() {
         {/* EARLY-ACCESS NOTE */}
         <div className="mt-4 rounded-2xl border border-white/12 bg-black/75 p-4 text-[11px] md:text-sm text-white/65 space-y-2">
           <p>
-            For early guests, some games may still be running with{' '}
+            For early guests, some games may run with{' '}
             <span className="font-semibold text-[#FFD700]">
               complimentary GLD chip stacks
             </span>{' '}
