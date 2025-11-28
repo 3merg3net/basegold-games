@@ -4,14 +4,13 @@ import Link from 'next/link'
 import Image from 'next/image'
 
 const CASINO  = process.env.NEXT_PUBLIC_CASINO_CA as string | undefined
-const BGRC    = process.env.NEXT_PUBLIC_BGRC_CA as string | undefined
+const BGLD    = process.env.NEXT_PUBLIC_BGLD_CA as string | undefined
 const CASHIER = process.env.NEXT_PUBLIC_CASHIER_CA as string | undefined
 
 export default function SiteFooter() {
   return (
     <footer className="mt-10 border-t border-white/10 bg-black/80">
       <div className="mx-auto max-w-6xl px-4 py-8 grid gap-6 md:grid-cols-3">
-
         {/* Brand Section with logo + chips */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -28,29 +27,30 @@ export default function SiteFooter() {
                 BASE GOLD RUSH
               </div>
               <div className="text-[10px] text-white/60 tracking-[0.18em] uppercase">
-                Casino • Arcade • On-Chain
+                Casino • Slots • Live Poker
               </div>
             </div>
           </div>
 
           <p className="text-sm text-white/60 max-w-sm">
-            On-chain mini-casino on Base. Transparent odds, live jackpots, and BGRC chip
-            gameplay — plus a full free-play arcade to test every table and machine.
+            Base-native casino onchain. GLD casino chips, PGLD poker chips, and
+            BGLD at the cashier — plus a free-play lane to test every table and
+            slot before you sit down with real chips.
           </p>
 
           {/* Little chip strip */}
           <div className="flex items-center gap-2 mt-2">
             <div className="relative h-7 w-7">
               <Image
-                src="/chips/base-gold-rush-chip.png"
-                alt="BGRC chip"
+                src="/chips/chip-gld-main.png"
+                alt="GLD casino chip"
                 fill
                 className="object-contain drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]"
               />
             </div>
             <span className="text-[11px] text-white/55">
-              Powered by <span className="font-semibold text-[#FFD700]">BGRC</span> demo chips on
-              Base Sepolia.
+              GLD chips for casino games, PGLD chips for live poker — both tied
+              to your wallet profile.
             </span>
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function SiteFooter() {
             <li>
               <Link
                 className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/play/slots-v2"
+                href="/casino"
               >
                 <span className="relative h-6 w-6">
                   <Image
@@ -72,55 +72,39 @@ export default function SiteFooter() {
                     className="object-contain"
                   />
                 </span>
-                <span>Gold Rush Slots (On-Chain)</span>
+                <span>Gold Rush Slots</span>
               </Link>
             </li>
             <li>
               <Link
                 className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/play/blackjack"
+                href="/live-tables"
               >
                 <span className="relative h-6 w-6">
                   <Image
                     src="/icons/game-blackjack.png"
-                    alt="Blackjack"
+                    alt="Tables"
                     fill
                     className="object-contain"
                   />
                 </span>
-                <span>Blackjack (On-Chain)</span>
+                <span>Poker Room & Table Games</span>
               </Link>
             </li>
             <li>
               <Link
                 className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/arcade/slots-arcade"
+                href="/arcade"
               >
                 <span className="relative h-6 w-6">
                   <Image
                     src="/icons/game-slots.png"
-                    alt="Slots Arcade"
+                    alt="Free-play arcade"
                     fill
                     className="object-contain"
                   />
                 </span>
-                <span>Slots Arcade (Demo)</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/arcade/roulette"
-              >
-                <span className="relative h-6 w-6">
-                  <Image
-                    src="/icons/game-roulette1.png"
-                    alt="Roulette Arcade"
-                    fill
-                    className="object-contain"
-                  />
-                </span>
-                <span>Roulette Arcade (Demo)</span>
+                <span>Free-Play Arcade</span>
               </Link>
             </li>
           </ul>
@@ -134,7 +118,7 @@ export default function SiteFooter() {
               <li>
                 <a
                   className="flex items-center gap-2 text-white/70 hover:text-white"
-                  href={`https://sepolia.basescan.org/address/${CASINO}`}
+                  href={`https://basescan.org/address/${CASINO}`}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -151,23 +135,23 @@ export default function SiteFooter() {
               </li>
             )}
 
-            {BGRC && (
+            {BGLD && (
               <li>
                 <a
                   className="flex items-center gap-2 text-white/70 hover:text-white"
-                  href={`https://sepolia.basescan.org/token/${BGRC}`}
+                  href={`https://basescan.org/token/${BGLD}`}
                   target="_blank"
                   rel="noreferrer"
                 >
                   <span className="relative h-5 w-5">
                     <Image
-                      src="/chips/base-gold-rush-chip.png"
-                      alt="BGRC token"
+                      src="/images/cashier-icon.png"
+                      alt="BGLD token"
                       fill
                       className="object-contain"
                     />
                   </span>
-                  <span>BGRC Chip Token</span>
+                  <span>BGLD Main Token</span>
                 </a>
               </li>
             )}
@@ -176,7 +160,7 @@ export default function SiteFooter() {
               <li>
                 <a
                   className="flex items-center gap-2 text-white/70 hover:text-white"
-                  href={`https://sepolia.basescan.org/address/${CASHIER}`}
+                  href={`https://basescan.org/address/${CASHIER}`}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -194,7 +178,9 @@ export default function SiteFooter() {
             )}
 
             <li className="pt-2 text-[12px] text-white/50">
-              Testnet demo. No real BGLD used. BGRC chips carry no real-world value.
+              During early access, some tables may still run in free-play mode
+              with no real-world value. GLD / PGLD denominations only matter
+              once you’ve loaded chips at the cashier.
             </li>
           </ul>
 
@@ -220,18 +206,20 @@ export default function SiteFooter() {
           {/* Legal Text Block */}
           <div className="mt-4 space-y-2 text-[10px] text-white/40 leading-relaxed">
             <p>
-              Play responsibly. Only use tokens you can afford to lose. On-chain games involve
-              risk and transactions cannot be reversed.
+              Play responsibly. Only use funds and chips you can afford to
+              lose. On-chain games involve risk and transactions cannot be
+              reversed.
             </p>
 
             <p>
-              Base Gold Rush is a non-custodial platform. All transactions occur directly
-              through your wallet. Never share your seed phrase or private keys.
+              Base Gold Rush is a non-custodial platform. All transactions
+              occur directly through your wallet or chip account. Never share
+              your seed phrase or private keys.
             </p>
 
             <p>
-              Not available where prohibited. Users are responsible for complying with local
-              laws regarding crypto-based gaming.
+              Not available where prohibited. You are responsible for complying
+              with local laws regarding crypto-based gaming.
             </p>
 
             <div className="mt-2 text-[10px] text-white/40">

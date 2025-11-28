@@ -7,9 +7,9 @@ export default function CasinoChipStack() {
   const { credits, initialCredits, net } = useArcadeWallet()
 
   const pnlLabel =
-    net > 0 ? `+${net.toFixed(2)} BGRC` :
-    net < 0 ? `${net.toFixed(2)} BGRC` :
-    '0.00 BGRC'
+    net > 0 ? `+${net.toFixed(2)} GLD` :
+    net < 0 ? `${net.toFixed(2)} GLD` :
+    '0.00 GLD'
 
   const pnlClass =
     net > 0
@@ -22,10 +22,10 @@ export default function CasinoChipStack() {
     <aside className="rounded-2xl border border-white/12 bg-black/80 px-4 py-3 text-xs text-white/70 shadow-[0_12px_30px_rgba(0,0,0,0.9)] space-y-2">
       <div>
         <div className="text-[10px] uppercase tracking-[0.22em] text-white/50">
-          BGRC Chip Stack
+          GLD Chip Stack
         </div>
         <div className="mt-0.5 text-[11px] text-white/60">
-          Shared BGRC chips across the casino — arcade now, on-chain next.
+          Shared GLD chips across the casino — Free Play now, on-chain next.
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export default function CasinoChipStack() {
             Current Stack
           </div>
           <div className="mt-0.5 text-lg font-extrabold text-[#FFD700] tabular-nums">
-            {credits.toLocaleString()} <span className="text-xs text-[#fef3c7]">BGRC</span>
+            {credits.toLocaleString()} <span className="text-xs text-[#fef3c7]">GLD</span>
           </div>
         </div>
         <div className="text-right">
@@ -50,14 +50,14 @@ export default function CasinoChipStack() {
 
       <div className="text-[11px] text-white/60 space-y-1">
         <div>
-          Starting arcade stack:{' '}
+          Starting Chip stack:{' '}
           <span className="font-semibold text-white/85">
-            {initialCredits.toLocaleString()} BGRC
+            {initialCredits.toLocaleString()} GLD
           </span>
         </div>
         <div className="text-white/40">•</div>
         <div>
-          Arcade wins &amp; losses update your P&amp;L here, while your main BGRC
+          Casino wins &amp; losses update your P&amp;L here, while your main GLD
           stack stays in sync with the chip HUD and mint button.
         </div>
       </div>

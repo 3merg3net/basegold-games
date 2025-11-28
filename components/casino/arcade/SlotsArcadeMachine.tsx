@@ -270,17 +270,17 @@ export default function SlotsArcadeMachine() {
               Base Gold Rush Casino
             </div>
             <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
-              Triple Stake Slots <span className="text-[#facc15]">• Arcade</span>
+              Triple Gold Stake Slots <span className="text-[#facc15]">• Casino Slot</span>
             </div>
             <div className="text-xs text-white/60 mt-1 max-w-sm">
-              Cinematic 3-reel cabinet with three horizontal paylines. Demo
-              credits only — no real BGLD on this machine.
+              3-reel Slot with three horizontal paylines. 
+            
             </div>
           </div>
           <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
             <div className="rounded-xl border border-white/15 bg-black/70 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
               <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
-                Demo Credits
+                GLD Chips
               </div>
               <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
                 {credits.toLocaleString()}
@@ -368,7 +368,7 @@ export default function SlotsArcadeMachine() {
                 : 'Spin Reels'}
             </button>
             <div className="text-[10px] text-emerald-100/80 text-center">
-              Each spin uses your arcade demo wallet balance and auto-credits
+              Each spin uses your GLD wallet balance and auto-credits
               any hits across all three paylines.
             </div>
 
@@ -457,7 +457,7 @@ export default function SlotsArcadeMachine() {
               </div>
               {credits <= 0 && (
                 <div className="mt-1 text-[11px] text-rose-300">
-                  You&apos;re out of demo credits. Top up from the arcade
+                  You&apos;re out of GLD Chips. Top up from the arcade
                   wallet HUD to keep spinning.
                 </div>
               )}
@@ -490,7 +490,7 @@ export default function SlotsArcadeMachine() {
               </div>
               <ul className="space-y-1 text-white/75 list-disc list-inside">
                 <li>
-                  All spins use your shared BGRC demo credits from the arcade
+                  All spins use your shared GLD Chips from the arcade
                   wallet.
                 </li>
                 <li>
@@ -498,7 +498,7 @@ export default function SlotsArcadeMachine() {
                   table above; multiple lines can hit at once.
                 </li>
                 <li>
-                  Your arcade wallet tracks net wins/losses across all demo
+                  Your arcade wallet tracks net wins/losses across all Casino
                   games, including this cabinet.
                 </li>
               </ul>

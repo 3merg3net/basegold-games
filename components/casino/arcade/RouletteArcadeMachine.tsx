@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useArcadeWallet } from '@/lib/useArcadeWallet'
 
 /** European wheel numbers in order */
@@ -143,8 +143,8 @@ export default function RouletteArcadeMachine() {
   const [currentChip, setCurrentChip] = useState(5)
 
   const [spinning, setSpinning] = useState(false)
-const [angle, setAngle] = useState(0)
-const [ballAngle, setBallAngle] = useState(0)
+  const [angle, setAngle] = useState(0)
+  const [ballAngle, setBallAngle] = useState(0)
   const [resultNumber, setResultNumber] = useState<number | null>(null)
   const [status, setStatus] = useState('Place your bets and tap Spin.')
   const [lastWin, setLastWin] = useState(0)
@@ -152,6 +152,9 @@ const [ballAngle, setBallAngle] = useState(0)
     'RED' | 'BLACK' | 'GREEN' | null
   >(null)
   const [history, setHistory] = useState<number[]>([])
+
+  // 🔒 mobile-only fullscreen mode
+  const [fullscreenMobile, setFullscreenMobile] = useState(false)
 
   const totalBet = useMemo(
     () => bets.reduce((sum, b) => sum + b.amount, 0),
@@ -205,80 +208,75 @@ const [ballAngle, setBallAngle] = useState(0)
   }
 
   const spin = () => {
-  if (spinning) return
-  if (totalBet <= 0) {
-    setStatus('No bets placed. Tap the board to add chips.')
-    return
-  }
-  if (totalBet > credits) {
-    setStatus('Not enough demo credits for that total bet.')
-    return
-  }
+    if (spinning) return
+    if (totalBet <= 0) {
+      setStatus('No bets placed. Tap the board to add chips.')
+      return
+    }
+    if (totalBet > credits) {
+      setStatus('Not enough demo credits for that total bet.')
+      return
+    }
 
-  setStatus('Spinning… Good luck!')
-  setSpinning(true)
+    setStatus('Spinning… Good luck!')
+    setSpinning(true)
 
-  // 1) Pick random pocket index + number
-  const idx = Math.floor(Math.random() * WHEEL_NUMBERS.length)
-  const n = WHEEL_NUMBERS[idx]
+    // 1) Pick random pocket index + number
+    const idx = Math.floor(Math.random() * WHEEL_NUMBERS.length)
+    const n = WHEEL_NUMBERS[idx]
 
-  // 2) Geometry of the wheel
-  const segment = 360 / WHEEL_NUMBERS.length
-  // Center of pocket idx in the wheel’s local coords
-  const pocketDirection = (idx + 0.5) * segment - 90
+    // 2) Geometry of the wheel
+    const segment = 360 / WHEEL_NUMBERS.length
+    // Center of pocket idx in the wheel’s local coords
+    const pocketDirection = (idx + 0.5) * segment - 90
 
-  // 3) Decide how much the wheel turns this spin
-  const spinsPerClick = 6 // full rotations per click
-  const newWheelAngle = angle - spinsPerClick * 360
+    // 3) Decide how much the wheel turns this spin
+    const spinsPerClick = 6 // full rotations per click
+    const newWheelAngle = angle - spinsPerClick * 360
 
-  // 4) Make the ball orbit a few extra times but end over the pocket
-  const ballOrbits = 4 // how many full laps the ball makes
-  const newBallAngle = pocketDirection + newWheelAngle + 90 + ballOrbits * 360
-  // Explanation:
-  //   Ball direction at end = -90 + newBallAngle
-  //   Wheel pocket direction = pocketDirection + newWheelAngle
-  //   With +90 above, those match exactly, so ball sits on the pocket center.
+    // 4) Make the ball orbit a few extra times but end over the pocket
+    const ballOrbits = 4 // how many full laps the ball makes
+    const newBallAngle =
+      pocketDirection + newWheelAngle + 90 + ballOrbits * 360
 
-  // Apply both rotations; CSS handles smooth animation from old → new
-  setAngle(newWheelAngle)
-  setBallAngle(newBallAngle)
+    setAngle(newWheelAngle)
+    setBallAngle(newBallAngle)
 
-  // 5) Resolve outcome after the animation duration
-  setTimeout(() => {
-    let totalPayout = 0
-    for (const b of bets) {
-      const mul = getPayoutMultiplier(b, n)
-      if (mul > 0) {
-        totalPayout += b.amount * mul
+    // 5) Resolve outcome after animation duration
+    setTimeout(() => {
+      let totalPayout = 0
+      for (const b of bets) {
+        const mul = getPayoutMultiplier(b, n)
+        if (mul > 0) {
+          totalPayout += b.amount * mul
+        }
       }
-    }
 
-    recordSpin({ wager: totalBet, payout: totalPayout })
+      recordSpin({ wager: totalBet, payout: totalPayout })
 
-    const net = totalPayout - totalBet
-    setLastWin(net)
-    setResultNumber(n)
-    setLastResultColor(n === 0 ? 'GREEN' : isRed(n) ? 'RED' : 'BLACK')
+      const net = totalPayout - totalBet
+      setLastWin(net)
+      setResultNumber(n)
+      setLastResultColor(
+        n === 0 ? 'GREEN' : isRed(n) ? 'RED' : 'BLACK'
+      )
 
-    setHistory(prev => {
-      const next = [n, ...prev]
-      return next.slice(0, 12)
-    })
+      setHistory(prev => {
+        const next = [n, ...prev]
+        return next.slice(0, 12)
+      })
 
-    if (net > 0) {
-      setStatus(`Hit ${n}! You won ${totalPayout} credits (net +${net}).`)
-    } else if (net === 0) {
-      setStatus(`Hit ${n}. You broke even on that spin.`)
-    } else {
-      setStatus(`Hit ${n}. Net ${net} this spin.`)
-    }
+      if (net > 0) {
+        setStatus(`Hit ${n}! You won ${totalPayout} credits (net +${net}).`)
+      } else if (net === 0) {
+        setStatus(`Hit ${n}. You broke even on that spin.`)
+      } else {
+        setStatus(`Hit ${n}. Net ${net} this spin.`)
+      }
 
-    setSpinning(false)
-  }, 3200)
-}
-
-
-
+      setSpinning(false)
+    }, 3200)
+  }
 
   const resetTable = () => {
     if (spinning) return
@@ -293,54 +291,90 @@ const [ballAngle, setBallAngle] = useState(0)
   const getStraightBetFor = (num: number) =>
     bets.find(b => b.type === 'STRAIGHT' && b.number === num)
 
-  return (
-    <div className="mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4">
-      {/* TOP: TITLE + DEMO STRIP */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
-            Base Gold Rush Casino
-          </div>
-          <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
-            Golden Wheel Roulette <span className="text-[#facc15]">• Arcade</span>
-          </div>
-          <div className="text-xs text-white/60 mt-1 max-w-sm">
-            Riulette wheel. Free demo credits only. Same multipliers
-            you&apos;ll see on the on-chain roulette table.
-          </div>
-        </div>
-        <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
-          <div className="rounded-xl border border-white/15 bg-black/60 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
-              Demo Credits
-            </div>
-            <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
-              {credits.toLocaleString()}
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
-            <MiniStat label="Total Bet" value={totalBet} />
-            <MiniStat label="Last Net" value={lastWin} colored />
-            <MiniStat label="Session P&L" value={sessionPnL} colored />
-          </div>
-        </div>
-      </div>
+  const containerClasses = [
+    'mx-auto w-full max-w-5xl rounded-[32px] border border-yellow-500/50 bg-gradient-to-b from-[#020617] via-black to-[#111827] p-4 md:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.9)] space-y-4',
+    fullscreenMobile
+      ? 'fixed inset-0 z-40 max-w-none rounded-none p-3 md:p-6 overflow-hidden flex flex-col bg-gradient-to-b from-black via-[#020617] to-black'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
-      {/* MAIN: WHEEL LEFT, BOARD RIGHT (STACK ON MOBILE) */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(320px,1.05fr)_minmax(260px,0.95fr)]">
+  const layoutClasses = [
+    'grid gap-5 lg:grid-cols-[minmax(320px,1.05fr)_minmax(260px,0.95fr)]',
+    fullscreenMobile ? 'flex-1 grid-cols-1 lg:grid-cols-1 overflow-hidden' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const wheelCardClasses = [
+    'rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-4 md:p-5 space-y-3',
+    fullscreenMobile ? 'h-full flex flex-col' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <div className={containerClasses}>
+      {/* TOP: TITLE + DEMO STRIP (hidden in mobile fullscreen) */}
+      {!fullscreenMobile && (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.45em] text-[#fde68a]/80">
+              Base Gold Rush Casino
+            </div>
+            <div className="mt-1 text-xl md:text-3xl font-extrabold text-white">
+              Golden Wheel Roulette{' '}
+              <span className="text-[#facc15]">• Arcade</span>
+            </div>
+            <div className="text-xs text-white/60 mt-1 max-w-sm">
+              Roulette wheel. Free demo credits only. Same multipliers
+              you&apos;ll see on the on-chain roulette tables.
+            </div>
+          </div>
+          <div className="flex flex-col items-stretch md:items-end gap-2 text-xs md:text-sm w-full md:w-auto">
+            <div className="rounded-xl border border-white/15 bg-black/60 px-4 py-2 flex items-center justify-between md:justify-end gap-4">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
+                Demo Credits
+              </div>
+              <div className="text-2xl font-black text-[#fbbf24] tabular-nums">
+                {credits.toLocaleString()}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
+              <MiniStat label="Total Bet" value={totalBet} />
+              <MiniStat label="Last Net" value={lastWin} colored />
+              <MiniStat label="Session P&L" value={sessionPnL} colored />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN: WHEEL LEFT, BOARD RIGHT (STACK ON MOBILE / FULLSCREEN) */}
+      <div className={layoutClasses}>
         {/* LEFT: WHEEL + SPIN + STATUS */}
-        <div className="rounded-[24px] border border-white/12 bg-gradient-to-b from-black/40 via-[#020617] to-black p-4 md:p-5 space-y-3">
+        <div className={wheelCardClasses}>
           <div className="flex items-center justify-between text-[11px] mb-1">
             <div className="uppercase tracking-[0.3em] text-white/60">
-              Golden Wheel 
+              Golden Wheel
             </div>
-            <div className="text-white/50">
-              Demo arcade • On-Chain Soon
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline text-white/50">
+                Demo arcade • On-chain soon
+              </span>
+              {/* MOBILE FULLSCREEN TOGGLE */}
+              <button
+                type="button"
+                onClick={() => setFullscreenMobile(fs => !fs)}
+                className="md:hidden rounded-full border border-white/30 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80"
+              >
+                {fullscreenMobile ? 'Exit Full Screen' : 'Full Screen'}
+              </button>
             </div>
           </div>
 
           {/* WHEEL */}
-          <div className="flex justify-center">
+          <div className="flex justify-center flex-1">
             <div className="relative w-full max-w-[320px] sm:max-w-[360px] aspect-square">
               <div className="absolute inset-0 rounded-full bg-[#020617] flex items-center justify-center">
                 <svg
@@ -433,29 +467,25 @@ const [ballAngle, setBallAngle] = useState(0)
                     />
                   </g>
 
-                  
-                  {/* BALL – fixed at top */}
-{/* BALL */}
-<g
-  style={{
-    transformOrigin: '50% 50%',
-    transform: `rotate(${ballAngle}deg)`,
-    transition: spinning
-      ? 'transform 3.2s cubic-bezier(.18,.7,.26,1.05)'
-      : undefined,
-  }}
->
-  <circle
-    cx="100"
-    cy="32"
-    r="5.5"
-    fill="#f9fafb"
-    stroke="#e5e7eb"
-    strokeWidth="1"
-  />
-</g>
-
-
+                  {/* BALL */}
+                  <g
+                    style={{
+                      transformOrigin: '50% 50%',
+                      transform: `rotate(${ballAngle}deg)`,
+                      transition: spinning
+                        ? 'transform 3.2s cubic-bezier(.18,.7,.26,1.05)'
+                        : undefined,
+                    }}
+                  >
+                    <circle
+                      cx="100"
+                      cy="32"
+                      r="5.5"
+                      fill="#f9fafb"
+                      stroke="#e5e7eb"
+                      strokeWidth="1"
+                    />
+                  </g>
                 </svg>
               </div>
             </div>
@@ -678,9 +708,7 @@ const [ballAngle, setBallAngle] = useState(0)
                 return (
                   <button
                     key={n}
-                    onClick={() =>
-                      addBet({ type: 'STRAIGHT', number: n })
-                    }
+                    onClick={() => addBet({ type: 'STRAIGHT', number: n })}
                     className={[
                       'relative h-9 sm:h-10 rounded-md border text-[11px] font-semibold flex flex-col items-center justify-center',
                       isRedNum

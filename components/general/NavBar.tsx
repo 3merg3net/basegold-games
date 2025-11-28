@@ -5,19 +5,15 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Menu, X } from 'lucide-react'
 
-// ───────────── TYPES & NAV CONFIG ─────────────
-
 type NavItem = { href: string; label: string }
 
+// Top-level sections
 const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
 
 const sectionItems: NavItem[] = [
-  { href: '/arcade', label: 'Casino' },
-  { href: '/onchain', label: 'On-Chain Casino' },
-  { href: '/live-tables', label: 'Tables' },
+  { href: '/arcade', label: 'Casino Lobby' },
+  { href: '/live-tables', label: 'Poker & Tables' },
 ]
-
-// ───────────── COMPONENT ─────────────
 
 export default function NavBar() {
   const pathname = usePathname()
@@ -27,12 +23,10 @@ export default function NavBar() {
 
   const mobileBoxRef = useRef<HTMLDivElement>(null)
 
-  // Close mobile + cashier on outside click / Esc
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const target = e.target as Node
       const insideMobile = mobileBoxRef.current?.contains(target)
-
       if (!insideMobile) {
         setOpen(false)
       }
@@ -58,8 +52,6 @@ export default function NavBar() {
     return pathname.startsWith(href)
   }
 
-  // ───────────── INVITE HANDLER ─────────────
-
   const handleInvite = async () => {
     try {
       const base =
@@ -69,7 +61,7 @@ export default function NavBar() {
 
       const url = `${base}/poker-demo`
       const text =
-        'Join me at the Base Gold Rush Hold’em Poker Room – free play table, live coordinator, and Vegas vibes on Base. 🃏'
+        'Join me at the Base Gold Rush Hold’em Poker Room – live rails, free early-access chips, and Vegas vibes on Base. 🃏'
 
       if (typeof navigator !== 'undefined' && (navigator as any).share) {
         await (navigator as any).share({
@@ -96,17 +88,14 @@ export default function NavBar() {
     }
   }
 
-  // ───────────── RENDER ─────────────
-
   return (
     <nav className="relative flex w-full items-center justify-between">
       {/* Desktop nav */}
       <div className="hidden md:flex w-full items-center justify-between gap-4">
-        {/* Left: Home + Floors */}
+        {/* Left: Home + floors */}
         <div className="flex items-center gap-4 min-w-0">
-          {/* Home link (lightweight) */}
           <div className="flex items-center gap-2">
-            {staticItems.map((it) => (
+            {staticItems.map(it => (
               <Link
                 key={it.href}
                 href={it.href}
@@ -119,13 +108,12 @@ export default function NavBar() {
                 {it.label}
               </Link>
             ))}
-
             <span className="h-4 w-px bg-white/15" />
           </div>
 
           {/* Casino floors segmented control */}
           <div className="inline-flex items-center rounded-full bg-black/60 border border-white/15 px-1 py-0.5 shadow-[0_0_18px_rgba(0,0,0,0.7)]">
-            {sectionItems.map((it) => {
+            {sectionItems.map(it => {
               const active = isActive(it.href)
               return (
                 <Link
@@ -145,9 +133,8 @@ export default function NavBar() {
           </div>
         </div>
 
-        {/* Right: slim actions */}
+        {/* Right: actions */}
         <div className="flex items-center gap-2">
-          {/* Invite */}
           <button
             onClick={handleInvite}
             className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-emerald-400/40 text-emerald-200 bg-black/40 hover:bg-emerald-500/10 hover:border-emerald-300 transition-colors"
@@ -155,7 +142,6 @@ export default function NavBar() {
             {inviteCopied ? 'Link Copied' : 'Invite'}
           </button>
 
-          {/* Profile */}
           <Link
             href="/profile"
             className={[
@@ -166,7 +152,6 @@ export default function NavBar() {
             Profile
           </Link>
 
-          {/* Cashier preview */}
           <button
             onClick={() => setCashierOpen(true)}
             className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#facc15]/50 text-[#facc15] bg-black/50 hover:bg-[#1f2937]"
@@ -176,10 +161,10 @@ export default function NavBar() {
         </div>
       </div>
 
-      {/* Mobile hamburger */}
+      {/* Mobile nav */}
       <div ref={mobileBoxRef} className="md:hidden ml-auto relative">
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen(v => !v)}
           aria-label="Menu"
           className="p-2 text-white"
         >
@@ -193,11 +178,11 @@ export default function NavBar() {
             aria-label="Mobile navigation"
           >
             <div className="py-1 max-h-[80vh] overflow-y-auto text-sm">
-              {/* Home */}
+              {/* Main */}
               <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Main
               </div>
-              {staticItems.map((it) => {
+              {staticItems.map(it => {
                 const active = isActive(it.href)
                 return (
                   <Link
@@ -217,11 +202,11 @@ export default function NavBar() {
                 )
               })}
 
-              {/* Casino floors */}
+              {/* Floors */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Casino Floors
               </div>
-              {sectionItems.map((it) => {
+              {sectionItems.map(it => {
                 const active = isActive(it.href)
                 return (
                   <Link
@@ -241,7 +226,7 @@ export default function NavBar() {
                 )
               })}
 
-              {/* Profile */}
+              {/* Player */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Player
               </div>
@@ -254,7 +239,7 @@ export default function NavBar() {
                 Profile &amp; Avatar
               </Link>
 
-              {/* Invite */}
+              {/* Share */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Share
               </div>
@@ -270,7 +255,7 @@ export default function NavBar() {
                   : 'Invite friends to poker room'}
               </button>
 
-              {/* Cashier preview */}
+              {/* Cashier */}
               <div className="px-4 pt-1 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Cashier
               </div>
@@ -288,7 +273,7 @@ export default function NavBar() {
         )}
       </div>
 
-      {/* CASHIER MODAL (unchanged behavior) */}
+      {/* CASHIER MODAL */}
       {cashierOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="relative w-full max-w-lg rounded-2xl border border-[#facc15]/40 bg-[#020617] shadow-[0_0_60px_rgba(0,0,0,0.9)] overflow-hidden">
@@ -311,17 +296,14 @@ export default function NavBar() {
                 Coming Soon • Cashier Window
               </div>
               <div className="text-base font-semibold">
-                Swap $BGLD ↔ Native $BGRC Chips at the Cage
+                Swap $BGLD ↔ GLD Casino Chips at the Cage
               </div>
               <p className="text-[13px] text-white/70">
                 This preview shows where you&apos;ll swap real{' '}
                 <span className="font-semibold">$BGLD</span> tokens for playable{' '}
-                <span className="font-semibold">BGRC chips</span> on Base
-                mainnet. For now, everything on this site runs in{' '}
-                <span className="font-semibold text-sky-300">
-                  free play / testnet
-                </span>{' '}
-                mode only.
+                <span className="font-semibold">GLD casino chips</span> on Base
+                mainnet. During early access, some tables and games still run
+                on free-play balances while we finalize the cashier.
               </p>
               <div className="flex items-center justify-between pt-2 text-[11px] text-white/55">
                 <Link
@@ -332,7 +314,8 @@ export default function NavBar() {
                   View Full Cashier Preview →
                 </Link>
                 <span>
-                  Real-value play will require region checks / legal review.
+                  Real-value play may be region-limited and will include full
+                  legal checks.
                 </span>
               </div>
             </div>

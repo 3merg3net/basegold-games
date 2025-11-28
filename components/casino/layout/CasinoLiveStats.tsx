@@ -8,12 +8,14 @@ type Variant = 'arcade' | 'onchain' | 'live'
 
 function baseSeeds(variant: Variant) {
   if (variant === 'arcade') {
+    // casino floor – lots of small rounds
     return { a: 4_231, b: 119_204, c: 8 }
   }
   if (variant === 'onchain') {
-    return { a: 982, b: 41_876, c: 5 }
+    // overall casino volume (GLD)
+    return { a: 2_184, b: 241_876, c: 12 }
   }
-  // live
+  // live poker / tables (PGLD rail)
   return { a: 163, b: 2_947, c: 2 }
 }
 
@@ -21,7 +23,7 @@ export default function CasinoLiveStats({ variant }: { variant: Variant }) {
   const seeds = baseSeeds(variant)
   const [t, setT] = useState(0)
 
-  // 🔗 Pull from arcade wallet (safe fallback elsewhere)
+  // Still using arcade wallet as the GLD demo stack source
   const { credits } = useArcadeWallet()
 
   useEffect(() => {
@@ -35,32 +37,28 @@ export default function CasinoLiveStats({ variant }: { variant: Variant }) {
     variant === 'arcade'
       ? 'Spins / Hands Dealt'
       : variant === 'onchain'
-      ? 'On-Chain Rounds'
+      ? 'Casino Rounds Played'
       : 'Hands Dealt (Live)'
 
   const statB =
     variant === 'arcade'
-      ? 'BGRC Chips In Play'
+      ? 'GLD Chips In Play'
       : variant === 'onchain'
-      ? 'Testnet BGRC Wagered'
-      : 'Pot Volume'
+      ? 'Total GLD Wagered'
+      : 'PGLD Pot Volume'
 
   const statC =
     variant === 'arcade'
-      ? 'Arcade Games Online'
+      ? 'Casino Games Online'
       : variant === 'onchain'
-      ? 'On-Chain Tables & Slots'
+      ? 'Casino Tables & Slots'
       : 'Live Tables Online'
 
-  // 📊 Values
-  const valueA =
-    variant === 'arcade'
-      ? tweak(seeds.a, 37)
-      : tweak(seeds.a, 37)
+  const valueA = tweak(seeds.a, 37)
 
   const valueB =
     variant === 'arcade'
-      ? credits // ✅ live wallet balance
+      ? credits // treat arcade wallet as GLD stack while comps / free chips are live
       : tweak(seeds.b, 317)
 
   const valueC = tweak(seeds.c, 7)

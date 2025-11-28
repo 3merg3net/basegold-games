@@ -1,6 +1,11 @@
 'use client';
 
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import { useAccount, useContractRead } from 'wagmi';
 import { formatUnits, zeroAddress } from 'viem';
 
@@ -12,19 +17,26 @@ const ERC20_ABI = [
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
   },
-  {
-    type: 'function',
-    name: 'decimals',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint8' }],
-  },
 ] as const;
 
+/**
+ * Sitewide wallet context:
+ * - BGLD = main token
+ * - GLD  = casino chips
+ * - PGLD = poker chips
+ */
 type WalletBarContextValue = {
   address?: `0x${string}`;
-  bgrcBalance: number | null;
-  bgrcFormatted: string;
+
+  bgldBalance: number | null;
+  bgldFormatted: string;
+
+  gldBalance: number | null;
+  gldFormatted: string;
+
+  pgldBalance: number | null;
+  pgldFormatted: string;
+
   isLoading: boolean;
 };
 
@@ -32,45 +44,97 @@ const WalletBarContext = createContext<WalletBarContextValue | undefined>(
   undefined
 );
 
+// Helper: bigint → number with assumed 18 decimals
+function toNumberFromRaw(raw: unknown, decimals = 18): number | null {
+  if (typeof raw !== 'bigint') return null;
+  try {
+    return Number(formatUnits(raw, decimals));
+  } catch {
+    return null;
+  }
+}
+
+// Helper: pretty short format (1.2K, 3.4M, 12.34, etc.)
+function formatShort(value: number | null): string {
+  if (value == null) return '—';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toFixed(2);
+}
+
 export function WalletBarProvider({ children }: { children: ReactNode }) {
   const { address } = useAccount();
-  const BGRC = process.env.NEXT_PUBLIC_BGRC_CA as `0x${string}` | undefined;
 
+  const BGLD = process.env.NEXT_PUBLIC_BGLD_CA as `0x${string}` | undefined;
+  const GLD  = process.env.NEXT_PUBLIC_GLD_CA  as `0x${string}` | undefined;
+  const PGLD = process.env.NEXT_PUBLIC_PGLD_CA as `0x${string}` | undefined;
+
+  // --- BGLD ---
   const {
-    data: balRaw,
-    isLoading: loadingBal,
+    data: bgldRaw,
+    isLoading: loadingBgld,
   } = useContractRead({
-    address: BGRC ?? zeroAddress,
+    address: BGLD ?? zeroAddress,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address ?? zeroAddress],
-    enabled: Boolean(address && BGRC),
+    enabled: Boolean(address && BGLD),
     watch: true,
   });
 
-  const bgrcBalance = useMemo(() => {
-    if (typeof balRaw !== 'bigint') return null;
-    try {
-      return Number(formatUnits(balRaw, 18)); // assume 18 decimals for BGRC
-    } catch {
-      return null;
-    }
-  }, [balRaw]);
+  // --- GLD (casino chips) ---
+  const {
+    data: gldRaw,
+    isLoading: loadingGld,
+  } = useContractRead({
+    address: GLD ?? zeroAddress,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address ?? zeroAddress],
+    enabled: Boolean(address && GLD),
+    watch: true,
+  });
 
-  const bgrcFormatted =
-    bgrcBalance == null
-      ? '—'
-      : bgrcBalance >= 1_000_000
-      ? `${(bgrcBalance / 1_000_000).toFixed(1)}M`
-      : bgrcBalance >= 1_000
-      ? `${(bgrcBalance / 1_000).toFixed(1)}K`
-      : bgrcBalance.toFixed(2);
+  // --- PGLD (poker chips) ---
+  const {
+    data: pgldRaw,
+    isLoading: loadingPgld,
+  } = useContractRead({
+    address: PGLD ?? zeroAddress,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address ?? zeroAddress],
+    enabled: Boolean(address && PGLD),
+    watch: true,
+  });
+
+  // Convert + format (assuming 18 decimals for all three)
+  const bgldBalance = useMemo(
+    () => toNumberFromRaw(bgldRaw, 18),
+    [bgldRaw]
+  );
+  const gldBalance = useMemo(
+    () => toNumberFromRaw(gldRaw, 18),
+    [gldRaw]
+  );
+  const pgldBalance = useMemo(
+    () => toNumberFromRaw(pgldRaw, 18),
+    [pgldRaw]
+  );
+
+  const bgldFormatted = formatShort(bgldBalance);
+  const gldFormatted  = formatShort(gldBalance);
+  const pgldFormatted = formatShort(pgldBalance);
 
   const value: WalletBarContextValue = {
     address,
-    bgrcBalance,
-    bgrcFormatted,
-    isLoading: loadingBal,
+    bgldBalance,
+    bgldFormatted,
+    gldBalance,
+    gldFormatted,
+    pgldBalance,
+    pgldFormatted,
+    isLoading: loadingBgld || loadingGld || loadingPgld,
   };
 
   return (

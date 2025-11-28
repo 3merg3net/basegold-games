@@ -7,7 +7,7 @@ import SiteFooter from '@/components/wallet/SiteFooter'
 import RootClient from '@/components/wallet/RootClient'
 import { WalletBarProvider } from '@/components/wallet/WalletBarProvider'
 import AgeGateOverlay from '@/components/legal/AgeGateOverlay'
-import { TestnetBanner } from '@/components/legal/TestnetBanner'
+
 import RiskBanner from '@/components/legal/RiskBanner'
 import { PlayerProfileProvider } from "@/lib/player/PlayerProfileProvider";
 import { CasinoChipsProvider } from '@/lib/useCasinoChips'
@@ -68,7 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <WalletBarProvider>
             <div className="flex min-h-screen flex-col">
               <SiteHeader />
-              <TestnetBanner />
+              
 
               <main className="flex-1">
   <RootClient>
