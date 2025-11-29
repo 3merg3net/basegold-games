@@ -8,15 +8,15 @@ export default function PokerDemoDefaultPage() {
         Base Gold Rush • Hold&apos;em Demo Room
       </h1>
       <p className="text-sm text-white/60 mb-4">
-        This is the default public BGRC free play room. To spin up private
-        tables like ClubGG, use a custom URL such as{" "}
+        This is the default public PGLD free play room. To spin up private community custom
+        tables, use a custom URL such as{" "}
         <code className="font-mono bg-white/10 px-1.5 py-0.5 rounded">
           /poker-demo/your-club-code
         </code>{" "}
         and share that link with friends.
       </p>
 
-      <PokerRoomArcade roomId="bgld-holdem-demo-room" />
+      <PokerRoomArcade roomId="BGRC-holdem-room" />
     </main>
   );
 }

@@ -51,68 +51,160 @@ function resolveWsUrl(): string {
 export function usePokerRoom(roomId: string, playerId: string) {
   const [ready, setReady] = useState(false);
   const [messages, setMessages] = useState<IncomingMessage[]>([]);
+
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const heartbeatIntervalRef = useRef<number | null>(null);
+  const manualCloseRef = useRef(false);
+  const attemptsRef = useRef(0);
 
   useEffect(() => {
-    const url = resolveWsUrl();
-    console.log("[poker] Attempting WS →", url);
+    manualCloseRef.current = false;
+    attemptsRef.current = 0;
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    let didUnmount = false;
 
-    ws.onopen = () => {
-      console.log("[poker] WS OPEN:", url);
-      setReady(true);
+    function clearReconnectTimer() {
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    }
 
-      const join = {
-        kind: "poker" as const,
-        roomId,
-        playerId,
-        type: "join-room" as const,
+    function clearHeartbeat() {
+      if (heartbeatIntervalRef.current !== null) {
+        window.clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+    }
+
+    function startHeartbeat() {
+      clearHeartbeat();
+      // Light heartbeat every ~25s to keep Railway / proxies from idling us out
+      heartbeatIntervalRef.current = window.setInterval(() => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const ping = {
+          kind: "poker" as const,
+          roomId,
+          playerId,
+          type: "ping" as const,
+          payload: "hb",
+        };
+        try {
+          ws.send(JSON.stringify(ping));
+        } catch (err) {
+          console.warn("[poker] heartbeat send failed:", err);
+        }
+      }, 25000) as unknown as number;
+    }
+
+    function connect() {
+      const url = resolveWsUrl();
+      console.log("[poker] Attempting WS →", url);
+
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (didUnmount) return;
+        console.log("[poker] WS OPEN:", url);
+        setReady(true);
+        attemptsRef.current = 0; // reset backoff on success
+
+        const join = {
+          kind: "poker" as const,
+          roomId,
+          playerId,
+          type: "join-room" as const,
+        };
+
+        try {
+          ws.send(JSON.stringify(join));
+        } catch (err) {
+          console.error("[poker] failed to send join-room:", err);
+        }
+
+        startHeartbeat();
       };
 
-      ws.send(JSON.stringify(join));
-    };
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          // console.log("[poker] incoming:", data);
+          setMessages((prev) => [...prev, data]);
+        } catch (err) {
+          console.error("[poker] bad message:", err);
+        }
+      };
 
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data);
-        // console.log("[poker] incoming:", data);
-        setMessages((prev) => [...prev, data]);
-      } catch (err) {
-        console.error("[poker] bad message:", err);
-      }
-    };
+      ws.onerror = (err) => {
+        console.error("[poker] WS ERROR:", err);
+      };
 
-    ws.onerror = (err) => {
-      console.error("[poker] WS ERROR:", err);
-    };
+      ws.onclose = (event) => {
+        if (didUnmount) return;
 
-    ws.onclose = (event) => {
-      console.log(
-        "[poker] WS closed",
-        "code:",
-        event.code,
-        "reason:",
-        event.reason
-      );
-      setReady(false);
-    };
+        console.log(
+          "[poker] WS closed",
+          "code:",
+          event.code,
+          "reason:",
+          event.reason
+        );
+        setReady(false);
+        clearHeartbeat();
+
+        // If we intentionally closed (unmount / route change), don't reconnect
+        if (manualCloseRef.current) {
+          return;
+        }
+
+        // Auto-reconnect with backoff
+        const attempt = attemptsRef.current + 1;
+        attemptsRef.current = attempt;
+        const delay = Math.min(1000 * Math.pow(2, attempt), 15000); // 1s → 2s → 4s … max 15s
+
+        console.log(`[poker] Scheduling reconnect in ${delay}ms (attempt ${attempt})`);
+
+        clearReconnectTimer();
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          if (!didUnmount && !manualCloseRef.current) {
+            connect();
+          }
+        }, delay) as unknown as number;
+      };
+    }
+
+    connect();
 
     return () => {
-      try {
-        if (ws.readyState === WebSocket.OPEN) {
-          const leave = {
-            kind: "poker" as const,
-            roomId,
-            playerId,
-            type: "leave-room" as const,
-          };
-          ws.send(JSON.stringify(leave));
+      didUnmount = true;
+      manualCloseRef.current = true;
+      setReady(false);
+
+      clearHeartbeat();
+      clearReconnectTimer();
+
+      const ws = wsRef.current;
+      wsRef.current = null;
+
+      if (ws) {
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            const leave = {
+              kind: "poker" as const,
+              roomId,
+              playerId,
+              type: "leave-room" as const,
+            };
+            ws.send(JSON.stringify(leave));
+          }
+          ws.close();
+        } catch (err) {
+          console.warn("[poker] error during WS cleanup:", err);
         }
-        ws.close();
-      } catch {
-        // ignore cleanup errors
       }
     };
   }, [roomId, playerId]);
@@ -134,8 +226,12 @@ export function usePokerRoom(roomId: string, playerId: string) {
       ...msg,
     };
 
-    console.log("[poker] outgoing:", full);
-    ws.send(JSON.stringify(full));
+    // console.log("[poker] outgoing:", full);
+    try {
+      ws.send(JSON.stringify(full));
+    } catch (err) {
+      console.error("[poker] send failed:", err);
+    }
   }
 
   return { ready, messages, send };

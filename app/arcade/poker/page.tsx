@@ -33,7 +33,7 @@ export default function PokerLobbyPage() {
           Live Poker Lobby (Alpha)
         </h1>
         <p className="text-sm text-white/60 mt-2 max-w-2xl">
-          Pick a table, grab a free-play BGRC stack, and run full hands
+          Pick a table, grab a free-play PGLD stack, and run full hands
           through the coordinator. Each browser / device = one unique player.
         </p>
       </header>
