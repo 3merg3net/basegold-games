@@ -17,10 +17,10 @@ export default function ChipBalanceBar() {
         <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
         <div>
           <div className="uppercase tracking-[0.2em] text-emerald-200/85 text-[10px]">
-            BGRC Arcade Chip Stack
+            GLD Chip Casino Stack
           </div>
           <div className="text-xs text-white/70">
-            Free-play GLD Chips shared across all Casino games.
+            GLD Chips shared across all Casino games.
           </div>
         </div>
       </div>

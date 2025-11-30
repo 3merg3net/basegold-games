@@ -286,36 +286,42 @@ function useSound(url: string) {
 
 // ───────────────── Main Component ─────────────────
 
-export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
-  // Player + chips from profile provider (cast to any to avoid TS friction)
+export default function PokerRoomArcade({
+  roomId = "bgld-holdem-room-1",
+}: PokerRoomArcadeProps) {
   const { profile, chips, setChips } =
     usePlayerProfileContext() as any;
 
-  // Stable playerId for this browser session
-  const playerIdRef = useRef<string>();
+  // ───────────────── Stable playerId per device ─────────────────
+  const [playerId, setPlayerId] = useState<string | null>(null);
 
-  if (!playerIdRef.current) {
-    const nm = profile?.name ?? "";
-    if (nm && nm.trim().length > 0) {
-      playerIdRef.current = `player-${nm
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")}`;
-    } else {
-      playerIdRef.current = "player-" + Math.random().toString(36).slice(2, 8);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      let id = window.localStorage.getItem("pgld-poker-player-id");
+      if (!id) {
+        const rand =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? (crypto.randomUUID() || "").slice(0, 8)
+            : Math.random().toString(36).slice(2, 10);
+
+        id = `player-${rand}`;
+        window.localStorage.setItem("pgld-poker-player-id", id);
+      }
+      setPlayerId(id);
+    } catch {
+      const fallback = "player-" + Math.random().toString(36).slice(2, 10);
+      setPlayerId(fallback);
     }
-  }
+  }, []);
 
-  const playerId = playerIdRef.current;
-
-  // 🔒 Hard-lock all clients into the same room for now
-  const effectiveRoomId = "bgld-holdem-room-1";
+  const effectivePlayerId = playerId ?? "player-pending";
 
   const { ready, messages, send } = usePokerRoom(
-    effectiveRoomId,
-    playerId
+    roomId,
+    effectivePlayerId
   );
-
 
   const sendMessage = (msg: any) => {
     (send as any)(msg);
@@ -469,7 +475,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     return "You";
   };
 
-  // Tournament HUD stub
+  // Simple blind level HUD
   const [tLevel] = useState(1);
   const [tBlinds] = useState<[number, number]>([25, 50]);
   const [tNextIn, setTNextIn] = useState<number>(180);
@@ -488,10 +494,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
   useEffect(() => {
     if (!table) return;
 
-    if (
-      handIdRef.current == null ||
-      table.handId !== handIdRef.current
-    ) {
+    if (handIdRef.current == null || table.handId !== handIdRef.current) {
       handIdRef.current = table.handId;
       streetRef.current = null;
       showdownHandRef.current = null;
@@ -557,7 +560,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     }
   }
 
-  // Side-pot indicator (simple: just show if there are all-ins + pot)
+  // Simple “side pot active” indicator
   const hasPotentialSidePot =
     !!betting &&
     betting.players.some(
@@ -569,7 +572,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     );
 
   const [chatInput, setChatInput] = useState("");
-    const [raiseSize, setRaiseSize] = useState<number>(0);
+  const [raiseSize, setRaiseSize] = useState<number>(0);
   const [manualBet, setManualBet] = useState<string>("");
 
   const [showBuyIn, setShowBuyIn] = useState(false);
@@ -610,9 +613,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
       return;
     }
     setChips((c: number) => Math.max(0, c - effBuyIn));
-    pushLog(
-      `${describeHero()} sits down with a ${effBuyIn} PGLD chip buy-in.`
-    );
+    pushLog(`${describeHero()} sits down with ${effBuyIn} PGLD chips.`);
     sendMessage({
       type: "sit",
       name: profile?.name ?? "",
@@ -623,7 +624,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
   // Hero actions
   function handleFold() {
     if (!isHeroTurn) return;
-    pushLog(`${describeHero()} folds (timer or manual).`);
+    pushLog(`${describeHero()} folds.`);
     sendMessage({ type: "action", action: "fold" });
   }
 
@@ -644,7 +645,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     sendMessage({ type: "action", action: primaryActionMode });
   }
 
-    function handleBet() {
+  function handleBet() {
     if (!isHeroTurn || !betting || !heroBetting) return;
 
     const callNeeded = Math.max(
@@ -654,7 +655,6 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
 
     const minRaise = betting.bigBlind * 2;
 
-    // Manual bet box (raise amount), fallback to slider, fallback to min
     let raiseDelta =
       manualBet.trim().length > 0
         ? Number(manualBet)
@@ -666,10 +666,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
       raiseDelta = minRaise;
     }
 
-    // Enforce a minimum raise
     raiseDelta = Math.max(minRaise, Math.floor(raiseDelta));
 
-    // Total chips that will actually leave hero's stack this action
     const totalSpend = Math.min(
       heroBetting.stack,
       callNeeded + raiseDelta
@@ -680,7 +678,6 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
         `(call ${callNeeded}, raise ${raiseDelta}).`
     );
 
-    // Server expects just the raise amount; it will add callNeeded internally.
     sendMessage({
       type: "action",
       action: "bet",
@@ -688,23 +685,22 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     });
   }
 
-
   function handleAllIn() {
     if (!isHeroTurn || !betting || !heroBetting) return;
-    const allInRaise = heroBetting.stack; // raise portion
+    const allInRaise = heroBetting.stack;
     setRaiseSize(allInRaise);
     setManualBet(String(allInRaise));
     pushLog(`${describeHero()} moves all-in.`);
     sendMessage({ type: "action", action: "bet", amount: allInRaise });
   }
 
-  // Host manual deal (still allowed, acts as safety)
+  // Host manual deal (safety)
   function handleManualDeal() {
     if (!isHostClient) return;
     const noActiveHand =
       !betting || betting.street === "done" || !table;
     if (seatedCount < 2 || !noActiveHand) return;
-    pushLog("Host manually dealt the next hand.");
+    pushLog("Host deals the next hand.");
     sendMessage({ type: "start-hand" });
   }
 
@@ -721,10 +717,9 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     return set;
   }, [showdown, seats]);
 
-  // Collapsibles
-  const [openHowRoom, setOpenHowRoom] = useState(true);
+  // Collapsibles – start closed for mobile
+  const [openHowRoom, setOpenHowRoom] = useState(false);
   const [openHowPlay, setOpenHowPlay] = useState(false);
-  const [openFreeOnchain, setOpenFreeOnchain] = useState(false);
 
   // Avatar initials
   const initials =
@@ -738,20 +733,20 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
           .slice(0, 3)
       : "??");
 
-    // ───────────────── Game-level timers ─────────────────
+  // ───────────────── Game-level timers ─────────────────
 
-  // Shared "next hand" countdown (seconds) — host-only for now
   const [gameCountdown, setGameCountdown] = useState<number | null>(null);
 
-  // Per-decision action timer (hero only)
-  const ACTION_MS = 60000; // 60 seconds
-  const [actionDeadline, setActionDeadline] = useState<number | null>(null);
+  const ACTION_MS = 60000; // 60 seconds per decision
+  const [actionDeadline, setActionDeadline] = useState<number | null>(
+    null
+  );
   const [now, setNow] = useState<number>(Date.now());
 
   const lastHandKeyRef = useRef<string | null>(null);
   const lastActionKeyRef = useRef<string | null>(null);
 
-  // Global ticking clock for action timers
+  // Global ticking clock
   useEffect(() => {
     const id = setInterval(() => {
       setNow(Date.now());
@@ -759,14 +754,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     return () => clearInterval(id);
   }, []);
 
-  // Host-only table countdown: when 2+ players & no active hand
+  // Shared pre-hand countdown on all clients
   useEffect(() => {
-    if (!isHostClient) {
-      // Non-hosts don't own the countdown; just clear any local state
-      if (gameCountdown !== null) setGameCountdown(null);
-      return;
-    }
-
     const noActiveHand =
       !betting || betting.street === "done" || !table;
 
@@ -775,47 +764,48 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
       : "none";
 
     if (seatedCount >= 2 && noActiveHand) {
-      // Only start once per "noActiveHand" phase
       if (lastHandKeyRef.current !== handKey && gameCountdown === null) {
         lastHandKeyRef.current = handKey;
-        setGameCountdown(60); // 60s pre-hand countdown
+        setGameCountdown(60);
       }
     } else {
       if (gameCountdown !== null) {
         setGameCountdown(null);
       }
     }
-  }, [isHostClient, seatedCount, betting, table, gameCountdown]);
+  }, [seatedCount, betting, table, gameCountdown]);
 
-  // Tick down host countdown; auto-deal when it hits 0
+  // Tick countdown locally on all clients
   useEffect(() => {
-    if (!isHostClient) return;
     if (gameCountdown === null) return;
-
-    if (gameCountdown <= 0) {
-      setGameCountdown(null);
-      if (seatedCount >= 2) {
-        pushLog("Auto-dealing next hand for the table.");
-        sendMessage({ type: "start-hand" });
-      }
-      return;
-    }
+    if (gameCountdown <= 0) return;
 
     const id = setInterval(() => {
-      setGameCountdown((prev) => (prev === null ? null : prev - 1));
+      setGameCountdown((prev) =>
+        prev === null ? null : Math.max(0, prev - 1)
+      );
     }, 1000);
 
     return () => clearInterval(id);
+  }, [gameCountdown]);
+
+  // Host auto-deals when countdown hits 0
+  useEffect(() => {
+    if (!isHostClient) return;
+    if (gameCountdown === null || gameCountdown > 0) return;
+
+    setGameCountdown(null);
+    if (seatedCount >= 2) {
+      pushLog("Auto-dealing next hand for the table.");
+      sendMessage({ type: "start-hand" });
+    }
   }, [isHostClient, gameCountdown, seatedCount]);
 
-    // ───────────────── Time Bank ─────────────────
-  // How many seconds does the time bank add?
-  const TIME_BANK_SECONDS = 30;
+  // ───────────────── Time Bank ─────────────────
 
-  // Whether the hero has used time bank this hand
+  const TIME_BANK_SECONDS = 30;
   const [timeBankUsed, setTimeBankUsed] = useState(false);
 
-  // Trigger adding time to the current actionDeadline
   function handleUseTimeBank() {
     if (!isHeroTurn || !actionDeadline || timeBankUsed) return;
 
@@ -827,17 +817,12 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     pushLog(`${describeHero()} uses time bank (+${TIME_BANK_SECONDS}s).`);
   }
 
-  // Reset time-bank each new hand or new street/action
   useEffect(() => {
     if (!betting) return;
-
-    const key = `${betting.handId}-${betting.street}`;
-    // Whenever hand or street changes, reset the flag
     setTimeBankUsed(false);
   }, [betting]);
 
-
-  // Action timer: 60s per decision, then auto-fold
+  // Action timer + auto-fold
   useEffect(() => {
     if (!betting || !heroSeat) {
       setActionDeadline(null);
@@ -860,7 +845,6 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     }
   }, [betting, heroSeat, isHeroTurn]);
 
-  // Auto-fold when timer hits 0
   useEffect(() => {
     if (!isHeroTurn || !actionDeadline) return;
     if (now >= actionDeadline) {
@@ -897,14 +881,12 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
     seatedCount >= 2 &&
     (!betting || betting.street === "done");
 
-
   // ───────────────── Auto-check / Auto-fold / Sit-out ─────────────────
 
   const [autoCheck, setAutoCheck] = useState(false);
   const [autoFold, setAutoFold] = useState(false);
   const [isSittingOut, setIsSittingOut] = useState(false);
 
-  // Apply auto actions when it becomes hero's turn
   useEffect(() => {
     if (!isHeroTurn || !betting || !heroBetting) return;
 
@@ -918,19 +900,13 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
 
     if (autoCheck && diff === 0) {
       handlePrimaryAction();
-      // keep autoCheck if you want it sticky; or clear:
-      // setAutoCheck(false);
     }
   }, [isHeroTurn, betting, heroBetting, autoCheck, autoFold]);
 
-  // "Sit out" = auto-fold every time hero is involved in a hand
   useEffect(() => {
     if (!isSittingOut || !isHeroTurn) return;
-    // simple: if sitting out and it's our turn, fold immediately
     handleFold();
   }, [isSittingOut, isHeroTurn]);
-
-  // Winner glow + timer ring per seat are done in JSX
 
   return (
     <>
@@ -953,16 +929,19 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                 <div className="text-sm md:text-base text-white/80">
                   Room ID:{" "}
                   <span className="font-mono text-[#FFD700]/90">
-                    bgld-holdem-demo-room
+                    {roomId}
                   </span>
                 </div>
-                <div className="text-[10px] text-white/50">
+                <div className="text-[11px] text-white/50 font-semibold">
                   Pot{" "}
                   <span className="font-mono text-[#FFD700]">
-                    {pot}
+                    {pot.toLocaleString()}
                   </span>{" "}
-                  • {seatedCount}{" "}
-                  {seatedCount === 1 ? "player" : "players"} seated
+                  •{" "}
+                  <span className="font-mono">
+                    {seatedCount}
+                  </span>{" "}
+                  {seatedCount === 1 ? "player" : "players"} at table
                 </div>
 
                 {table && (
@@ -999,26 +978,23 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               </div>
             </div>
 
-            {/* TOURNAMENT HUD (stub) */}
+            {/* Blind HUD */}
             <div className="mb-2 rounded-xl border border-white/10 bg-black/60 px-3 py-2 flex flex-wrap items-center gap-3 text-[11px]">
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-[#FFD700]/10 border border-[#FFD700]/60 px-2 py-0.5 text-[10px] font-semibold text-[#FFD700]">
-                  PGLD Demo Cash Game
+                  PGLD Cash Game
                 </span>
-                <span className="text-white/70">
-                  Level {tLevel} • Blinds {tBlinds[0]}/{tBlinds[1]} PGLD
+                <span className="text-white/70 font-semibold">
+                  Blinds {tBlinds[0]}/{tBlinds[1]} PGLD
                 </span>
               </div>
               <div className="flex-1 flex flex-wrap items-center gap-3 justify-end text-white/50">
                 <span>
-                  Next level in{" "}
+                  Blind timer{" "}
                   <span className="font-mono text-white/80">
                     {Math.floor(tNextIn / 60)}:
                     {(tNextIn % 60).toString().padStart(2, "0")}
                   </span>
-                </span>
-                <span className="hidden md:inline-block">
-                  In full tournaments this timer drives blind increases.
                 </span>
               </div>
             </div>
@@ -1027,8 +1003,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
             <div className="relative mt-2 mx-auto w-full max-w-[760px] aspect-[9/16] md:aspect-[16/9] rounded-[999px] bg-[radial-gradient(circle_at_top,#157256_0,#032018_45%,#020617_70%,#000_100%)] border border-[#FFD700]/40 shadow-[0_0_80px_rgba(0,0,0,1)] overflow-hidden">
               <div className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-soft-light bg-[url('/felt/felt-texture.png')]" />
 
-                            {/* Game countdown banner (host only for now) */}
-              {isHostClient && gameCountdown !== null && (
+              {/* Game countdown banner: visible to all */}
+              {gameCountdown !== null && (
                 <div className="absolute top-[6%] left-1/2 -translate-x-1/2 z-20">
                   <div className="rounded-full px-4 py-1.5 flex items-center gap-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border bg-black/80 border-[#FFD700]/80">
                     <span className="text-[10px] uppercase tracking-[0.2em] text-white/60">
@@ -1044,7 +1020,6 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                 </div>
               )}
 
-
               {/* Center logo */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="flex flex-col items-center translate-y-2 md:translate-y-0">
@@ -1057,17 +1032,16 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                       className="object-contain mx-auto drop-shadow-[0_0_18px_rgba(250,204,21,0.6)]"
                     />
                   </div>
-                  <div className="text-[10px] md:text-xs tracking-[0.35em] text-[#FFD700]/90 uppercase text-center">
-                    PGLD Poker Room
+                  <div className="text-[10px] md:text-xs tracking-[0.35em] text-[#FFD700]/90 uppercase text-center font-semibold">
+                    PGLD POKER ROOM
                   </div>
                 </div>
               </div>
 
               <div className="pointer-events-none absolute inset-[6%] md:inset-[8%] rounded-[999px] border border-[#FFD700]/25 shadow-[0_0_40px_rgba(250,204,21,0.35)]" />
 
-              {/* Center content: pot + board */}
+              {/* Pot + board */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                {/* Pot */}
                 {pot > 0 && (
                   <div className="mb-2 relative -translate-y-6 md:-translate-y-4">
                     <div className="pot-animate flex flex-col items-center">
@@ -1078,7 +1052,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                         </span>
                         {hasPotentialSidePot && (
                           <span className="text-amber-300 text-[10px] ml-1">
-                            • Side pots active
+                            • Side pots in play
                           </span>
                         )}
                       </div>
@@ -1086,22 +1060,20 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                   </div>
                 )}
 
-                {/* Board cards */}
                 <div className="flex gap-1.5 mb-2 z-10 px-2 -translate-y-2 md:-translate-y-1">
                   {boardCards.length > 0 &&
-  boardCards.map((c, i) => {
-    const tilts = [-8, -4, 0, 4, 8];
-    const tilt = tilts[i] ?? 0;
-    return (
-      <PokerCard
-        key={`${table?.handId ?? 0}-board-${i}-${c}`}
-        card={c}
-        delayIndex={i}
-        tilt={tilt}
-      />
-    );
-  })}
-
+                    boardCards.map((c, i) => {
+                      const tilts = [-8, -4, 0, 4, 8];
+                      const tilt = tilts[i] ?? 0;
+                      return (
+                        <PokerCard
+                          key={`${table?.handId ?? 0}-board-${i}-${c}`}
+                          card={c}
+                          delayIndex={i}
+                          tilt={tilt}
+                        />
+                      );
+                    })}
                 </div>
               </div>
 
@@ -1259,7 +1231,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
 
                           {/* Name + stack */}
                           <div className="flex flex-col">
-                            <span className="max-w-[110px] truncate leading-tight">
+                            <span className="max-w-[110px] truncate leading-tight font-semibold">
                               {label}
                             </span>
                             {seat.playerId && (
@@ -1290,7 +1262,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
             <div className="mt-3 rounded-2xl bg-black/80 border border-white/20 px-3 py-2 space-y-2">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-[11px] text-white/70">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold">
+                  <span className="font-semibold text-white">
                     {describeHero()}
                   </span>
                   {heroBetting && (
@@ -1302,7 +1274,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                     </span>
                   )}
                   <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
-                    PGLD Bankroll:{" "}
+                    Bankroll:{" "}
                     <span className="font-mono text-[#FFD700]">
                       {chips.toLocaleString()} PGLD
                     </span>
@@ -1317,7 +1289,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                 <div className="flex items-center gap-2 text-[10px] text-white/60">
                   {isHeroTurn && actionSeconds !== null && (
                     <span className="font-mono text-[#FFD700]">
-                      Action time: {actionSeconds}s
+                      Action: {actionSeconds}s
                     </span>
                   )}
                   <button
@@ -1340,23 +1312,23 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               {/* Status + action timer bar */}
               <div className="space-y-1">
                 <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between text-[11px]">
-                  <span className="text-white/60">
+                  <span className="text-white/60 font-semibold">
                     {!betting || betting.street === "done" ? (
                       showdown &&
                       table &&
                       showdown.handId === table.handId ? (
-                        "Hand complete. Showdown above. Next hand auto-starts once players are seated."
+                        "Hand complete. Showdown above."
                       ) : (
-                        "Waiting for next hand. When 2+ players are seated, the next hand auto-deals."
+                        "Waiting for next hand. Sit and watch the countdown."
                       )
                     ) : !heroSeat || !heroBetting ? (
-                      "Sit at the table to join the action."
+                      "Sit to join the action."
                     ) : isSittingOut ? (
-                      "You are sitting out. Click Sit in to rejoin the game."
+                      "You are sitting out."
                     ) : !isHeroTurn ? (
-                      "Waiting for other players to act…"
+                      "Waiting for other players…"
                     ) : (
-                      "Your turn to act"
+                      "Your turn."
                     )}
                   </span>
                   <div className="flex flex-wrap gap-2 text-[10px] text-white/60">
@@ -1438,7 +1410,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                   >
                     {primaryActionLabel}
                   </button>
-                                    <button
+                  <button
                     onClick={handleBet}
                     disabled={!isHeroTurn || !betting || !heroBetting}
                     className="flex-1 min-w-[80px] rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
@@ -1447,7 +1419,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                       if (!betting || !heroBetting) return "Bet";
                       const callNeeded = Math.max(
                         0,
-                        betting.maxCommitted - heroBetting.committed
+                        betting.maxCommitted -
+                          heroBetting.committed
                       );
                       const minRaise = betting.bigBlind * 2;
                       const rawRaise =
@@ -1466,12 +1439,11 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                       return `Bet ${total} PGLD`;
                     })()}
                   </button>
-
                 </div>
 
                 {betting && (
                   <div className="mt-1 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] text-white/45">
+                    <div className="flex items-center justify-between text-[10px] text-white/45 font-semibold">
                       <span>Raise amount</span>
                       <span className="font-mono text-[#FFD700]">
                         {manualBet.trim() !== ""
@@ -1493,8 +1465,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                       )}
                       step={betting.bigBlind}
                       value={
-                        raiseSize ||
-                        betting.bigBlind * 2
+                        raiseSize || betting.bigBlind * 2
                       }
                       onChange={(e) => {
                         const v = Number(e.target.value);
@@ -1504,7 +1475,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                       className="w-full accent-[#FFD700]"
                     />
 
-                    {/* Preset buttons + all-in */}
+                    {/* Presets + all-in */}
                     <div className="flex flex-wrap gap-2 text-[10px]">
                       <button
                         type="button"
@@ -1537,7 +1508,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                         type="button"
                         onClick={() =>
                           setRaiseSize(
-                            betting.pot || betting.bigBlind * 6
+                            betting.pot ||
+                              betting.bigBlind * 6
                           )
                         }
                         className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
@@ -1557,7 +1529,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                     {/* Manual bet box */}
                     <div className="flex items-center gap-2 text-[10px]">
                       <div className="flex-1">
-                        <label className="block mb-0.5 text-white/60">
+                        <label className="block mb-0.5 text-white/60 font-semibold">
                           Manual bet (PGLD)
                         </label>
                         <input
@@ -1591,10 +1563,6 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                   <span>
                     Showdown • Pot {pot.toLocaleString()} PGLD
                   </span>
-                </div>
-                <div className="text-[10px] text-white/55 mb-2">
-                  Final hands for this pot. Winners are highlighted in
-                  gold.
                 </div>
                 {Array.isArray(showdown.players) &&
                   showdown.players.map((p) => {
@@ -1654,9 +1622,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                   })}
                 {hasPotentialSidePot && (
                   <div className="mt-1 text-[10px] text-amber-300">
-                    Side pots were active this hand. Final distribution
-                    is handled server-side and will be fully on-chain in
-                    live mode.
+                    Side pots were active this hand. Pots will map to
+                    full on-chain accounting when the cashier is wired.
                   </div>
                 )}
               </div>
@@ -1674,8 +1641,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               </div>
               {dealerLog.length === 0 ? (
                 <div className="text-white/35">
-                  Waiting for action. Sit at the table and watch the
-                  countdown for the next hand.
+                  Waiting for players. Sit, watch the countdown, and
+                  play.
                 </div>
               ) : (
                 <ul className="space-y-0.5">
@@ -1689,13 +1656,9 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               )}
             </div>
 
-            
-
-            <div className="mt-3 text-[11px] text-white/40 relative z-10">
+            <div className="mt-3 text-[11px] text-white/40 font-semibold relative z-10">
               Seats, blinds, betting, showdown, and chat are all synced
-              through the coordinator. When we flip to on-chain, PGLD chip
-              balances and rake accounting plug directly into this flow via
-              the cashier.
+              live for every player.
             </div>
           </div>
 
@@ -1708,9 +1671,8 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                   <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
                     Player Profile
                   </div>
-                  <div className="text-[11px] text-white/40">
-                    Edit from the profile page. This persona is shown at
-                    the table.
+                  <div className="text-[11px] text-white/50">
+                    This name & avatar show at the table.
                   </div>
                 </div>
                 <div
@@ -1727,7 +1689,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               <div className="space-y-2 pt-1 text-[11px]">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <div className="text-white/80 font-semibold">
+                    <div className="text-white/90 font-semibold">
                       {profile?.name &&
                       profile.name.trim().length > 0
                         ? profile.name
@@ -1744,12 +1706,14 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                     href="/profile"
                     className="rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[11px] font-semibold text-[#FFD700] hover:bg-[#111827]"
                   >
-                    Edit full profile →
+                    Edit profile →
                   </Link>
                 </div>
 
                 {profile?.bio && (
-                  <p className="text-white/60">{profile.bio}</p>
+                  <p className="text-white/60 line-clamp-3">
+                    {profile.bio}
+                  </p>
                 )}
 
                 <div className="flex flex-wrap gap-2 text-[10px] text-white/55 pt-1">
@@ -1772,17 +1736,15 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                   <div className="text-[10px] uppercase tracking-[0.25em] text-white/50 mb-1">
                     PGLD Chips
                   </div>
-                  <div className="text-sm text-white/80">
+                  <div className="text-sm text-white/80 font-semibold">
                     Bankroll:{" "}
                     <span className="font-mono text-[#FFD700]">
                       {chips.toLocaleString()} PGLD
                     </span>
                   </div>
-                  <p className="text-[11px] text-white/40">
-                    Sitting deducts a PGLD chip buy-in from this profile;
-                    standing up adds your table stack back. When the
-                    cashier is live, this will map 1:1 to your on-chain
-                    BGLD → PGLD chip balance.
+                  <p className="text-[11px] text-white/45">
+                    Sitting takes a PGLD chip buy-in from this
+                    bankroll; standing adds your stack back.
                   </p>
                 </div>
               </div>
@@ -1791,18 +1753,17 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
             {/* Room controls + invite */}
             <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 space-y-3 text-xs">
               <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                Room Info & Invites
+                Room & Invites
               </div>
               <p className="text-white/60 text-[11px]">
-                Each person connects from their own browser or device. Sit,
-                watch the countdown, and play through full hands — betting,
-                turns, and showdown are synced via WebSocket.
+                Each device or browser = one seat. Share this link and
+                play live together.
               </p>
 
               <div className="pt-3 border-t border-white/10 mt-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                    Invite friends
+                    Invite link
                   </div>
                   <button
                     type="button"
@@ -1818,7 +1779,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               </div>
             </div>
 
-            {/* Info blocks */}
+            {/* Info blocks (short + mobile friendly) */}
             <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 space-y-3 text-[11px]">
               {/* How this room works */}
               <button
@@ -1827,7 +1788,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                 className="flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
               >
                 <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                  How this room works
+                  Table basics
                 </span>
                 <span className="text-white/60 text-xs">
                   {openHowRoom ? "−" : "+"}
@@ -1836,16 +1797,12 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               {openHowRoom && (
                 <div className="px-1 space-y-1 text-white/70">
                   <p>
-                    This is a 6–9 seat Hold&apos;em cash-game style table
-                    running on a multiplayer coordinator. Each browser /
-                    device is a unique player with their own PGLD chip
-                    stack.
+                    6–9 seat PGLD Hold&apos;em cash game. Chips, action
+                    order, and hands are synced for every player.
                   </p>
                   <p>
-                    The coordinator tracks seats, blinds, betting order,
-                    streets, and showdown. When we hook in on-chain BGLD /
-                    PGLD balances through the cashier, this same flow powers
-                    live pots on Base.
+                    Each browser connects as a unique player with their
+                    own stack and bankroll.
                   </p>
                 </div>
               )}
@@ -1857,7 +1814,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
                 className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
               >
                 <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                  How to play Texas Hold&apos;em
+                  Hold&apos;em quick rules
                 </span>
                 <span className="text-white/60 text-xs">
                   {openHowPlay ? "−" : "+"}
@@ -1866,50 +1823,13 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               {openHowPlay && (
                 <div className="px-1 space-y-1 text-white/70">
                   <p>
-                    Each player gets 2 private cards. The table reveals up
-                    to 5 shared community cards (flop, turn, river). You
-                    build your best 5-card hand from any combo of your 2 +
-                    the board.
+                    You get 2 hole cards. Up to 5 community cards hit
+                    the board (flop, turn, river). Best 5-card hand
+                    wins.
                   </p>
                   <p>
-                    Betting happens preflop, on the flop, turn, and river.
-                    You can fold, call, or bet/raise when it&apos;s your
-                    turn. If you make it to showdown, the best hand takes
-                    the pot.
-                  </p>
-                </div>
-              )}
-
-              {/* PGLD vs on-chain */}
-              <button
-                type="button"
-                onClick={() =>
-                  setOpenFreeOnchain((v) => !v)
-                }
-                className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
-              >
-                <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                  PGLD demo vs on-chain mode
-                </span>
-                <span className="text-white/60 text-xs">
-                  {openFreeOnchain ? "−" : "+"}
-                </span>
-              </button>
-              {openFreeOnchain && (
-                <div className="px-1 space-y-1 text-white/70">
-                  <p>
-                    Right now you&apos;re playing with{" "}
-                    <span className="font-semibold">
-                      demo PGLD chips
-                    </span>
-                    . Hands, pots, and results are for fun and testing
-                    only.
-                  </p>
-                  <p>
-                    When we go live, these same flows route real PGLD chips
-                    backed by BGLD on Base. Rake and payouts will be handled
-                    through the cashier and vault contracts, not
-                    hard-coded into this UI.
+                    Bet preflop, on the flop, turn, and river. You can
+                    fold, call, or bet/raise when it&apos;s your turn.
                   </p>
                 </div>
               )}
@@ -1924,14 +1844,13 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               Table Chat • PGLD Poker Room
             </div>
             <div className="text-[10px] text-white/40">
-              Messages are live across all connected players.
+              Live for all seated players.
             </div>
           </div>
           <div className="max-h-64 overflow-y-auto rounded-lg bg-black/60 p-2 text-[11px] space-y-1">
             {chatMessages.length === 0 && (
               <div className="text-white/40">
-                No messages yet. Type a message below and hit send to
-                chat at the table.
+                No messages yet. Say hello to the table.
               </div>
             )}
             {chatMessages.map((m, i) => (
@@ -1952,7 +1871,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
             <input
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Send a message to the table…"
+              placeholder="Type a message…"
               className="flex-1 rounded-lg bg-black/70 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
             />
             <button
@@ -1977,9 +1896,7 @@ export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
               Sit at the Base Gold Rush table
             </h2>
             <p className="text-[11px] text-white/60 mb-3">
-              Choose a PGLD chip buy-in amount for this session. In live
-              mode this will map to your on-chain BGLD → PGLD chip
-              balance.
+              Choose your PGLD chip buy-in amount for this session.
             </p>
 
             <div className="space-y-2 mb-3">
