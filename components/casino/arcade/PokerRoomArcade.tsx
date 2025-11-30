@@ -412,6 +412,11 @@ export default function PokerRoomArcade({
     () => seats.filter((s) => s.playerId).length,
     [seats]
   );
+  // REAL MODE: Require 2+ players to start a hand
+const MIN_PLAYERS_TO_START = 2;
+
+
+  
 
   const hostSeatIndex = useMemo(() => {
     let min: number | null = null;
@@ -777,29 +782,63 @@ export default function PokerRoomArcade({
 
   // Tick countdown locally on all clients
   useEffect(() => {
-    if (gameCountdown === null) return;
-    if (gameCountdown <= 0) return;
+  if (gameCountdown === null) return;
 
-    const id = setInterval(() => {
-      setGameCountdown((prev) =>
-        prev === null ? null : Math.max(0, prev - 1)
-      );
-    }, 1000);
+  if (gameCountdown <= 0) {
+    setGameCountdown(null);
 
-    return () => clearInterval(id);
-  }, [gameCountdown]);
+    // ✅ Only auto-deal when:
+    // - we have enough players
+    // - no active hand (or finished)
+    if (
+      seatedCount >= MIN_PLAYERS_TO_START &&
+      (!betting || betting.street === "done")
+    ) {
+      pushLog("Auto-dealing next hand for the table.");
+      // Any seated client can safely fire this; server enforces handInProgress
+      sendMessage({ type: "start-hand" });
+    }
+
+    return;
+  }
+
+  const id = setTimeout(
+    () => setGameCountdown((c) => (c === null ? null : c - 1)),
+    1000
+  );
+  return () => clearTimeout(id);
+}, [gameCountdown, seatedCount, betting, sendMessage]);
+
 
   // Host auto-deals when countdown hits 0
   useEffect(() => {
-    if (!isHostClient) return;
-    if (gameCountdown === null || gameCountdown > 0) return;
+  if (gameCountdown === null) return;
 
+  if (gameCountdown <= 0) {
     setGameCountdown(null);
-    if (seatedCount >= 2) {
+
+    // ✅ Only auto-deal when:
+    // - we have enough players
+    // - no active hand (or finished)
+    if (
+      seatedCount >= MIN_PLAYERS_TO_START &&
+      (!betting || betting.street === "done")
+    ) {
       pushLog("Auto-dealing next hand for the table.");
+      // Any seated client can safely fire this; server enforces handInProgress
       sendMessage({ type: "start-hand" });
     }
-  }, [isHostClient, gameCountdown, seatedCount]);
+
+    return;
+  }
+
+  const id = setTimeout(
+    () => setGameCountdown((c) => (c === null ? null : c - 1)),
+    1000
+  );
+  return () => clearTimeout(id);
+}, [gameCountdown, seatedCount, betting, sendMessage]);
+
 
   // ───────────────── Time Bank ─────────────────
 
@@ -876,10 +915,11 @@ export default function PokerRoomArcade({
     }
   }
 
-  const canHostManualDeal =
-    isHostClient &&
-    seatedCount >= 2 &&
-    (!betting || betting.street === "done");
+  const canManualDeal =
+  !!heroSeat &&
+  seatedCount >= MIN_PLAYERS_TO_START &&
+  (!betting || betting.street === "done");
+
 
   // ───────────────── Auto-check / Auto-fold / Sit-out ─────────────────
 
@@ -1387,14 +1427,16 @@ export default function PokerRoomArcade({
                     {heroSeat ? "Stand Up" : "Sit at Table"}
                   </button>
 
-                  {canHostManualDeal && (
-                    <button
-                      onClick={handleManualDeal}
-                      className="rounded-lg bg-[#FFD700] px-3 py-1.5 text-xs font-semibold text-black hover:bg-yellow-400"
-                    >
-                      Deal Next Hand
-                    </button>
-                  )}
+                  {canManualDeal && (
+  <button
+    onClick={handleManualDeal}
+    className="rounded-lg bg-[#FFD700] px-3 py-1.5 text-xs font-semibold text-black hover:bg-yellow-400"
+  >
+    Deal Next Hand
+  </button>
+)}
+
+
 
                   <button
                     onClick={handleFold}
