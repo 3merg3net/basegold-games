@@ -286,7 +286,7 @@ function useSound(url: string) {
 
 // ───────────────── Main Component ─────────────────
 
-export default function PokerRoomArcade({ roomId = "bgld-holdem-demo-room" }: PokerRoomArcadeProps) {
+export default function PokerRoomArcade({ roomId }: PokerRoomArcadeProps) {
   // Player + chips from profile provider (cast to any to avoid TS friction)
   const { profile, chips, setChips } =
     usePlayerProfileContext() as any;
@@ -294,12 +294,27 @@ export default function PokerRoomArcade({ roomId = "bgld-holdem-demo-room" }: Po
   // Stable playerId for this browser session
   const playerIdRef = useRef<string>();
 
-  // ...
+  if (!playerIdRef.current) {
+    const nm = profile?.name ?? "";
+    if (nm && nm.trim().length > 0) {
+      playerIdRef.current = `player-${nm
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_")}`;
+    } else {
+      playerIdRef.current = "player-" + Math.random().toString(36).slice(2, 8);
+    }
+  }
 
-  // Ensure playerId is always a string before passing to hook
-const playerId = playerIdRef.current ?? "unknown-player";
+  const playerId = playerIdRef.current;
 
-const { ready, messages, send } = usePokerRoom(roomId, playerId);
+  // 🔒 Hard-lock all clients into the same room for now
+  const effectiveRoomId = "bgld-holdem-room-1";
+
+  const { ready, messages, send } = usePokerRoom(
+    effectiveRoomId,
+    playerId
+  );
 
 
   const sendMessage = (msg: any) => {
