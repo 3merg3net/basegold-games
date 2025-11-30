@@ -76,6 +76,10 @@ type DealerLogEntry = {
   ts: number;
 };
 
+type PokerRoomArcadeProps = {
+  roomId?: string;
+};
+
 // ───────────────── Chips ─────────────────
 
 const CHIP_SOURCES: Record<number, string> = {
@@ -282,30 +286,21 @@ function useSound(url: string) {
 
 // ───────────────── Main Component ─────────────────
 
-export default function PokerRoomArcade() {
+export default function PokerRoomArcade({ roomId = "bgld-holdem-demo-room" }: PokerRoomArcadeProps) {
+  // Player + chips from profile provider (cast to any to avoid TS friction)
   const { profile, chips, setChips } =
     usePlayerProfileContext() as any;
 
   // Stable playerId for this browser session
   const playerIdRef = useRef<string>();
-  if (!playerIdRef.current) {
-    const nm = profile?.name ?? "";
-    if (nm && nm.trim().length > 0) {
-      playerIdRef.current = `player-${nm
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")}`;
-    } else {
-      playerIdRef.current =
-        "player-" + Math.random().toString(36).slice(2, 8);
-    }
-  }
-  const playerId = playerIdRef.current;
 
-  const { ready, messages, send } = usePokerRoom(
-    "bgld-holdem-demo-room",
-    playerId
-  );
+  // ...
+
+  // Ensure playerId is always a string before passing to hook
+const playerId = playerIdRef.current ?? "unknown-player";
+
+const { ready, messages, send } = usePokerRoom(roomId, playerId);
+
 
   const sendMessage = (msg: any) => {
     (send as any)(msg);
