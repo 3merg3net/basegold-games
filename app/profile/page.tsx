@@ -13,8 +13,13 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { usePlayerProfileContext } from '@/lib/player/PlayerProfileProvider';
 import { supabase } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 const LOCAL_STORAGE_KEY = 'bgld_player_id';
+
+
+
+
 
 type StyleOption = 'tight' | 'loose' | 'aggro' | 'balanced';
 
@@ -24,7 +29,9 @@ export default function PokerProfilePage() {
 
   const { address } = useAccount();
 
+const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -77,23 +84,33 @@ export default function PokerProfilePage() {
   }, [localName]);
 
   async function handleSave(e: FormEvent) {
-    e.preventDefault();
-    if (!profile) return;
-    setSaving(true);
-    try {
-      await updateProfile({
-        name: localName,
-        bio: localBio,
-        style: localStyle,
-        xHandle: localX,
-        telegramHandle: localTelegram,
-        avatarColor: localAvatarColor,
-        avatarInitials: initials,
-      } as any);
-    } finally {
-      setSaving(false);
-    }
+  e.preventDefault();
+  if (!profile) return;
+
+  setSaving(true);
+  setSaveError(null);
+
+  try {
+    await updateProfile({
+      name: localName,
+      bio: localBio,
+      style: localStyle,
+      xHandle: localX,
+      telegramHandle: localTelegram,
+      avatarColor: localAvatarColor,
+      avatarInitials: initials,
+    } as any);
+
+    // ✅ redirect after successful save
+    router.push('/poker'); // <-- change this path if your poker table route is different
+  } catch (err: any) {
+    console.error('[profile] save error', err);
+    setSaveError(err?.message ?? 'Failed to save profile. Please try again.');
+  } finally {
+    setSaving(false);
   }
+}
+
 
   async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     setAvatarError(null);
@@ -390,6 +407,12 @@ export default function PokerProfilePage() {
               >
                 {saving ? 'Saving…' : 'Save profile'}
               </button>
+              {saveError && (
+  <div className="mt-1 text-[11px] text-red-400">
+    {saveError}
+  </div>
+)}
+
               <div className="text-[10px] text-white/45 sm:text-right">
                 Profile is stored in Supabase and used across the Base Gold Rush
                 poker room, arcade, and future BGLD cash games.

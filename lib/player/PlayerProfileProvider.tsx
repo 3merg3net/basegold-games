@@ -25,6 +25,11 @@ export type PlayerProfile = {
   losses?: number;
   style: "tight" | "loose" | "aggro" | "balanced";
   joinedAt: number;
+
+  // optional wallet link fields you’re using in /profile (they’ll live in memory for now)
+  walletAddress?: string;
+  xHandle?: string;
+  telegramHandle?: string;
 };
 
 const defaultProfile: PlayerProfile = {
@@ -53,19 +58,23 @@ type Ctx = {
   updateProfile: (patch: Partial<PlayerProfile>) => void;
   chips: number;
   setChips: (fn: (c: number) => number) => void;
+  loading: boolean;
+  error: unknown;
 };
 
 const PlayerProfileContext = createContext<Ctx | undefined>(undefined);
 
 export function PlayerProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<unknown>(null);
+
   const [chips, setChipsInner] = useState<number>(() => {
     if (typeof window === "undefined") return 5000;
     const raw = window.localStorage.getItem("bgld_demo_chips");
     return raw ? Number(raw) || 5000 : 5000;
   });
 
-  // persist chips locally
   const setChips = (fn: (c: number) => number) => {
     setChipsInner(prev => {
       const next = fn(prev);
@@ -76,35 +85,36 @@ export function PlayerProfileProvider({ children }: { children: React.ReactNode 
     });
   };
 
-  // get or create local player id
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let id = window.localStorage.getItem("bgld_player_id");
-    if (!id) {
-      id = "player-" + Math.random().toString(36).slice(2, 10);
-      window.localStorage.setItem("bgld_player_id", id);
-    }
 
-    // load from Supabase
-    (async () => {
-      const { data, error } = await supabase
-        .from("players")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
+    const init = async () => {
+      setLoading(true);
+      setError(null);
 
-      if (error) {
-        console.error("[profile] load error", error);
-        setProfile({ ...defaultProfile, id });
-        return;
-      }
+      try {
+        let id = window.localStorage.getItem("bgld_player_id");
+        if (!id) {
+          id = "player-" + Math.random().toString(36).slice(2, 10);
+          window.localStorage.setItem("bgld_player_id", id);
+        }
 
-      if (!data) {
-        // create new row
-        const newProfile: PlayerProfile = { ...defaultProfile, id };
-        const { error: insertError } = await supabase
+        const { data, error: loadError } = await supabase
           .from("players")
-          .insert({
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (loadError) {
+          console.error("[profile] load error", loadError);
+          setError(loadError);
+          setProfile({ ...defaultProfile, id });
+          return;
+        }
+
+        if (!data) {
+          const newProfile: PlayerProfile = { ...defaultProfile, id };
+          const { error: insertError } = await supabase.from("players").insert({
             id,
             name: "",
             avatar_color: newProfile.avatarColor,
@@ -124,38 +134,47 @@ export function PlayerProfileProvider({ children }: { children: React.ReactNode 
             style: newProfile.style,
           });
 
-        if (insertError) {
-          console.error("[profile] insert error", insertError);
+          if (insertError) {
+            console.error("[profile] insert error", insertError);
+            setError(insertError);
+          }
+
+          setProfile(newProfile);
+          return;
         }
 
-        setProfile(newProfile);
-        return;
+        const mapped: PlayerProfile = {
+          id: data.id,
+          name: data.name ?? "",
+          avatarColor: data.avatar_color ?? "#facc15",
+          avatarInitials: data.avatar_initials ?? "??",
+          avatarUrl: data.avatar_url ?? "",
+          bio: data.bio ?? "",
+          twitter: data.twitter ?? "",
+          telegram: data.telegram ?? "",
+          discord: data.discord ?? "",
+          degenRank: (data.degen_rank as PlayerProfile["degenRank"]) ?? "rookie",
+          favGame: data.fav_game ?? "Poker",
+          reputation: data.reputation ?? 50,
+          level: data.level ?? 1,
+          xp: data.xp ?? 0,
+          wins: data.wins ?? 0,
+          losses: data.losses ?? 0,
+          style: (data.style as PlayerProfile["style"]) ?? "balanced",
+          joinedAt: Date.now(),
+        };
+
+        setProfile(mapped);
+      } catch (err) {
+        console.error("[profile] unexpected error", err);
+        setError(err);
+        setProfile({ ...defaultProfile, id: "unknown" });
+      } finally {
+        setLoading(false);
       }
+    };
 
-      // map row -> PlayerProfile
-      const mapped: PlayerProfile = {
-        id: data.id,
-        name: data.name ?? "",
-        avatarColor: data.avatar_color ?? "#facc15",
-        avatarInitials: data.avatar_initials ?? "??",
-        avatarUrl: data.avatar_url ?? "",
-        bio: data.bio ?? "",
-        twitter: data.twitter ?? "",
-        telegram: data.telegram ?? "",
-        discord: data.discord ?? "",
-        degenRank: (data.degen_rank as PlayerProfile["degenRank"]) ?? "rookie",
-        favGame: data.fav_game ?? "Poker",
-        reputation: data.reputation ?? 50,
-        level: data.level ?? 1,
-        xp: data.xp ?? 0,
-        wins: data.wins ?? 0,
-        losses: data.losses ?? 0,
-        style: (data.style as PlayerProfile["style"]) ?? "balanced",
-        joinedAt: Date.now(), // or data.created_at
-      };
-
-      setProfile(mapped);
-    })();
+    void init();
   }, []);
 
   const updateProfile = (patch: Partial<PlayerProfile>) => {
@@ -163,7 +182,6 @@ export function PlayerProfileProvider({ children }: { children: React.ReactNode 
       if (!prev) return prev;
       const next = { ...prev, ...patch };
 
-      // fire-and-forget update to Supabase
       const {
         id,
         name,
@@ -206,18 +224,23 @@ export function PlayerProfileProvider({ children }: { children: React.ReactNode 
         })
         .eq("id", id)
         .then(({ error }) => {
-          if (error) console.error("[profile] update error", error);
+          if (error) {
+            console.error("[profile] update error", error);
+            setError(error);
+          }
         });
 
       return next;
     });
   };
- 
+
   const value: Ctx = {
     profile,
     updateProfile,
     chips,
     setChips,
+    loading,
+    error,
   };
 
   return (

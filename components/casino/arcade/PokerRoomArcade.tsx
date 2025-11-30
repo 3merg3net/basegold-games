@@ -8,6 +8,7 @@ import {
   useState,
   FormEvent,
 } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePokerRoom } from "@/lib/pokerClient/usePokerRoom";
@@ -74,9 +75,6 @@ type DealerLogEntry = {
   text: string;
   ts: number;
 };
-type PokerRoomArcadeProps = {
-  roomId?: string
-}
 
 // ───────────────── Chips ─────────────────
 
@@ -128,7 +126,7 @@ function ChipStack({
           <Image
             key={`${d}-${i}`}
             src={src}
-            alt={`BGRC ${d}`}
+            alt={`PGLD ${d}`}
             width={w}
             height={h}
             className="rounded-full drop-shadow-[0_0_6px_rgba(0,0,0,0.8)]"
@@ -164,16 +162,12 @@ const SUIT_LABELS: Record<string, string> = {
   c: "♣",
 };
 
-// Deeper, richer suit colors (black suits dark, reds punchy)
 const SUIT_COLORS: Record<string, string> = {
-  // black suits – crisp + bright on darker bevel
-  s: "text-slate-100",
-  c: "text-slate-100",
-  // red suits – deeper / richer reds
-  h: "text-rose-300",
-  d: "text-rose-300",
+  s: "text-slate-900",
+  c: "text-slate-900",
+  h: "text-red-500",
+  d: "text-red-500",
 };
-
 
 function parseCard(card: string) {
   if (!card || card.length < 2) {
@@ -182,17 +176,15 @@ function parseCard(card: string) {
       suit: "",
       rankLabel: card,
       suitLabel: "",
-      suitColor: "text-slate-100",
-      isRed: false,
+      suitColor: "text-white",
     };
   }
   const rank = card[0].toUpperCase();
   const suitRaw = card[1].toLowerCase();
   const rankLabel = RANK_LABELS[rank] ?? rank;
   const suitLabel = SUIT_LABELS[suitRaw] ?? "";
-  const suitColor = SUIT_COLORS[suitRaw] ?? "text-slate-100";
-  const isRed = suitRaw === "h" || suitRaw === "d";
-  return { rank, suit: suitRaw, rankLabel, suitLabel, suitColor, isRed };
+  const suitColor = SUIT_COLORS[suitRaw] ?? "text-white";
+  return { rank, suit: suitRaw, rankLabel, suitLabel, suitColor };
 }
 
 function PokerCard({
@@ -200,91 +192,72 @@ function PokerCard({
   highlight = false,
   size = "normal",
   delayIndex = 0,
+  tilt = 0,
 }: {
   card: string;
   highlight?: boolean;
   size?: "normal" | "small";
   delayIndex?: number;
+  tilt?: number;
 }) {
   const { rankLabel, suitLabel, suitColor } = parseCard(card);
-  const isSmall = size === "small";
-
-  const baseSize = isSmall
-    ? "w-8 h-11 text-[9px]" // compact showdown card
-    : "w-11 h-16 text-xs md:w-12 md:h-18 md:text-sm"; // full board / hero card
+  const baseSize =
+    size === "small"
+      ? "w-9 h-12 text-[10px]"
+      : "w-11 h-16 text-xs md:w-12 md:h-18 md:text-sm";
 
   const delay = `${0.05 * delayIndex}s`;
 
-  const bevelClasses = highlight
-    ? // gold edge bevel when highlighted (hero / winners)
-      "border-[#FACC15]/90 shadow-[0_0_16px_rgba(250,204,21,0.75)]"
-    : // subtle metallic edge otherwise
-      "border-slate-500/70 shadow-[0_4px_10px_rgba(0,0,0,0.75)]";
-
-  const baseClasses = [
-    "card-deal",
-    baseSize,
-    "rounded-xl",
-    // darker, beveled card face
-    "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900",
-    "flex flex-col justify-between",
-    "px-1.5 py-1",
-    "border",
-    bevelClasses,
-    "relative overflow-hidden",
-  ].join(" ");
-
-  // ── COMPACT: showdown / small display (no duplicate rank/suit) ─────────
-  if (isSmall) {
-    return (
-      <div className={baseClasses} style={{ animationDelay: delay }}>
-        {/* faint inner bevel */}
-        <div className="pointer-events-none absolute inset-[1px] rounded-[0.7rem] border border-black/40" />
-        <div className="flex-1 flex flex-col items-center justify-center leading-tight relative z-10">
-          <span className={`font-bold ${suitColor}`}>{rankLabel}</span>
-          <span className={`text-[10px] ${suitColor}`}>{suitLabel}</span>
-        </div>
-      </div>
-    );
-  }
-
-  // ── FULL CARD: board + hero hand ───────────────────────────────────────
   return (
     <div
-      className={baseClasses}
+      className={`card-deal ${baseSize} rounded-xl bg-gradient-to-br from-slate-50 via-slate-200 to-slate-100 flex flex-col justify-between px-1.5 py-1 shadow-[0_10px_20px_rgba(0,0,0,0.65)] border relative ${
+        highlight
+          ? "border-[#FFD700] shadow-[0_0_22px_rgba(250,204,21,0.9)]"
+          : "border-slate-400/70"
+      }`}
       style={{
         animationDelay: delay,
+        transform: `rotate(${tilt}deg)`,
+        transformOrigin: "50% 60%",
       }}
     >
-      {/* faint inner bevel */}
-      <div className="pointer-events-none absolute inset-[1px] rounded-[0.7rem] border border-black/40" />
+      <div className="pointer-events-none absolute inset-[1px] rounded-[10px] border border-white/70 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.2)]" />
 
-      {/* Rank / suit top-left */}
-      <div className="flex items-start justify-between relative z-10">
-        <span className="font-bold text-slate-50 drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
+      <div className="relative flex items-start justify-between">
+        <span className="font-extrabold text-slate-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.5)]">
           {rankLabel}
         </span>
         <span className={`text-[11px] ${suitColor}`}>{suitLabel}</span>
       </div>
 
-      {/* Big center pip */}
-      <div className="flex flex-1 items-center justify-center relative z-10">
+      <div className="relative flex flex-1 items-center justify-center">
         <span
-          className={`text-xl md:text-2xl leading-none ${suitColor} drop-shadow-[0_2px_3px_rgba(0,0,0,0.7)]`}
+          className={`text-xl md:text-2xl leading-none ${suitColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.35)]`}
         >
           {suitLabel}
         </span>
       </div>
 
-      {/* Rank / suit bottom-right */}
-      <div className="flex items-end justify-end relative z-10">
+      <div className="relative flex items-end justify-end">
         <span className={`text-[11px] ${suitColor}`}>{suitLabel}</span>
       </div>
     </div>
   );
 }
 
+// ───────────────── Seat ring positions ─────────────────
 
+const RING_POSITIONS: Array<Partial<CSSProperties>> = [
+  { top: "3%", left: "50%", transform: "translate(-50%, 0)" },
+  { top: "18%", left: "8%", transform: "translate(0, 0)" },
+  { top: "18%", right: "8%", transform: "translate(0, 0)" },
+  { top: "45%", left: "0%", transform: "translate(0, -50%)" },
+  { top: "45%", right: "0%", transform: "translate(0, -50%)" },
+  { bottom: "22%", left: "6%", transform: "translate(0, 0)" },
+  { bottom: "22%", right: "6%", transform: "translate(0, 0)" },
+  { bottom: "8%", left: "28%", transform: "translate(-50%, 0)" },
+  { bottom: "8%", left: "72%", transform: "translate(-50%, 0)" },
+];
 
 // ───────────────── Audio Hook ─────────────────
 
@@ -302,42 +275,37 @@ function useSound(url: string) {
       audioRef.current.currentTime = 0;
       void audioRef.current.play();
     } catch {
-      // autoplay errors ignored
+      // ignore autoplay errors
     }
   };
 }
 
 // ───────────────── Main Component ─────────────────
 
-export default function PokerRoomArcade({
-  roomId = 'bgld-holdem-demo-room',
-}: PokerRoomArcadeProps) {
-  // Player + chips from profile provider (cast to any to avoid TS friction)
+export default function PokerRoomArcade() {
   const { profile, chips, setChips } =
-    usePlayerProfileContext() as any
+    usePlayerProfileContext() as any;
 
   // Stable playerId for this browser session
-  const playerIdRef = useRef<string>()
-
+  const playerIdRef = useRef<string>();
   if (!playerIdRef.current) {
-    const nm = profile?.name ?? ''
+    const nm = profile?.name ?? "";
     if (nm && nm.trim().length > 0) {
       playerIdRef.current = `player-${nm
         .trim()
         .toLowerCase()
-        .replace(/\s+/g, '_')}`
+        .replace(/\s+/g, "_")}`;
     } else {
       playerIdRef.current =
-        'player-' + Math.random().toString(36).slice(2, 8)
+        "player-" + Math.random().toString(36).slice(2, 8);
     }
   }
-
-  const playerId = playerIdRef.current!
+  const playerId = playerIdRef.current;
 
   const { ready, messages, send } = usePokerRoom(
-    roomId,
+    "bgld-holdem-demo-room",
     playerId
-  )
+  );
 
   const sendMessage = (msg: any) => {
     (send as any)(msg);
@@ -347,7 +315,7 @@ export default function PokerRoomArcade({
   const playChip = useSound("/sounds/chip.wav");
   const playWin = useSound("/sounds/win.wav");
 
-  // Invite link for sharing table
+  // Invite link
   const [inviteUrl, setInviteUrl] = useState("");
   const [copiedInvite, setCopiedInvite] = useState(false);
 
@@ -366,14 +334,11 @@ export default function PokerRoomArcade({
           setCopiedInvite(true);
           setTimeout(() => setCopiedInvite(false), 1500);
         })
-        .catch(() => {
-          // ignore clipboard errors
-        });
+        .catch(() => {});
     }
   }
 
-  // --- Derived state from messages ---
-
+  // Derived state from messages
   const seats = useMemo<SeatView[]>(() => {
     const seatMessages = (messages as any[]).filter(
       (m) => m && m.type === "seats-update"
@@ -427,13 +392,11 @@ export default function PokerRoomArcade({
     return seats.find((s) => s.playerId === playerId) || null;
   }, [seats, playerId]);
 
-  // How many players are actually seated?
   const seatedCount = useMemo(
     () => seats.filter((s) => s.playerId).length,
     [seats]
   );
 
-  // Host = lowest seatIndex that has a player
   const hostSeatIndex = useMemo(() => {
     let min: number | null = null;
     for (const s of seats) {
@@ -469,8 +432,7 @@ export default function PokerRoomArcade({
     betting.currentSeatIndex === heroSeat.seatIndex &&
     betting.street !== "done";
 
-  // ───────────────── Dealer logs & state tracking ─────────────────
-
+  // Dealer logs
   const [dealerLog, setDealerLog] = useState<DealerLogEntry[]>([]);
   const logIdRef = useRef(0);
   const handIdRef = useRef<number | null>(null);
@@ -497,10 +459,22 @@ export default function PokerRoomArcade({
     return "You";
   };
 
-  // Fixed blinds HUD (global, cash game style)
-  const BLINDS: [number, number] = [25, 50];
+  // Tournament HUD stub
+  const [tLevel] = useState(1);
+  const [tBlinds] = useState<[number, number]>([25, 50]);
+  const [tNextIn, setTNextIn] = useState<number>(180);
 
-  // Track new hands and board cards for logs + sounds
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTNextIn((prev) => {
+        if (prev <= 1) return 180;
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Track new hands + board for sounds/logs
   useEffect(() => {
     if (!table) return;
 
@@ -512,7 +486,7 @@ export default function PokerRoomArcade({
       streetRef.current = null;
       showdownHandRef.current = null;
       lastBoardCountRef.current = table.board.length;
-      pushLog(`New hand #${table.handId} in the BGRC free play room.`);
+      pushLog(`New hand #${table.handId} in the PGLD room.`);
       playDeal();
     }
 
@@ -543,7 +517,7 @@ export default function PokerRoomArcade({
       const label = labelMap[betting.street] ?? betting.street;
       if (betting.street === "done") {
         pushLog(
-          `Hand #${betting.handId} complete. Pot locked at ${betting.pot} free play chips.`
+          `Hand #${betting.handId} complete. Pot locked at ${betting.pot} PGLD chips.`
         );
       } else {
         pushLog(`Street: ${label}. Pot currently ${betting.pot}.`);
@@ -551,26 +525,18 @@ export default function PokerRoomArcade({
     }
   }, [betting, playChip]);
 
-  // Showdown effect – sound + log only
   useEffect(() => {
     if (!showdown || !table) return;
     if (showdown.handId !== table.handId) return;
     if (showdownHandRef.current === showdown.handId) return;
 
     showdownHandRef.current = showdown.handId;
-
     playWin();
-    pushLog(
-      "Showdown: revealing hands and sweeping the pot (raked ~5% when live on-chain)."
-    );
+    pushLog("Showdown: revealing hands and sweeping the pot.");
   }, [showdown, table, playWin]);
 
   const boardCards = table?.board ?? [];
   const pot = betting?.pot ?? 0;
-  // Simple fake rake in UI only (5% of pot)
-  const FAKE_RAKE_PCT = 0.05;
-  const rakeAmount = Math.floor(pot * FAKE_RAKE_PCT);
-  const mainPot = Math.max(0, pot - rakeAmount);
   const buttonSeatIndex = betting?.buttonSeatIndex ?? null;
   const currentSeatIndex = betting?.currentSeatIndex ?? null;
 
@@ -581,8 +547,21 @@ export default function PokerRoomArcade({
     }
   }
 
+  // Side-pot indicator (simple: just show if there are all-ins + pot)
+  const hasPotentialSidePot =
+    !!betting &&
+    betting.players.some(
+      (p) =>
+        p.inHand &&
+        !p.hasFolded &&
+        p.stack === 0 &&
+        (p.committed > 0 || betting.pot > 0)
+    );
+
   const [chatInput, setChatInput] = useState("");
-  const [raiseSize, setRaiseSize] = useState<number>(0);
+    const [raiseSize, setRaiseSize] = useState<number>(0);
+  const [manualBet, setManualBet] = useState<string>("");
+
   const [showBuyIn, setShowBuyIn] = useState(false);
   const [buyIn, setBuyIn] = useState<number>(500);
 
@@ -600,7 +579,7 @@ export default function PokerRoomArcade({
       if (cashOut > 0) {
         setChips((c: number) => c + cashOut);
         pushLog(
-          `${describeHero()} stands up and cashes out ${cashOut} free play chips.`
+          `${describeHero()} stands up and cashes out ${cashOut} PGLD chips.`
         );
       } else {
         pushLog(`${describeHero()} stands up from the table.`);
@@ -616,13 +595,13 @@ export default function PokerRoomArcade({
     const effBuyIn = Math.max(100, Math.floor(buyIn));
     if (effBuyIn > chips) {
       pushLog(
-        `Not enough free play credits to sit with ${effBuyIn}. Adjust buy-in or reload.`
+        `Not enough PGLD chips to sit with ${effBuyIn}. Adjust buy-in or reload.`
       );
       return;
     }
     setChips((c: number) => Math.max(0, c - effBuyIn));
     pushLog(
-      `${describeHero()} sits down with a ${effBuyIn} free play chip buy-in.`
+      `${describeHero()} sits down with a ${effBuyIn} PGLD chip buy-in.`
     );
     sendMessage({
       type: "sit",
@@ -631,15 +610,15 @@ export default function PokerRoomArcade({
     } as any);
   }
 
+  // Hero actions
   function handleFold() {
     if (!isHeroTurn) return;
-    pushLog(`${describeHero()} folds (timer expired or manual).`);
+    pushLog(`${describeHero()} folds (timer or manual).`);
     sendMessage({ type: "action", action: "fold" });
   }
 
   function handlePrimaryAction() {
     if (!isHeroTurn) return;
-    // Determine check/call
     let primaryActionMode: "check" | "call" = "check";
     if (betting && heroBetting) {
       const diff = betting.maxCommitted - heroBetting.committed;
@@ -647,7 +626,6 @@ export default function PokerRoomArcade({
         primaryActionMode = "call";
       }
     }
-
     if (primaryActionMode === "call") {
       pushLog(`${describeHero()} calls.`);
     } else {
@@ -656,15 +634,61 @@ export default function PokerRoomArcade({
     sendMessage({ type: "action", action: primaryActionMode });
   }
 
-  function handleBet() {
-    if (!isHeroTurn || !betting) return;
-    const min = betting.bigBlind * 2;
-    const amount = raiseSize > 0 ? raiseSize : min;
-    pushLog(`${describeHero()} bets ${amount}.`);
-    sendMessage({ type: "action", action: "bet", amount });
+    function handleBet() {
+    if (!isHeroTurn || !betting || !heroBetting) return;
+
+    const callNeeded = Math.max(
+      0,
+      betting.maxCommitted - heroBetting.committed
+    );
+
+    const minRaise = betting.bigBlind * 2;
+
+    // Manual bet box (raise amount), fallback to slider, fallback to min
+    let raiseDelta =
+      manualBet.trim().length > 0
+        ? Number(manualBet)
+        : raiseSize > 0
+        ? raiseSize
+        : minRaise;
+
+    if (!Number.isFinite(raiseDelta) || raiseDelta <= 0) {
+      raiseDelta = minRaise;
+    }
+
+    // Enforce a minimum raise
+    raiseDelta = Math.max(minRaise, Math.floor(raiseDelta));
+
+    // Total chips that will actually leave hero's stack this action
+    const totalSpend = Math.min(
+      heroBetting.stack,
+      callNeeded + raiseDelta
+    );
+
+    pushLog(
+      `${describeHero()} bets ${totalSpend} PGLD ` +
+        `(call ${callNeeded}, raise ${raiseDelta}).`
+    );
+
+    // Server expects just the raise amount; it will add callNeeded internally.
+    sendMessage({
+      type: "action",
+      action: "bet",
+      amount: raiseDelta,
+    });
   }
 
-  // Host manual "Deal Next Hand" fallback
+
+  function handleAllIn() {
+    if (!isHeroTurn || !betting || !heroBetting) return;
+    const allInRaise = heroBetting.stack; // raise portion
+    setRaiseSize(allInRaise);
+    setManualBet(String(allInRaise));
+    pushLog(`${describeHero()} moves all-in.`);
+    sendMessage({ type: "action", action: "bet", amount: allInRaise });
+  }
+
+  // Host manual deal (still allowed, acts as safety)
   function handleManualDeal() {
     if (!isHostClient) return;
     const noActiveHand =
@@ -687,12 +711,12 @@ export default function PokerRoomArcade({
     return set;
   }, [showdown, seats]);
 
-  // Collapsible sections
+  // Collapsibles
   const [openHowRoom, setOpenHowRoom] = useState(true);
   const [openHowPlay, setOpenHowPlay] = useState(false);
   const [openFreeOnchain, setOpenFreeOnchain] = useState(false);
 
-  // Avatar initials for display in sidebar
+  // Avatar initials
   const initials =
     profile?.avatarInitials ||
     (profile?.name
@@ -704,34 +728,20 @@ export default function PokerRoomArcade({
           .slice(0, 3)
       : "??");
 
-  // Dynamic seat positions – only for players actually seated
-  const activeSeats = seats.filter((s) => s.playerId);
-  const RING_POSITIONS: Array<Partial<React.CSSProperties>> = [
-    { top: "6%", left: "50%", transform: "translate(-50%, 0)" }, // top center
-    { top: "20%", left: "12%", transform: "translate(0, 0)" }, // upper left
-    { top: "20%", right: "12%", transform: "translate(0, 0)" }, // upper right
-    { top: "45%", left: "4%", transform: "translate(0, -50%)" }, // mid left
-    { top: "45%", right: "4%", transform: "translate(0, -50%)" }, // mid right
-    { bottom: "24%", left: "10%", transform: "translate(0, 0)" }, // lower left
-    { bottom: "24%", right: "10%", transform: "translate(0, 0)" }, // lower right
-    { bottom: "10%", left: "30%", transform: "translate(-50%, 0)" }, // bottom left
-    { bottom: "10%", left: "70%", transform: "translate(-50%, 0)" }, // bottom right
-  ];
+    // ───────────────── Game-level timers ─────────────────
 
-  // ───────────────── Game-level timers ─────────────────
+  // Shared "next hand" countdown (seconds) — host-only for now
+  const [gameCountdown, setGameCountdown] = useState<number | null>(null);
 
-  // Shared "next hand" countdown (seconds)
-  const [gameCountdown, setGameCountdown] = useState<number | null>(
-    null
-  );
+  // Per-decision action timer (hero only)
+  const ACTION_MS = 60000; // 60 seconds
+  const [actionDeadline, setActionDeadline] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
-  const [actionDeadline, setActionDeadline] =
-    useState<number | null>(null);
 
   const lastHandKeyRef = useRef<string | null>(null);
   const lastActionKeyRef = useRef<string | null>(null);
 
-  // Global ticking clock
+  // Global ticking clock for action timers
   useEffect(() => {
     const id = setInterval(() => {
       setNow(Date.now());
@@ -739,10 +749,14 @@ export default function PokerRoomArcade({
     return () => clearInterval(id);
   }, []);
 
-  // Start "next hand" countdown whenever:
-  // - ≥2 players seated
-  // - no active betting (or betting.done)
+  // Host-only table countdown: when 2+ players & no active hand
   useEffect(() => {
+    if (!isHostClient) {
+      // Non-hosts don't own the countdown; just clear any local state
+      if (gameCountdown !== null) setGameCountdown(null);
+      return;
+    }
+
     const noActiveHand =
       !betting || betting.street === "done" || !table;
 
@@ -751,39 +765,69 @@ export default function PokerRoomArcade({
       : "none";
 
     if (seatedCount >= 2 && noActiveHand) {
-      if (lastHandKeyRef.current !== handKey) {
+      // Only start once per "noActiveHand" phase
+      if (lastHandKeyRef.current !== handKey && gameCountdown === null) {
         lastHandKeyRef.current = handKey;
-        setGameCountdown(5); // 5-second table-wide countdown
+        setGameCountdown(60); // 60s pre-hand countdown
       }
     } else {
-      setGameCountdown(null);
+      if (gameCountdown !== null) {
+        setGameCountdown(null);
+      }
     }
-  }, [seatedCount, betting, table]);
+  }, [isHostClient, seatedCount, betting, table, gameCountdown]);
 
-  // Tick down the game countdown + auto deal when it hits 0 (host-only)
+  // Tick down host countdown; auto-deal when it hits 0
   useEffect(() => {
+    if (!isHostClient) return;
     if (gameCountdown === null) return;
 
     if (gameCountdown <= 0) {
       setGameCountdown(null);
-      // Only the host client fires auto-deal
-      if (isHostClient) {
+      if (seatedCount >= 2) {
         pushLog("Auto-dealing next hand for the table.");
         sendMessage({ type: "start-hand" });
       }
       return;
     }
 
-    const id = setTimeout(
-      () => setGameCountdown((c) => (c === null ? null : c - 1)),
-      1000
-    );
-    return () => clearTimeout(id);
-  }, [gameCountdown, isHostClient, sendMessage]);
+    const id = setInterval(() => {
+      setGameCountdown((prev) => (prev === null ? null : prev - 1));
+    }, 1000);
 
-  // Action timer: 60s per decision, auto-fold at 0
-  const ACTION_MS = 60000; // 60 seconds
+    return () => clearInterval(id);
+  }, [isHostClient, gameCountdown, seatedCount]);
 
+    // ───────────────── Time Bank ─────────────────
+  // How many seconds does the time bank add?
+  const TIME_BANK_SECONDS = 30;
+
+  // Whether the hero has used time bank this hand
+  const [timeBankUsed, setTimeBankUsed] = useState(false);
+
+  // Trigger adding time to the current actionDeadline
+  function handleUseTimeBank() {
+    if (!isHeroTurn || !actionDeadline || timeBankUsed) return;
+
+    const extended = actionDeadline + TIME_BANK_SECONDS * 1000;
+
+    setTimeBankUsed(true);
+    setActionDeadline(extended);
+
+    pushLog(`${describeHero()} uses time bank (+${TIME_BANK_SECONDS}s).`);
+  }
+
+  // Reset time-bank each new hand or new street/action
+  useEffect(() => {
+    if (!betting) return;
+
+    const key = `${betting.handId}-${betting.street}`;
+    // Whenever hand or street changes, reset the flag
+    setTimeBankUsed(false);
+  }, [betting]);
+
+
+  // Action timer: 60s per decision, then auto-fold
   useEffect(() => {
     if (!betting || !heroSeat) {
       setActionDeadline(null);
@@ -795,13 +839,11 @@ export default function PokerRoomArcade({
     const heroTurnNow = isHeroTurn;
 
     if (!heroTurnNow) {
-      // Not our turn – clear timer so we don't show stale info
       setActionDeadline(null);
       lastActionKeyRef.current = key;
       return;
     }
 
-    // New turn for hero → start/restart timer
     if (lastActionKeyRef.current !== key) {
       lastActionKeyRef.current = key;
       setActionDeadline(Date.now() + ACTION_MS);
@@ -826,11 +868,9 @@ export default function PokerRoomArcade({
   const actionSeconds = actionRemainingMs
     ? Math.ceil(actionRemainingMs / 1000)
     : null;
+
   const actionPct = actionRemainingMs
-    ? Math.max(
-        0,
-        Math.min(100, (actionRemainingMs / ACTION_MS) * 100)
-      )
+    ? Math.max(0, Math.min(100, (actionRemainingMs / ACTION_MS) * 100))
     : 0;
 
   // Primary action label (check/call)
@@ -846,6 +886,41 @@ export default function PokerRoomArcade({
     isHostClient &&
     seatedCount >= 2 &&
     (!betting || betting.street === "done");
+
+
+  // ───────────────── Auto-check / Auto-fold / Sit-out ─────────────────
+
+  const [autoCheck, setAutoCheck] = useState(false);
+  const [autoFold, setAutoFold] = useState(false);
+  const [isSittingOut, setIsSittingOut] = useState(false);
+
+  // Apply auto actions when it becomes hero's turn
+  useEffect(() => {
+    if (!isHeroTurn || !betting || !heroBetting) return;
+
+    const diff = betting.maxCommitted - heroBetting.committed;
+
+    if (autoFold && diff > 0) {
+      handleFold();
+      setAutoFold(false);
+      return;
+    }
+
+    if (autoCheck && diff === 0) {
+      handlePrimaryAction();
+      // keep autoCheck if you want it sticky; or clear:
+      // setAutoCheck(false);
+    }
+  }, [isHeroTurn, betting, heroBetting, autoCheck, autoFold]);
+
+  // "Sit out" = auto-fold every time hero is involved in a hand
+  useEffect(() => {
+    if (!isSittingOut || !isHeroTurn) return;
+    // simple: if sitting out and it's our turn, fold immediately
+    handleFold();
+  }, [isSittingOut, isHeroTurn]);
+
+  // Winner glow + timer ring per seat are done in JSX
 
   return (
     <>
@@ -871,15 +946,13 @@ export default function PokerRoomArcade({
                     bgld-holdem-demo-room
                   </span>
                 </div>
-                <div className="text-[10px] text-white/40 mt-0.5">
+                <div className="text-[10px] text-white/50">
+                  Pot{" "}
                   <span className="font-mono text-[#FFD700]">
-                    {mainPot}
+                    {pot}
                   </span>{" "}
-                  to players •{" "}
-                  <span className="font-mono text-emerald-300">
-                    {rakeAmount}
-                  </span>{" "}
-                  fake rake (5%)
+                  • {seatedCount}{" "}
+                  {seatedCount === 1 ? "player" : "players"} seated
                 </div>
 
                 {table && (
@@ -887,12 +960,6 @@ export default function PokerRoomArcade({
                     Hand #{table.handId}
                   </div>
                 )}
-                <div className="text-[10px] text-white/50">
-                  Pot{" "}
-                  <span className="font-mono text-[#FFD700]">
-                    {pot}
-                  </span>
-                </div>
 
                 {betting && (
                   <div className="text-[11px] text-white/50">
@@ -922,40 +989,42 @@ export default function PokerRoomArcade({
               </div>
             </div>
 
-            {/* TABLE HUD – fixed blinds */}
+            {/* TOURNAMENT HUD (stub) */}
             <div className="mb-2 rounded-xl border border-white/10 bg-black/60 px-3 py-2 flex flex-wrap items-center gap-3 text-[11px]">
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-[#FFD700]/10 border border-[#FFD700]/60 px-2 py-0.5 text-[10px] font-semibold text-[#FFD700]">
-                  Free Play • Fixed Blinds
+                  PGLD Demo Cash Game
                 </span>
                 <span className="text-white/70">
-                  Blinds{" "}
-                  <span className="font-mono">
-                    {BLINDS[0]}/{BLINDS[1]}
-                  </span>{" "}
-                  BGRC
+                  Level {tLevel} • Blinds {tBlinds[0]}/{tBlinds[1]} PGLD
                 </span>
               </div>
               <div className="flex-1 flex flex-wrap items-center gap-3 justify-end text-white/50">
-                <span className="text-[10px]">
-                  Blinds stay fixed this session. Hands auto-deal when 2+
-                  players are seated.
+                <span>
+                  Next level in{" "}
+                  <span className="font-mono text-white/80">
+                    {Math.floor(tNextIn / 60)}:
+                    {(tNextIn % 60).toString().padStart(2, "0")}
+                  </span>
+                </span>
+                <span className="hidden md:inline-block">
+                  In full tournaments this timer drives blind increases.
                 </span>
               </div>
             </div>
 
-            {/* FELT – tall on mobile, wide on desktop */}
+            {/* FELT */}
             <div className="relative mt-2 mx-auto w-full max-w-[760px] aspect-[9/16] md:aspect-[16/9] rounded-[999px] bg-[radial-gradient(circle_at_top,#157256_0,#032018_45%,#020617_70%,#000_100%)] border border-[#FFD700]/40 shadow-[0_0_80px_rgba(0,0,0,1)] overflow-hidden">
               <div className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-soft-light bg-[url('/felt/felt-texture.png')]" />
 
-              {/* Game countdown banner */}
-              {gameCountdown !== null && (
+                            {/* Game countdown banner (host only for now) */}
+              {isHostClient && gameCountdown !== null && (
                 <div className="absolute top-[6%] left-1/2 -translate-x-1/2 z-20">
-                  <div className="rounded-full bg-black/80 border border-[#FFD700]/80 px-4 py-1.5 flex items-center gap-2 shadow-[0_0_25px_rgba(0,0,0,0.9)]">
+                  <div className="rounded-full px-4 py-1.5 flex items-center gap-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border bg-black/80 border-[#FFD700]/80">
                     <span className="text-[10px] uppercase tracking-[0.2em] text-white/60">
                       Next hand starts in
                     </span>
-                    <span className="text-xl font-extrabold text-[#FFD700] tabular-nums">
+                    <span className="text-xl font-extrabold tabular-nums text-[#FFD700]">
                       {gameCountdown}
                     </span>
                     <span className="text-[10px] text-white/40">
@@ -965,6 +1034,7 @@ export default function PokerRoomArcade({
                 </div>
               )}
 
+
               {/* Center logo */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="flex flex-col items-center translate-y-2 md:translate-y-0">
@@ -972,13 +1042,13 @@ export default function PokerRoomArcade({
                     <Image
                       src="/felt/bgrc-logo.png"
                       alt="Base Gold Rush"
-                      width={200}
-                      height={200}
+                      width={300}
+                      height={300}
                       className="object-contain mx-auto drop-shadow-[0_0_18px_rgba(250,204,21,0.6)]"
                     />
                   </div>
                   <div className="text-[10px] md:text-xs tracking-[0.35em] text-[#FFD700]/90 uppercase text-center">
-                    Base Gold Rush
+                    PGLD Poker Room
                   </div>
                 </div>
               </div>
@@ -987,19 +1057,20 @@ export default function PokerRoomArcade({
 
               {/* Center content: pot + board */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                {/* Pot, above board */}
+                {/* Pot */}
                 {pot > 0 && (
                   <div className="mb-2 relative -translate-y-6 md:-translate-y-4">
                     <div className="pot-animate flex flex-col items-center">
-                      <ChipStack amount={pot} size={26} />
-                      <div className="mt-1 px-2 py-0.5 rounded-full bg-black/80 border border-[#FFD700]/70 text-[10px] font-mono">
-                        <span className="text-[#FFD700]">
-                          Pot {pot}
+                      <ChipStack amount={pot} size={32} />
+                      <div className="mt-1 px-3 py-1 rounded-full bg-black/85 border border-[#FFD700]/80 text-[11px] font-mono flex items-center gap-2">
+                        <span className="text-[#FFD700] font-semibold">
+                          Pot {pot.toLocaleString()} PGLD
                         </span>
-                        <span className="text-white/60">
-                          {" "}
-                          • Rake {rakeAmount}
-                        </span>
+                        {hasPotentialSidePot && (
+                          <span className="text-amber-300 text-[10px] ml-1">
+                            • Side pots active
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1007,43 +1078,31 @@ export default function PokerRoomArcade({
 
                 {/* Board cards */}
                 <div className="flex gap-1.5 mb-2 z-10 px-2 -translate-y-2 md:-translate-y-1">
-                  {boardCards.length === 0 ? (
-                    <div className="text-[11px] text-white/40 text-center max-w-xs">
-                      When 2+ players are seated, the next hand auto-deals
-                      after the countdown. Each browser/device is its own
-                      player.
-                    </div>
-                    ) : (
-    boardCards.map((c, i) => {
-  const tilts = [-8, -4, 0, 4, 8]; // nice fan for up to 5 cards
-  const tilt = tilts[i] ?? 0;
-
-  return (
-    <div
-      key={`${table?.handId ?? 0}-board-${i}-${c}`}
-      style={{
-        transform: `translateY(${Math.abs(tilt) / 3}px) rotate(${tilt}deg)`,
-        transformOrigin: "50% 80%",
-      }}
-    >
-      <PokerCard card={c} delayIndex={i} />
-    </div>
-  );
-})
-
-  )}
+                  {boardCards.length > 0 &&
+  boardCards.map((c, i) => {
+    const tilts = [-8, -4, 0, 4, 8];
+    const tilt = tilts[i] ?? 0;
+    return (
+      <PokerCard
+        key={`${table?.handId ?? 0}-board-${i}-${c}`}
+        card={c}
+        delayIndex={i}
+        tilt={tilt}
+      />
+    );
+  })}
 
                 </div>
               </div>
 
-              {/* Hero hand anchored near bottom, fanned like a real app */}
+              {/* Hero hand */}
               {heroHand && (
                 <div className="absolute bottom-[6%] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                   <div className="relative h-20 w-[120px] md:w-[140px]">
                     {heroHand.map((c, i) => {
                       const offsets = [
-                        { rotate: -10, translateX: -14, z: 10 },
-                        { rotate: 10, translateX: 14, z: 20 },
+                        { rotate: -12, translateX: -18, z: 10 },
+                        { rotate: 12, translateX: 18, z: 20 },
                       ];
                       const cfg = offsets[i] ?? offsets[1];
 
@@ -1057,7 +1116,11 @@ export default function PokerRoomArcade({
                             zIndex: cfg.z,
                           }}
                         >
-                          <PokerCard card={c} highlight delayIndex={i} />
+                          <PokerCard
+                            card={c}
+                            highlight
+                            delayIndex={i}
+                          />
                         </div>
                       );
                     })}
@@ -1067,105 +1130,155 @@ export default function PokerRoomArcade({
 
               {/* Seats */}
               <div className="absolute inset-0 text-[11px] text-white/80">
-                {activeSeats.map((seat, idx) => {
-                  const label =
-                    seat.playerId && seat.name
-                      ? seat.name
-                      : seat.playerId
-                      ? seat.playerId
-                      : `Seat ${seat.seatIndex + 1}`;
+                {seats
+                  .filter((s) => s.playerId)
+                  .map((seat, idx) => {
+                    const label =
+                      seat.playerId && seat.name
+                        ? seat.name
+                        : seat.playerId
+                        ? seat.playerId
+                        : `Seat ${seat.seatIndex + 1}`;
 
-                  const isHeroSeat = seat.playerId === playerId;
-                  const isButton =
-                    buttonSeatIndex !== null &&
-                    buttonSeatIndex === seat.seatIndex;
-                  const isActiveTurn =
-                    currentSeatIndex !== null &&
-                    currentSeatIndex === seat.seatIndex;
-                  const isWinnerSeat = winnerSeatIndexes.has(
-                    seat.seatIndex
-                  );
+                    const isHeroSeat =
+                      seat.playerId === playerId;
+                    const isButton =
+                      buttonSeatIndex !== null &&
+                      buttonSeatIndex === seat.seatIndex;
+                    const isWinnerSeat =
+                      winnerSeatIndexes.has(seat.seatIndex);
 
-                  const pos =
-                    RING_POSITIONS[idx] ?? RING_POSITIONS[0];
+                    const pos =
+                      RING_POSITIONS[idx] ?? RING_POSITIONS[0];
 
-                  const committed =
-                    committedBySeat[seat.seatIndex] ?? 0;
+                    const committed =
+                      committedBySeat[seat.seatIndex] ?? 0;
 
-                  return (
-                    <div
-                      key={seat.seatIndex}
-                      className="absolute flex flex-col items-center gap-1"
-                      style={pos as any}
-                    >
-                      {/* Dealer button */}
-                      {isButton && (
-                        <div className="px-1.5 py-0.5 rounded-full bg-[#FFD700] text-black text-[9px] font-bold shadow">
-                          D
-                        </div>
-                      )}
+                    const isCurrentTurn =
+                      currentSeatIndex !== null &&
+                      currentSeatIndex === seat.seatIndex &&
+                      betting?.street !== "done";
 
-                      {/* Player pill */}
+                    const timeFracUsed =
+                      isCurrentTurn && actionRemainingMs != null
+                        ? 1 - actionPct / 100
+                        : 0;
+                    const ringAngle = 360 * timeFracUsed;
+
+                    return (
                       <div
-                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 border text-[10px] bg-black/80 shadow-[0_0_10px_rgba(0,0,0,0.7)] ${
-                          isHeroSeat
-                            ? "border-[#FFD700]/80 text-[#FFD700]"
-                            : seat.playerId
-                            ? "border-white/60 text-white"
-                            : "border-white/20 text-white/50"
-                        } ${isActiveTurn ? "seat-active-ring" : ""} ${
-                          isWinnerSeat ? "winner-glow" : ""
-                        }`}
+                        key={seat.seatIndex}
+                        className="absolute flex flex-col items-center gap-1"
+                        style={pos as CSSProperties}
                       >
-                        {/* Avatar circle – default to BGLD chip / logo */}
-                        <div className="h-7 w-7 rounded-full bg-slate-900 border border-white/25 flex items-center justify-center overflow-hidden">
-                          {isHeroSeat && (profile as any)?.avatarUrl ? (
-                            <Image
-                              src={(profile as any).avatarUrl}
-                              alt="Avatar"
-                              width={28}
-                              height={28}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <Image
-                              src="/felt/bgrc-logo.png"
-                              alt="BGLD"
-                              width={22}
-                              height={22}
-                              className="object-contain"
-                            />
-                          )}
-                        </div>
+                        {isButton && (
+                          <div className="px-1.5 py-0.5 rounded-full bg-[#FFD700] text-black text-[9px] font-bold shadow">
+                            D
+                          </div>
+                        )}
 
-                        {/* Name + stack */}
-                        <div className="flex flex-col">
-                          <span className="max-w-[110px] truncate leading-tight">
-                            {label}
-                          </span>
-                          {seat.playerId && (
-                            <span className="font-mono text-[10px] text-[#5eead4] leading-tight">
-                              {(seat.chips ?? 1000).toLocaleString()}
+                        <div
+                          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 border text-[10px] bg-black/80 shadow-[0_0_10px_rgba(0,0,0,0.7)] ${
+                            isHeroSeat
+                              ? "border-[#FFD700]/80 text-[#FFD700]"
+                              : seat.playerId
+                              ? "border-white/60 text-white"
+                              : "border-white/20 text-white/50"
+                          } ${isWinnerSeat ? "winner-glow" : ""}`}
+                        >
+                          {/* Avatar + timer ring */}
+                          <div className="relative h-9 w-9 flex items-center justify-center">
+                            <div
+                              className="absolute inset-0 rounded-full"
+                              style={
+                                isCurrentTurn &&
+                                actionRemainingMs != null
+                                  ? {
+                                      padding: "2px",
+                                      background: `conic-gradient(
+                                        #22c55e 0deg,
+                                        #22c55e ${Math.max(
+                                          ringAngle * 0.4,
+                                          0
+                                        )}deg,
+                                        #eab308 ${Math.max(
+                                          ringAngle * 0.7,
+                                          0
+                                        )}deg,
+                                        #ef4444 ${Math.max(
+                                          ringAngle,
+                                          0
+                                        )}deg,
+                                        rgba(15,23,42,0.9) ${Math.max(
+                                          ringAngle,
+                                          0
+                                        )}deg 360deg
+                                      )`,
+                                    }
+                                  : {
+                                      padding: "2px",
+                                      background:
+                                        "radial-gradient(circle, rgba(148,163,184,0.4), rgba(15,23,42,0.9))",
+                                    }
+                              }
+                            >
+                              <div className="h-full w-full rounded-full bg-slate-900 border border-white/25 flex items-center justify-center overflow-hidden">
+                                {isHeroSeat &&
+                                (profile as any)?.avatarUrl ? (
+                                  <Image
+                                    src={
+                                      (profile as any).avatarUrl
+                                    }
+                                    alt="Avatar"
+                                    width={28}
+                                    height={28}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <Image
+                                    src="/felt/bgrc-logo.png"
+                                    alt="PGLD"
+                                    width={22}
+                                    height={22}
+                                    className="object-contain"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Name + stack */}
+                          <div className="flex flex-col">
+                            <span className="max-w-[110px] truncate leading-tight">
+                              {label}
                             </span>
-                          )}
+                            {seat.playerId && (
+                              <span className="font-mono text-[10px] text-[#5eead4] leading-tight">
+                                {(seat.chips ?? 1000).toLocaleString()}{" "}
+                                PGLD
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Committed chips under the pill */}
-                      {committed > 0 && (
-                        <div className="-mt-1">
-                          <ChipStack amount={committed} size={18} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        {/* Committed chips */}
+                        {committed > 0 && (
+                          <div className="-mt-1">
+                            <ChipStack
+                              amount={committed}
+                              size={18}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
 
-            {/* Under-table ACTION BAR (ClubGG style) */}
-            <div className="mt-3 rounded-2xl bg-black/80 border border-white/20 px-3 py-2 space-y-3">
-              <div className="flex items-center justify-between text-[11px] text-white/70">
+            {/* Hero action bar */}
+            <div className="mt-3 rounded-2xl bg-black/80 border border-white/20 px-3 py-2 space-y-2">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-[11px] text-white/70">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">
                     {describeHero()}
@@ -1174,29 +1287,49 @@ export default function PokerRoomArcade({
                     <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
                       Stack:{" "}
                       <span className="font-mono text-[#FFD700]">
-                        {heroBetting.stack}
+                        {heroBetting.stack} PGLD
                       </span>
                     </span>
                   )}
                   <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
-                    Bankroll:{" "}
+                    PGLD Bankroll:{" "}
                     <span className="font-mono text-[#FFD700]">
-                      {chips.toLocaleString()} BGRC
+                      {chips.toLocaleString()} PGLD
                     </span>
                   </span>
+                  {isSittingOut && (
+                    <span className="rounded-full bg-amber-500/10 border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-300">
+                      Sitting out (auto-fold)
+                    </span>
+                  )}
                 </div>
 
-                <div className="text-[10px] text-white/50">
-                  Pot{" "}
-                  <span className="font-mono text-[#FFD700]">
-                    {pot}
-                  </span>
+                <div className="flex items-center gap-2 text-[10px] text-white/60">
+                  {isHeroTurn && actionSeconds !== null && (
+                    <span className="font-mono text-[#FFD700]">
+                      Action time: {actionSeconds}s
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleUseTimeBank}
+                    disabled={
+                      !isHeroTurn ||
+                      !actionDeadline ||
+                      timeBankUsed
+                    }
+                    className="rounded-full border border-sky-400/60 bg-black/70 px-2.5 py-1 text-[10px] text-sky-300 disabled:opacity-40"
+                  >
+                    {timeBankUsed
+                      ? "Time bank used"
+                      : `Time bank +${TIME_BANK_SECONDS}s`}
+                  </button>
                 </div>
               </div>
 
-              {/* Status + timer bar */}
+              {/* Status + action timer bar */}
               <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between text-[11px]">
                   <span className="text-white/60">
                     {!betting || betting.street === "done" ? (
                       showdown &&
@@ -1208,17 +1341,48 @@ export default function PokerRoomArcade({
                       )
                     ) : !heroSeat || !heroBetting ? (
                       "Sit at the table to join the action."
+                    ) : isSittingOut ? (
+                      "You are sitting out. Click Sit in to rejoin the game."
                     ) : !isHeroTurn ? (
                       "Waiting for other players to act…"
                     ) : (
                       "Your turn to act"
                     )}
                   </span>
-                  {isHeroTurn && actionSeconds !== null && (
-                    <span className="text-[10px] font-mono text-[#FFD700]">
-                      Action time: {actionSeconds}s
-                    </span>
-                  )}
+                  <div className="flex flex-wrap gap-2 text-[10px] text-white/60">
+                    <label className="inline-flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoCheck}
+                        onChange={(e) =>
+                          setAutoCheck(e.target.checked)
+                        }
+                        className="h-3 w-3"
+                      />
+                      <span>Auto-check</span>
+                    </label>
+                    <label className="inline-flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoFold}
+                        onChange={(e) =>
+                          setAutoFold(e.target.checked)
+                        }
+                        className="h-3 w-3"
+                      />
+                      <span>Auto-fold</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setIsSittingOut((v) => !v)
+                      }
+                      disabled={!heroSeat}
+                      className="rounded-full border border-white/30 px-2 py-0.5 text-[10px] hover:border-[#FFD700] disabled:opacity-40"
+                    >
+                      {isSittingOut ? "Sit in" : "Sit out"}
+                    </button>
+                  </div>
                 </div>
                 {isHeroTurn && (
                   <div className="h-2 rounded-full bg-white/10 overflow-hidden">
@@ -1230,14 +1394,13 @@ export default function PokerRoomArcade({
                 )}
               </div>
 
-              {/* Buttons + raise controls – ClubGG layout */}
-              <div className="mt-1 space-y-3">
-                {/* Seat / host controls */}
-                <div className="flex flex-wrap items-center gap-2">
+              {/* Buttons + raise controls */}
+              <div className="mt-2 space-y-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={handleSitOrStand}
                     disabled={!ready}
-                    className="rounded-full bg-emerald-500/90 px-3 py-1.5 text-[11px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+                    className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
                   >
                     {heroSeat ? "Stand Up" : "Sit at Table"}
                   </button>
@@ -1245,41 +1408,55 @@ export default function PokerRoomArcade({
                   {canHostManualDeal && (
                     <button
                       onClick={handleManualDeal}
-                      className="rounded-full bg-[#FFD700] px-3 py-1.5 text-[11px] font-semibold text-black hover:bg-yellow-400"
+                      className="rounded-lg bg-[#FFD700] px-3 py-1.5 text-xs font-semibold text-black hover:bg-yellow-400"
                     >
                       Deal Next Hand
                     </button>
                   )}
-                </div>
 
-                {/* Primary action rail (centered, 3 big buttons) */}
-                <div className="flex justify-center gap-2">
                   <button
                     onClick={handleFold}
                     disabled={!isHeroTurn}
-                    className="flex-1 max-w-[140px] rounded-full bg-red-500 px-3 py-2 text-xs md:text-sm font-semibold text-black shadow-[0_0_16px_rgba(239,68,68,0.8)] hover:bg-red-400 disabled:opacity-40"
+                    className="flex-1 min-w-[80px] rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-red-400 disabled:opacity-40"
                   >
                     Fold
                   </button>
                   <button
                     onClick={handlePrimaryAction}
                     disabled={!isHeroTurn}
-                    className="flex-1 max-w-[160px] rounded-full bg-slate-800 px-3 py-2 text-xs md:text-sm font-semibold text-white shadow-[0_0_16px_rgba(15,23,42,0.9)] hover:bg-slate-600 disabled:opacity-40"
+                    className="flex-1 min-w-[80px] rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-600 disabled:opacity-40"
                   >
                     {primaryActionLabel}
                   </button>
-                  <button
+                                    <button
                     onClick={handleBet}
-                    disabled={!isHeroTurn || !betting}
-                    className="flex-1 max-w-[140px] rounded-full bg-emerald-500 px-3 py-2 text-xs md:text-sm font-semibold text-black shadow-[0_0_16px_rgba(16,185,129,0.8)] hover:bg-emerald-400 disabled:opacity-40"
+                    disabled={!isHeroTurn || !betting || !heroBetting}
+                    className="flex-1 min-w-[80px] rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
                   >
-                    Bet{" "}
-                    {betting
-                      ? raiseSize > 0
-                        ? raiseSize
-                        : betting.bigBlind * 2
-                      : 0}
+                    {(() => {
+                      if (!betting || !heroBetting) return "Bet";
+                      const callNeeded = Math.max(
+                        0,
+                        betting.maxCommitted - heroBetting.committed
+                      );
+                      const minRaise = betting.bigBlind * 2;
+                      const rawRaise =
+                        manualBet.trim().length > 0
+                          ? Number(manualBet)
+                          : raiseSize > 0
+                          ? raiseSize
+                          : minRaise;
+                      const raiseDelta = Math.max(
+                        minRaise,
+                        Number.isFinite(rawRaise) && rawRaise > 0
+                          ? Math.floor(rawRaise)
+                          : minRaise
+                      );
+                      const total = callNeeded + raiseDelta;
+                      return `Bet ${total} PGLD`;
+                    })()}
                   </button>
+
                 </div>
 
                 {betting && (
@@ -1287,11 +1464,16 @@ export default function PokerRoomArcade({
                     <div className="flex items-center justify-between text-[10px] text-white/45">
                       <span>Raise amount</span>
                       <span className="font-mono text-[#FFD700]">
-                        {raiseSize > 0
+                        {manualBet.trim() !== ""
+                          ? manualBet
+                          : raiseSize > 0
                           ? raiseSize
-                          : betting.bigBlind * 2}
+                          : betting.bigBlind * 2}{" "}
+                        PGLD
                       </span>
                     </div>
+
+                    {/* Slider */}
                     <input
                       type="range"
                       min={betting.bigBlind * 2}
@@ -1300,12 +1482,19 @@ export default function PokerRoomArcade({
                         betting.pot || betting.bigBlind * 4
                       )}
                       step={betting.bigBlind}
-                      value={raiseSize || betting.bigBlind * 2}
-                      onChange={(e) =>
-                        setRaiseSize(Number(e.target.value))
+                      value={
+                        raiseSize ||
+                        betting.bigBlind * 2
                       }
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setRaiseSize(v);
+                        setManualBet("");
+                      }}
                       className="w-full accent-[#FFD700]"
                     />
+
+                    {/* Preset buttons + all-in */}
                     <div className="flex flex-wrap gap-2 text-[10px]">
                       <button
                         type="button"
@@ -1345,11 +1534,123 @@ export default function PokerRoomArcade({
                       >
                         Pot
                       </button>
+                      <button
+                        type="button"
+                        onClick={handleAllIn}
+                        disabled={!isHeroTurn || !heroBetting}
+                        className="rounded-full border border-red-400/70 px-2 py-0.5 text-red-300 hover:border-red-300 disabled:opacity-40"
+                      >
+                        All-in
+                      </button>
+                    </div>
+
+                    {/* Manual bet box */}
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <div className="flex-1">
+                        <label className="block mb-0.5 text-white/60">
+                          Manual bet (PGLD)
+                        </label>
+                        <input
+                          type="number"
+                          min={betting.bigBlind * 2}
+                          value={manualBet}
+                          onChange={(e) =>
+                            setManualBet(e.target.value)
+                          }
+                          className="w-full rounded-lg bg-black/70 border border-white/25 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setManualBet("")}
+                        className="mt-4 rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
+                      >
+                        Clear
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Showdown */}
+            {showdown && table && showdown.handId === table.handId && (
+              <div className="mt-3 rounded-xl bg-black/60 border border-[#FFD700]/60 px-3 py-2 text-[11px] text-white/80 shadow-[0_0_25px_rgba(250,204,21,0.35)]">
+                <div className="font-semibold text-[#FFD700] mb-1 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FFD700] animate-pulse" />
+                  <span>
+                    Showdown • Pot {pot.toLocaleString()} PGLD
+                  </span>
+                </div>
+                <div className="text-[10px] text-white/55 mb-2">
+                  Final hands for this pot. Winners are highlighted in
+                  gold.
+                </div>
+                {Array.isArray(showdown.players) &&
+                  showdown.players.map((p) => {
+                    const seat = seats.find(
+                      (s) => s.seatIndex === p.seatIndex
+                    );
+                    const label = seat?.name || p.playerId;
+                    const isHero = p.playerId === playerId;
+                    return (
+                      <div
+                        key={p.playerId}
+                        className={`flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-1 rounded-lg px-2 py-1 ${
+                          p.isWinner
+                            ? "bg-[#022c22]/80 border border-emerald-400/70"
+                            : "bg-black/40 border border-white/10"
+                        }`}
+                      >
+                        <div>
+                          <span
+                            className={
+                              p.isWinner
+                                ? "font-semibold text-[#FFD700]"
+                                : "font-semibold"
+                            }
+                          >
+                            {label}
+                          </span>{" "}
+                          <span className="text-white/60">
+                            — {p.rankName}
+                          </span>
+                          {p.isWinner && (
+                            <span className="ml-1 text-emerald-300 font-semibold">
+                              (Winner)
+                            </span>
+                          )}
+                          {isHero && (
+                            <span className="ml-1 text-sky-300 text-[10px]">
+                              (You)
+                            </span>
+                          )}
+                        </div>
+                        {p.bestHand && p.bestHand.length > 0 && (
+                          <div className="flex gap-1">
+                            {p.bestHand.map((c, i) => (
+                              <PokerCard
+                                key={c + i}
+                                card={c}
+                                size="small"
+                                highlight={p.isWinner}
+                                delayIndex={i}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                {hasPotentialSidePot && (
+                  <div className="mt-1 text-[10px] text-amber-300">
+                    Side pots were active this hand. Final distribution
+                    is handled server-side and will be fully on-chain in
+                    live mode.
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Dealer log */}
             <div className="mt-3 rounded-xl bg-black/55 border border-white/15 px-3 py-2 max-h-32 overflow-y-auto text-[11px]">
@@ -1378,91 +1679,13 @@ export default function PokerRoomArcade({
               )}
             </div>
 
-            {/* Showdown */}
-            {showdown && table && showdown.handId === table.handId && (
-  <div className="mt-3 rounded-xl bg-black/40 border border-[#FFD700]/40 px-3 py-2 text-[11px] text-white/80">
-    <div className="font-semibold text-[#FFD700] mb-1">
-      Showdown
-    </div>
-    <div className="text-[10px] text-white/50 mb-1">
-      House rake (live mode):{" "}
-      <span className="font-mono text-[#FFD700]">5%</span> of pot, routing
-      to the Base Gold Rush vault + house wallet. Free play doesn&apos;t
-      move real value yet.
-    </div>
-
-    {Array.isArray(showdown.players) &&
-      showdown.players.map((p) => {
-        const seat = seats.find((s) => s.seatIndex === p.seatIndex);
-        const label = seat?.name || p.playerId;
-
-        return (
-          <div
-            key={p.playerId}
-            className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-1"
-          >
-            {/* Text summary */}
-            <div>
-              <span
-                className={
-                  p.isWinner
-                    ? "font-semibold text-[#FFD700]"
-                    : ""
-                }
-              >
-                {label}
-              </span>{" "}
-              <span className="text-white/60">— {p.rankName}</span>
-              {p.isWinner && (
-                <span className="ml-1 text-emerald-300 font-semibold">
-                  (Winner)
-                </span>
-              )}
-            </div>
-
-            {/* Fanned mini hand */}
-            {p.bestHand && p.bestHand.length > 0 && (
-              <div className="relative flex gap-1 pr-2">
-                {p.bestHand.map((c, i) => {
-                  // Fan angles around center of the hand
-                  const center =
-                    (p.bestHand.length - 1) / 2;
-                  const tilt = (i - center) * 6; // degrees
-
-                  return (
-                    <div
-                      key={c + i}
-                      className="relative"
-                      style={{
-                        transform: `translateY(${Math.abs(
-                          tilt
-                        ) / 4}px) rotate(${tilt}deg)`,
-                        transformOrigin: "50% 80%",
-                      }}
-                    >
-                      <PokerCard
-                        card={c}
-                        size="small"
-                        highlight={p.isWinner}
-                        delayIndex={i}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-  </div>
-)}
-
+            
 
             <div className="mt-3 text-[11px] text-white/40 relative z-10">
               Seats, blinds, betting, showdown, and chat are all synced
-              through the coordinator. When we flip to on-chain, BGRC /
-              BGLD balances and rake accounting plug directly into this
-              flow.
+              through the coordinator. When we flip to on-chain, PGLD chip
+              balances and rake accounting plug directly into this flow via
+              the cashier.
             </div>
           </div>
 
@@ -1483,7 +1706,8 @@ export default function PokerRoomArcade({
                 <div
                   className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold text-black shadow-[0_0_20px_rgba(250,204,21,0.7)]"
                   style={{
-                    backgroundColor: profile?.avatarColor ?? "#facc15",
+                    backgroundColor:
+                      profile?.avatarColor ?? "#facc15",
                   }}
                 >
                   {initials.slice(0, 3).toUpperCase()}
@@ -1494,7 +1718,8 @@ export default function PokerRoomArcade({
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="text-white/80 font-semibold">
-                      {profile?.name && profile.name.trim().length > 0
+                      {profile?.name &&
+                      profile.name.trim().length > 0
                         ? profile.name
                         : "Unnamed Player"}
                     </div>
@@ -1531,22 +1756,23 @@ export default function PokerRoomArcade({
                 </div>
               </div>
 
-              {/* Free play credits */}
+              {/* PGLD credits */}
               <div className="pt-2 border-t border-white/10 mt-2">
                 <div className="space-y-1.5">
                   <div className="text-[10px] uppercase tracking-[0.25em] text-white/50 mb-1">
-                    Free Play Credits
+                    PGLD Chips
                   </div>
                   <div className="text-sm text-white/80">
                     Bankroll:{" "}
                     <span className="font-mono text-[#FFD700]">
-                      {chips.toLocaleString()} BGRC
+                      {chips.toLocaleString()} PGLD
                     </span>
                   </div>
                   <p className="text-[11px] text-white/40">
-                    Sitting deducts a buy-in from this wallet; standing up
-                    adds your stack back. In real BGLD mode this maps 1:1
-                    to live house chips on Base.
+                    Sitting deducts a PGLD chip buy-in from this profile;
+                    standing up adds your table stack back. When the
+                    cashier is live, this will map 1:1 to your on-chain
+                    BGLD → PGLD chip balance.
                   </p>
                 </div>
               </div>
@@ -1559,11 +1785,10 @@ export default function PokerRoomArcade({
               </div>
               <p className="text-white/60 text-[11px]">
                 Each person connects from their own browser or device. Sit,
-                watch the countdown, and play through full hands —
-                betting, turns, and showdown are synced via WebSocket.
+                watch the countdown, and play through full hands — betting,
+                turns, and showdown are synced via WebSocket.
               </p>
 
-              {/* Invite link */}
               <div className="pt-3 border-t border-white/10 mt-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
@@ -1583,7 +1808,7 @@ export default function PokerRoomArcade({
               </div>
             </div>
 
-            {/* Collapsible info blocks */}
+            {/* Info blocks */}
             <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 space-y-3 text-[11px]">
               {/* How this room works */}
               <button
@@ -1603,13 +1828,14 @@ export default function PokerRoomArcade({
                   <p>
                     This is a 6–9 seat Hold&apos;em cash-game style table
                     running on a multiplayer coordinator. Each browser /
-                    device is a unique player with their own free play BGRC
+                    device is a unique player with their own PGLD chip
                     stack.
                   </p>
                   <p>
                     The coordinator tracks seats, blinds, betting order,
                     streets, and showdown. When we hook in on-chain BGLD /
-                    BGRC balances, this same flow powers live pots on Base.
+                    PGLD balances through the cashier, this same flow powers
+                    live pots on Base.
                   </p>
                 </div>
               )}
@@ -1644,14 +1870,16 @@ export default function PokerRoomArcade({
                 </div>
               )}
 
-              {/* Free play vs on-chain */}
+              {/* PGLD vs on-chain */}
               <button
                 type="button"
-                onClick={() => setOpenFreeOnchain((v) => !v)}
+                onClick={() =>
+                  setOpenFreeOnchain((v) => !v)
+                }
                 className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
               >
                 <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                  Free play vs on-chain
+                  PGLD demo vs on-chain mode
                 </span>
                 <span className="text-white/60 text-xs">
                   {openFreeOnchain ? "−" : "+"}
@@ -1662,14 +1890,16 @@ export default function PokerRoomArcade({
                   <p>
                     Right now you&apos;re playing with{" "}
                     <span className="font-semibold">
-                      free play BGRC chips
+                      demo PGLD chips
                     </span>
-                    . Hands, pots, and rake are for fun and testing only.
+                    . Hands, pots, and results are for fun and testing
+                    only.
                   </p>
                   <p>
-                    When we go live, these same flows route real BGRC /
-                    BGLD chips on Base, with a 5% capped rake feeding the
-                    Base Gold Rush vault, jackpots, and community promos.
+                    When we go live, these same flows route real PGLD chips
+                    backed by BGLD on Base. Rake and payouts will be handled
+                    through the cashier and vault contracts, not
+                    hard-coded into this UI.
                   </p>
                 </div>
               )}
@@ -1681,7 +1911,7 @@ export default function PokerRoomArcade({
         <section className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
-              Table Chat • BGRC Free Play Room
+              Table Chat • PGLD Poker Room
             </div>
             <div className="text-[10px] text-white/40">
               Messages are live across all connected players.
@@ -1737,13 +1967,14 @@ export default function PokerRoomArcade({
               Sit at the Base Gold Rush table
             </h2>
             <p className="text-[11px] text-white/60 mb-3">
-              Choose a free play buy-in amount for this session. In live
-              mode this will map to your BGRC / BGLD stack on Base.
+              Choose a PGLD chip buy-in amount for this session. In live
+              mode this will map to your on-chain BGLD → PGLD chip
+              balance.
             </p>
 
             <div className="space-y-2 mb-3">
               <label className="block text-xs text-white/60">
-                Buy-in (free play credits)
+                Buy-in (PGLD chips)
               </label>
               <input
                 type="number"
@@ -1761,14 +1992,14 @@ export default function PokerRoomArcade({
                     onClick={() => setBuyIn(preset)}
                     className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
                   >
-                    {preset.toLocaleString()}
+                    {preset.toLocaleString()} PGLD
                   </button>
                 ))}
               </div>
               <div className="text-[11px] text-white/45">
-                Free play credits available:{" "}
+                PGLD chips available:{" "}
                 <span className="font-mono text-[#FFD700]">
-                  {chips.toLocaleString()}
+                  {chips.toLocaleString()} PGLD
                 </span>
               </div>
             </div>
@@ -1786,7 +2017,7 @@ export default function PokerRoomArcade({
                 onClick={confirmSit}
                 className="rounded-lg bg-[#FFD700] px-3 py-1.5 font-semibold text-black hover:bg-yellow-400"
               >
-                Sit with {Math.max(100, Math.floor(buyIn))}
+                Sit with {Math.max(100, Math.floor(buyIn))} PGLD
               </button>
             </div>
           </div>
@@ -1807,21 +2038,6 @@ export default function PokerRoomArcade({
         }
         .card-deal {
           animation: dealIn 0.25s ease-out;
-        }
-
-        @keyframes glowPulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
-          }
-          70% {
-            box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
-          }
-        }
-        .seat-active-ring {
-          animation: glowPulse 1.2s ease-out infinite;
         }
 
         @keyframes potPulse {
@@ -1869,27 +2085,6 @@ export default function PokerRoomArcade({
         }
         .winner-glow {
           animation: winnerGlow 1.3s ease-in-out infinite;
-        }
-
-        /* Cleaner active seat ring */
-        .seat-active-ring {
-          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.9);
-          animation: seatPulse 1.4s ease-out infinite;
-        }
-
-        @keyframes seatPulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.9);
-            transform: translateY(0);
-          }
-          70% {
-            box-shadow: 0 0 18px 4px rgba(56, 189, 248, 0);
-            transform: translateY(-1px);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
-            transform: translateY(0);
-          }
         }
       `}</style>
     </>
