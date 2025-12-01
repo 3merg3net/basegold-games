@@ -8,6 +8,7 @@ import {
   useState,
   FormEvent,
 } from "react";
+import React from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -80,6 +81,14 @@ type PokerRoomArcadeProps = {
   roomId?: string;
 };
 
+type PokerCardProps = {
+  card: string;           // e.g. "As", "Td"
+  tilt?: number;          // degrees
+  delayIndex?: number;    // for subtle stagger anim
+  highlight?: boolean;    // hero / winning hands
+};
+
+type SeatPosition = React.CSSProperties;
 // ───────────────── Chips ─────────────────
 
 const CHIP_SOURCES: Record<number, string> = {
@@ -141,127 +150,169 @@ function ChipStack({
   );
 }
 
-// ───────────────── Cards ─────────────────
+// Small helper to format chip amounts
+function formatChips(n: number | undefined | null) {
+  if (!n || n <= 0) return "";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "m";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
+  return n.toString();
+}
 
-const RANK_LABELS: Record<string, string> = {
-  A: "A",
-  K: "K",
-  Q: "Q",
-  J: "J",
-  T: "10",
-  "9": "9",
-  "8": "8",
-  "7": "7",
-  "6": "6",
-  "5": "5",
-  "4": "4",
-  "3": "3",
-  "2": "2",
-};
 
-const SUIT_LABELS: Record<string, string> = {
+
+const SUIT_SYMBOL: Record<string, string> = {
   s: "♠",
   h: "♥",
   d: "♦",
   c: "♣",
 };
 
-const SUIT_COLORS: Record<string, string> = {
-  s: "text-slate-900",
-  c: "text-slate-900",
-  h: "text-red-500",
-  d: "text-red-500",
+const SUIT_COLOR: Record<string, string> = {
+  s: "#1e293b", 
+  c: "#1e293b",
+  h: "#ef4444",
+  d: "#ef4444",
 };
 
-function parseCard(card: string) {
-  if (!card || card.length < 2) {
-    return {
-      rank: card,
-      suit: "",
-      rankLabel: card,
-      suitLabel: "",
-      suitColor: "text-white",
-    };
-  }
-  const rank = card[0].toUpperCase();
-  const suitRaw = card[1].toLowerCase();
-  const rankLabel = RANK_LABELS[rank] ?? rank;
-  const suitLabel = SUIT_LABELS[suitRaw] ?? "";
-  const suitColor = SUIT_COLORS[suitRaw] ?? "text-white";
-  return { rank, suit: suitRaw, rankLabel, suitLabel, suitColor };
+function formatRank(rank: string) {
+  if (rank === "T") return "10";
+  return rank;
 }
 
-function PokerCard({
+export function PokerCard({
   card,
-  highlight = false,
-  size = "normal",
-  delayIndex = 0,
   tilt = 0,
-}: {
-  card: string;
-  highlight?: boolean;
-  size?: "normal" | "small";
-  delayIndex?: number;
-  tilt?: number;
-}) {
-  const { rankLabel, suitLabel, suitColor } = parseCard(card);
-  const baseSize =
-    size === "small"
-      ? "w-9 h-12 text-[10px]"
-      : "w-11 h-16 text-xs md:w-12 md:h-18 md:text-sm";
+  delayIndex = 0,
+  highlight = false,
+}: PokerCardProps) {
+  const rank = card?.[0] ?? "?";
+  const suit = card?.[1]?.toLowerCase() ?? "s";
+  const rankLabel = formatRank(rank);
+  const suitLabel = SUIT_SYMBOL[suit] ?? "♠";
+  const suitColor = SUIT_COLOR[suit] ?? "#1e293b";
 
-  const delay = `${0.05 * delayIndex}s`;
+  const transitionDelay = `${delayIndex * 40}ms`;
 
   return (
     <div
-      className={`card-deal ${baseSize} rounded-xl bg-gradient-to-br from-slate-50 via-slate-200 to-slate-100 flex flex-col justify-between px-1.5 py-1 shadow-[0_10px_20px_rgba(0,0,0,0.65)] border relative ${
-        highlight
-          ? "border-[#FFD700] shadow-[0_0_22px_rgba(250,204,21,0.9)]"
-          : "border-slate-400/70"
-      }`}
+      className={`
+        relative 
+        rounded-[10px]
+        border
+        bg-gradient-to-br 
+        from-slate-100 
+        to-slate-300 
+        shadow-[0_4px_12px_rgba(0,0,0,0.7)]
+        overflow-hidden
+        select-none
+        flex
+        items-center
+        justify-center
+        ${highlight ? "border-[#FFD700] shadow-[0_0_22px_rgba(250,204,21,0.75)]" : "border-slate-300"}
+      `}
       style={{
-        animationDelay: delay,
-        transform: `rotate(${tilt}deg)`,
-        transformOrigin: "50% 60%",
+        width: "52px",
+        height: "78px",
+        transform: `translateZ(0) rotate(${tilt}deg)`,
+        willChange: "transform, box-shadow",
+        transition:
+          "transform 120ms ease-out, box-shadow 120ms ease-out, border-color 120ms ease-out",
+        transitionDelay,
       }}
     >
-      <div className="pointer-events-none absolute inset-[1px] rounded-[10px] border border-white/70 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.2)]" />
+      <div className="absolute inset-[3px] rounded-[8px] bg-white flex flex-col justify-between p-[4px]">
+        {/* Top-left */}
+        <div className="text-[11px] leading-tight font-bold">
+          <div className="font-mono text-slate-900">{rankLabel}</div>
+          <div className="text-[11px]" style={{ color: suitColor }}>
+            {suitLabel}
+          </div>
+        </div>
 
-      <div className="relative flex items-start justify-between">
-        <span className="font-extrabold text-slate-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.5)]">
-          {rankLabel}
-        </span>
-        <span className={`text-[11px] ${suitColor}`}>{suitLabel}</span>
-      </div>
+        {/* Center pip */}
+        <div className="flex flex-1 items-center justify-center">
+          <div
+            className="text-[20px] drop-shadow-[0_0_3px_rgba(0,0,0,0.4)]"
+            style={{ color: suitColor }}
+          >
+            {suitLabel}
+          </div>
+        </div>
 
-      <div className="relative flex flex-1 items-center justify-center">
-        <span
-          className={`text-xl md:text-2xl leading-none ${suitColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.35)]`}
-        >
-          {suitLabel}
-        </span>
-      </div>
-
-      <div className="relative flex items-end justify-end">
-        <span className={`text-[11px] ${suitColor}`}>{suitLabel}</span>
+        {/* Bottom-right */}
+        <div className="flex flex-col items-end text-[11px] leading-tight font-bold rotate-180">
+          <div className="font-mono text-slate-900">{rankLabel}</div>
+          <div className="text-[11px]" style={{ color: suitColor }}>
+            {suitLabel}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
+
 // ───────────────── Seat ring positions ─────────────────
 
-const RING_POSITIONS: Array<Partial<CSSProperties>> = [
+const RING_POSITIONS: CSSProperties[] = [
+  // Seat 0 – top center
   { top: "3%", left: "50%", transform: "translate(-50%, 0)" },
-  { top: "18%", left: "8%", transform: "translate(0, 0)" },
-  { top: "18%", right: "8%", transform: "translate(0, 0)" },
-  { top: "45%", left: "0%", transform: "translate(0, -50%)" },
-  { top: "45%", right: "0%", transform: "translate(0, -50%)" },
-  { bottom: "22%", left: "6%", transform: "translate(0, 0)" },
-  { bottom: "22%", right: "6%", transform: "translate(0, 0)" },
-  { bottom: "8%", left: "28%", transform: "translate(-50%, 0)" },
-  { bottom: "8%", left: "72%", transform: "translate(-50%, 0)" },
+
+  // Seat 1 – top-left
+  { top: "14%", left: "11%" },
+
+  // Seat 2 – top-right
+  { top: "14%", right: "11%" },
+
+  // Seat 3 – mid-left
+  { top: "50%", left: "4%", transform: "translate(0,-50%)" },
+
+  // Seat 4 – mid-right
+  { top: "50%", right: "4%", transform: "translate(0,-50%)" },
+
+  // Seat 5 – bottom-left
+  { bottom: "16%", left: "11%" },
+
+  // Seat 6 – bottom-right
+  { bottom: "16%", right: "11%" },
+
+  // Seat 7 – bottom inner-left
+  { bottom: "4%", left: "34%" },
+
+  // Seat 8 – bottom inner-right
+  { bottom: "4%", right: "34%" },
 ];
+
+
+const SEAT_RING_POSITIONS: CSSProperties[] = [
+  // 0 – top center
+  { top: "2%", left: "50%", transform: "translate(-50%, -40%)" },
+
+  // 1 – top-left
+  { top: "16%", left: "15%", transform: "translate(-50%, -50%)" },
+
+  // 2 – top-right
+  { top: "16%", right: "15%", transform: "translate(50%, -50%)" },
+
+  // 3 – mid-left
+  { top: "45%", left: "4%", transform: "translate(-50%, -50%)" },
+
+  // 4 – mid-right
+  { top: "45%", right: "4%", transform: "translate(50%, -50%)" },
+
+  // 5 – bottom-left
+  { bottom: "18%", left: "12%", transform: "translate(-50%, 50%)" },
+
+  // 6 – bottom-right
+  { bottom: "18%", right: "12%", transform: "translate(50%, 50%)" },
+
+  // 7 – bottom mid-left
+  { bottom: "3%", left: "30%", transform: "translate(-50%, 40%)" },
+
+  // 8 – bottom mid-right
+  { bottom: "3%", right: "30%", transform: "translate(50%, 40%)" },
+];
+
 
 // ───────────────── Audio Hook ─────────────────
 
@@ -738,6 +789,9 @@ const MIN_PLAYERS_TO_START = 2;
           .slice(0, 3)
       : "??");
 
+      const [isFullscreen, setIsFullscreen] = useState(false);
+
+
   // ───────────────── Game-level timers ─────────────────
 
   const [gameCountdown, setGameCountdown] = useState<number | null>(null);
@@ -916,9 +970,10 @@ const MIN_PLAYERS_TO_START = 2;
   }
 
   const canManualDeal =
-  !!heroSeat &&
+  isHostClient &&
   seatedCount >= MIN_PLAYERS_TO_START &&
   (!betting || betting.street === "done");
+
 
 
   // ───────────────── Auto-check / Auto-fold / Sit-out ─────────────────
@@ -948,309 +1003,389 @@ const MIN_PLAYERS_TO_START = 2;
     handleFold();
   }, [isSittingOut, isHeroTurn]);
 
-  return (
+    return (
     <>
       <div className="space-y-6 pb-16 md:pb-4">
         {/* TABLE + SIDEBAR */}
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <section
+          className={`grid gap-4 ${
+            isFullscreen
+              ? "grid-cols-1"
+              : "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"
+          }`}
+        >
           {/* TABLE */}
-          <div className="relative rounded-3xl border border-[#FFD700]/40 bg-gradient-to-b from-black via-[#020617] to-black p-4 md:p-6 shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden">
+          <div
+            className={`relative border border-[#FFD700]/40 bg-gradient-to-b from-black via-[#020617] to-black shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden ${
+              isFullscreen
+                ? "fixed inset-0 z-40 !rounded-none border-0 bg-black p-2 md:p-4 flex items-center justify-center"
+                : "rounded-3xl p-4 md:p-6"
+            }`}
+          >
+            {/* Top-right exit button when fullscreen */}
+            {isFullscreen && (
+  <button
+    type="button"
+    onClick={() => setIsFullscreen(false)}
+    className="absolute left-1/2 top-3 z-50 -translate-x-1/2 rounded-full bg-black/90 border border-[#FFD700] px-4 py-1.5 text-[11px] font-semibold text-[#FFD700] shadow-[0_0_20px_rgba(0,0,0,0.9)]"
+  >
+    Exit fullscreen ✕
+  </button>
+)}
+
+
             <div className="pointer-events-none absolute inset-0 opacity-40">
               <div className="absolute -top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-[#0ea5e9]/30 blur-3xl" />
               <div className="absolute bottom-0 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#FFD700]/20 blur-[70px]" />
             </div>
 
-            {/* Header */}
-            <div className="relative flex flex-col md:flex-row md:items-start md:justify-between gap-2 mb-3">
-              <div className="space-y-1">
-                <div className="text-[10px] uppercase tracking-[0.3em] text-white/40">
-                  Base Gold Rush • Hold&apos;em Room
-                </div>
-                <div className="text-sm md:text-base text-white/80">
-                  Room ID:{" "}
-                  <span className="font-mono text-[#FFD700]/90">
-                    {roomId}
-                  </span>
-                </div>
-                <div className="text-[11px] text-white/50 font-semibold">
-                  Pot{" "}
-                  <span className="font-mono text-[#FFD700]">
-                    {pot.toLocaleString()}
-                  </span>{" "}
-                  •{" "}
-                  <span className="font-mono">
-                    {seatedCount}
-                  </span>{" "}
-                  {seatedCount === 1 ? "player" : "players"} at table
-                </div>
-
-                {table && (
-                  <div className="text-[11px] text-white/50">
-                    Hand #{table.handId}
+            {/* Header (hidden in fullscreen) */}
+            {!isFullscreen && (
+              <div className="relative mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-[0.3em] text-white/40">
+                    Base Gold Rush • Hold&apos;em Room
                   </div>
-                )}
-
-                {betting && (
-                  <div className="text-[11px] text-white/50">
-                    Street: {betting.street}
+                  <div className="text-sm md:text-base text-white/80">
+                    Room ID:{" "}
+                    <span className="font-mono text-[#FFD700]/90">
+                      {roomId}
+                    </span>
                   </div>
-                )}
+                  <div className="text-[11px] font-semibold text-white/50">
+                    Pot{" "}
+                    <span className="font-mono text-[#FFD700]">
+                      {pot.toLocaleString()}
+                    </span>{" "}
+                    •{" "}
+                    <span className="font-mono">
+                      {seatedCount}
+                    </span>{" "}
+                    {seatedCount === 1 ? "player" : "players"} at table
+                  </div>
+
+                  {table && (
+                    <div className="text-[11px] text-white/50">
+                      Hand #{table.handId}
+                    </div>
+                  )}
+
+                  {betting && (
+                    <div className="text-[11px] text-white/50">
+                      Street: {betting.street}
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative space-y-1 text-right text-xs text-white/55">
+                  {ready ? (
+                    <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300">
+                      <span className="mr-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">
+                      <span className="mr-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                      Connecting…
+                    </span>
+                  )}
+                  <div className="text-[10px] text-white/40">
+                    WS:{" "}
+                    <span className="font-mono">
+                      {process.env.NEXT_PUBLIC_POKER_WS ??
+                        "ws://localhost:8080"}
+                    </span>
+                  </div>
+
+                  {/* Fullscreen toggle */}
+                  {/* Fullscreen toggle – only in normal mode */}
+{!isFullscreen && (
+  <button
+    type="button"
+    onClick={() => setIsFullscreen(true)}
+    className="mt-1 inline-flex items-center justify-end gap-1 rounded-full border border-white/25 bg-black/70 px-2 py-0.5 text-[10px] text-white/70 hover:border-[#FFD700]"
+  >
+    Fullscreen table
+  </button>
+)}
+
+
+                </div>
               </div>
-              <div className="relative text-xs text-right text-white/55 space-y-1">
-                {ready ? (
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300 border border-emerald-500/40">
-                    <span className="mr-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Connected
+            )}
+
+            {/* Blind HUD (hidden in fullscreen) */}
+            {!isFullscreen && (
+              <div className="mb-2 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-[#FFD700]/10 border border-[#FFD700]/60 px-2 py-0.5 text-[10px] font-semibold text-[#FFD700]">
+                    PGLD Cash Game
                   </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300 border border-amber-500/40">
-                    <span className="mr-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                    Connecting…
+                  <span className="font-semibold text-white/70">
+                    Blinds {tBlinds[0]}/{tBlinds[1]} PGLD
                   </span>
-                )}
-                <div className="text-[10px] text-white/40">
-                  WS:{" "}
-                  <span className="font-mono">
-                    {process.env.NEXT_PUBLIC_POKER_WS ??
-                      "ws://localhost:8080"}
+                </div>
+                <div className="flex flex-1 flex-wrap items-center justify-end gap-3 text-white/50">
+                  <span>
+                    Blind timer{" "}
+                    <span className="font-mono text-white/80">
+                      {Math.floor(tNextIn / 60)}:
+                      {(tNextIn % 60).toString().padStart(2, "0")}
+                    </span>
                   </span>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Blind HUD */}
-            <div className="mb-2 rounded-xl border border-white/10 bg-black/60 px-3 py-2 flex flex-wrap items-center gap-3 text-[11px]">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-[#FFD700]/10 border border-[#FFD700]/60 px-2 py-0.5 text-[10px] font-semibold text-[#FFD700]">
-                  PGLD Cash Game
-                </span>
-                <span className="text-white/70 font-semibold">
-                  Blinds {tBlinds[0]}/{tBlinds[1]} PGLD
-                </span>
-              </div>
-              <div className="flex-1 flex flex-wrap items-center gap-3 justify-end text-white/50">
-                <span>
-                  Blind timer{" "}
-                  <span className="font-mono text-white/80">
-                    {Math.floor(tNextIn / 60)}:
-                    {(tNextIn % 60).toString().padStart(2, "0")}
-                  </span>
-                </span>
-              </div>
-            </div>
+            {/* FELT + TABLE (3D oval, brown bumper, thinner rail) */}
+            <div
+  className={`relative mx-auto mt-2 w-full max-w-[980px] aspect-[10/16] md:aspect-[16/9] [perspective:1600px] ${
+    isFullscreen ? "max-h-[70vh]" : ""
+  }`}
+>
 
-            {/* FELT */}
-            <div className="relative mt-2 mx-auto w-full max-w-[760px] aspect-[9/16] md:aspect-[16/9] rounded-[999px] bg-[radial-gradient(circle_at_top,#157256_0,#032018_45%,#020617_70%,#000_100%)] border border-[#FFD700]/40 shadow-[0_0_80px_rgba(0,0,0,1)] overflow-hidden">
-              <div className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-soft-light bg-[url('/felt/felt-texture.png')]" />
-
-              {/* Game countdown banner: visible to all */}
+              {/* SMALL countdown pill – ABOVE rail, off the table */}
               {gameCountdown !== null && (
-                <div className="absolute top-[6%] left-1/2 -translate-x-1/2 z-20">
-                  <div className="rounded-full px-4 py-1.5 flex items-center gap-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border bg-black/80 border-[#FFD700]/80">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-                      Next hand starts in
+                <div className="absolute -top-3 right-4 z-40 md:-top-4">
+                  <div className="flex items-center gap-1 rounded-full border border-[#FFD700]/70 bg-black/90 px-2.5 py-0.5 text-[9px] shadow-[0_0_18px_rgba(0,0,0,0.9)]">
+                    <span className="uppercase tracking-[0.16em] text-white/55">
+                      Next
                     </span>
-                    <span className="text-xl font-extrabold tabular-nums text-[#FFD700]">
+                    <span className="text-sm font-extrabold tabular-nums text-[#FFD700] leading-none">
                       {gameCountdown}
-                    </span>
-                    <span className="text-[10px] text-white/40">
-                      Sit now to join
                     </span>
                   </div>
                 </div>
               )}
 
-              {/* Center logo */}
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex flex-col items-center translate-y-2 md:translate-y-0">
-                  <div className="mb-1 opacity-85">
-                    <Image
-                      src="/felt/bgrc-logo.png"
-                      alt="Base Gold Rush"
-                      width={300}
-                      height={300}
-                      className="object-contain mx-auto drop-shadow-[0_0_18px_rgba(250,204,21,0.6)]"
-                    />
-                  </div>
-                  <div className="text-[10px] md:text-xs tracking-[0.35em] text-[#FFD700]/90 uppercase text-center font-semibold">
-                    PGLD POKER ROOM
-                  </div>
+              {/* 3D group */}
+              <div className="absolute inset-0 [transform:rotateX(18deg)] [transform-style:preserve-3d]">
+                {/* Outer 3D rail – brown leather */}
+                <div className="absolute inset-0 rounded-[999px] bg-[radial-gradient(circle_at_top,#4b2f1a_0,#2b1a0d_50%,#050509_100%)] shadow-[0_26px_90px_rgba(0,0,0,1)]">
+                  {/* subtle rail shine */}
+                  <div className="absolute inset-x-[14%] top-[6%] h-5 rounded-full bg-gradient-to-b from-white/18 to-transparent blur-md opacity-80" />
                 </div>
-              </div>
 
-              <div className="pointer-events-none absolute inset-[6%] md:inset-[8%] rounded-[999px] border border-[#FFD700]/25 shadow-[0_0_40px_rgba(250,204,21,0.35)]" />
+                {/* Inner felt – bigger (thinner bumper) */}
+                <div className="absolute inset-[6%] origin-center scale-y-[0.96] md:scale-y-[0.9] rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
+                  {/* Felt texture */}
+                  <div className="pointer-events-none absolute inset-0 bg-[url('/felt/felt-texture.png')] mix-blend-soft-light opacity-[0.16]" />
 
-              {/* Pot + board */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                {pot > 0 && (
-                  <div className="mb-2 relative -translate-y-6 md:-translate-y-4">
-                    <div className="pot-animate flex flex-col items-center">
-                      <ChipStack amount={pot} size={32} />
-                      <div className="mt-1 px-3 py-1 rounded-full bg-black/85 border border-[#FFD700]/80 text-[11px] font-mono flex items-center gap-2">
-                        <span className="text-[#FFD700] font-semibold">
-                          Pot {pot.toLocaleString()} PGLD
-                        </span>
-                        {hasPotentialSidePot && (
-                          <span className="text-amber-300 text-[10px] ml-1">
-                            • Side pots in play
-                          </span>
-                        )}
+                  {/* Center logo + label */}
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="flex translate-y-2 flex-col items-center md:translate-y-1">
+                      <div className="mb-1 opacity-85">
+                        <Image
+                          src="/felt/bgrc-logo.png"
+                          alt="Base Gold Rush"
+                          width={260}
+                          height={260}
+                          className="mx-auto object-contain drop-shadow-[0_0_18px_rgba(250,204,21,0.6)]"
+                        />
+                      </div>
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.35em] text-[#FFD700]/90 md:text-[10px]">
+                        PGLD POKER ROOM
                       </div>
                     </div>
                   </div>
-                )}
 
-                <div className="flex gap-1.5 mb-2 z-10 px-2 -translate-y-2 md:-translate-y-1">
-                  {boardCards.length > 0 &&
-                    boardCards.map((c, i) => {
-                      const tilts = [-8, -4, 0, 4, 8];
-                      const tilt = tilts[i] ?? 0;
-                      return (
-                        <PokerCard
-                          key={`${table?.handId ?? 0}-board-${i}-${c}`}
-                          card={c}
-                          delayIndex={i}
-                          tilt={tilt}
-                        />
-                      );
-                    })}
-                </div>
-              </div>
-
-              {/* Hero hand */}
-              {heroHand && (
-                <div className="absolute bottom-[6%] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                  <div className="relative h-20 w-[120px] md:w-[140px]">
-                    {heroHand.map((c, i) => {
-                      const offsets = [
-                        { rotate: -12, translateX: -18, z: 10 },
-                        { rotate: 12, translateX: 18, z: 20 },
-                      ];
-                      const cfg = offsets[i] ?? offsets[1];
-
-                      return (
-                        <div
-                          key={`${table?.handId ?? 0}-hero-${i}-${c}`}
-                          className="absolute top-0 left-1/2"
-                          style={{
-                            transform: `translateX(${cfg.translateX}px) rotate(${cfg.rotate}deg)`,
-                            transformOrigin: "50% 80%",
-                            zIndex: cfg.z,
-                          }}
-                        >
-                          <PokerCard
-                            card={c}
-                            highlight
-                            delayIndex={i}
-                          />
+                  {/* TOTAL POT – mid-top */}
+                  {(pot > 0 || betting?.street === "done") && (
+                    <div className="pointer-events-none absolute left-1/2 top-[26%] flex -translate-x-1/2 flex-col items-center gap-1">
+                      {pot > 0 && (
+                        <div className="flex items-center gap-2 rounded-full border border-[#FFD700]/80 bg-black/85 px-3 py-1 text-[11px] font-mono shadow-[0_0_22px_rgba(0,0,0,0.9)]">
+                          <span className="font-semibold text-[#FFD700]">
+                            Total Pot {pot.toLocaleString()} PGLD
+                          </span>
+                          {hasPotentialSidePot && (
+                            <span className="text-[10px] text-amber-300">
+                              • Side pots active
+                            </span>
+                          )}
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                  )}
+
+                  {/* Board cards – under pot */}
+                  <div className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-2 px-2 md:-translate-y-1">
+                    <div className="flex gap-1.5">
+                      {boardCards.map((c, i) => {
+                        const tilts = [-8, -4, 0, 4, 8];
+                        return (
+                          <PokerCard
+                            key={`${table?.handId ?? 0}-board-${i}-${c}`}
+                            card={c}
+                            delayIndex={i}
+                            tilt={tilts[i]}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* SHOWDOWN – smaller pill, high enough not to be chopped */}
+                  {showdown &&
+                    table &&
+                    showdown.handId === table.handId && (
+                      <div className="pointer-events-none absolute left-1/2 top-[16%] flex -translate-x-1/2 flex-col items-center gap-0.5 text-[9px] md:text-[10px]">
+                        <div className="rounded-full bg-black/80 px-2.5 py-0.5 font-semibold text-emerald-300 shadow-md shadow-black/80">
+                          Showdown • Pot {pot.toLocaleString()} PGLD
+                        </div>
+                        {Array.isArray(showdown.players) &&
+                          showdown.players
+                            .filter((p) => p.isWinner)
+                            .map((p) => (
+                              <div
+                                key={p.playerId + p.seatIndex}
+                                className="rounded-full bg-black/65 px-2.5 py-0.5 text-amber-100 shadow shadow-black/70"
+                              >
+                                Seat {p.seatIndex + 1} wins —{" "}
+                                {p.rankName}
+                              </div>
+                            ))}
+                      </div>
+                    )}
+
+                  {/* HERO HAND – bottom center */}
+                 {heroHand && (
+  <div
+    className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 ${
+      isFullscreen
+        ? "bottom-[18%] md:bottom-[16%]"
+        : "bottom-[10%] md:bottom-[9%]"
+    }`}
+  >
+
+                      <div className="relative h-20 w-[130px] md:w-[150px]">
+                        {heroHand.map((c, i) => {
+                          const cfg =
+                            [
+                              { rotate: -12, translateX: -18, z: 10 },
+                              { rotate: 12, translateX: 18, z: 20 },
+                            ][i] ?? { rotate: 0, translateX: 0, z: 10 };
+
+                          return (
+                            <div
+                              key={`${table?.handId ?? 0}-hero-${i}-${c}`}
+                              className="absolute left-1/2 top-0"
+                              style={{
+                                transform: `translateX(${cfg.translateX}px) rotate(${cfg.rotate}deg)`,
+                                transformOrigin: "50% 80%",
+                                zIndex: cfg.z,
+                              }}
+                            >
+                              <PokerCard
+                                card={c}
+                                highlight
+                                delayIndex={i}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* Seats */}
-              <div className="absolute inset-0 text-[11px] text-white/80">
-                {seats
-                  .filter((s) => s.playerId)
-                  .map((seat, idx) => {
-                    const label =
-                      seat.playerId && seat.name
-                        ? seat.name
-                        : seat.playerId
-                        ? seat.playerId
-                        : `Seat ${seat.seatIndex + 1}`;
+                {/* SEATS ON BUMPER – slightly inset so they sit on rail */}
+                <div className="absolute inset-[1.5%] text-[10px] text-white/80 md:text-[11px]">
+                  {seats
+                    .filter((s) => s.playerId)
+                    .map((seat) => {
+                      const label =
+                        seat.playerId && seat.name
+                          ? seat.name
+                          : seat.playerId
+                          ? seat.playerId
+                          : `Seat ${seat.seatIndex + 1}`;
 
-                    const isHeroSeat =
-                      seat.playerId === playerId;
-                    const isButton =
-                      buttonSeatIndex !== null &&
-                      buttonSeatIndex === seat.seatIndex;
-                    const isWinnerSeat =
-                      winnerSeatIndexes.has(seat.seatIndex);
+                      const isHeroSeat = seat.playerId === playerId;
+                      const isWinnerSeat =
+                        !!showdown &&
+                        !!table &&
+                        showdown.handId === table.handId &&
+                        showdown.players.some(
+                          (p) =>
+                            p.isWinner && p.seatIndex === seat.seatIndex
+                        );
+                      const isButton =
+                        buttonSeatIndex === seat.seatIndex;
+                      const committed =
+                        committedBySeat[seat.seatIndex] ?? 0;
 
-                    const pos =
-                      RING_POSITIONS[idx] ?? RING_POSITIONS[0];
+                      const isCurrentTurn =
+                        currentSeatIndex === seat.seatIndex &&
+                        betting?.street !== "done";
 
-                    const committed =
-                      committedBySeat[seat.seatIndex] ?? 0;
+                      const pos =
+                        SEAT_RING_POSITIONS[seat.seatIndex] ??
+                        SEAT_RING_POSITIONS[
+                          SEAT_RING_POSITIONS.length - 1
+                        ];
 
-                    const isCurrentTurn =
-                      currentSeatIndex !== null &&
-                      currentSeatIndex === seat.seatIndex &&
-                      betting?.street !== "done";
+                      const ringAngle =
+                        isCurrentTurn && actionRemainingMs != null
+                          ? 360 * (1 - actionPct / 100)
+                          : 0;
 
-                    const timeFracUsed =
-                      isCurrentTurn && actionRemainingMs != null
-                        ? 1 - actionPct / 100
-                        : 0;
-                    const ringAngle = 360 * timeFracUsed;
+                      const isOut =
+                        betting?.players.some(
+                          (p) =>
+                            p.seatIndex === seat.seatIndex &&
+                            (!p.inHand || p.hasFolded)
+                        ) ?? false;
 
-                    return (
-                      <div
-                        key={seat.seatIndex}
-                        className="absolute flex flex-col items-center gap-1"
-                        style={pos as CSSProperties}
-                      >
-                        {isButton && (
-                          <div className="px-1.5 py-0.5 rounded-full bg-[#FFD700] text-black text-[9px] font-bold shadow">
-                            D
-                          </div>
-                        )}
-
+                      return (
                         <div
-                          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 border text-[10px] bg-black/80 shadow-[0_0_10px_rgba(0,0,0,0.7)] ${
-                            isHeroSeat
-                              ? "border-[#FFD700]/80 text-[#FFD700]"
-                              : seat.playerId
-                              ? "border-white/60 text-white"
-                              : "border-white/20 text-white/50"
-                          } ${isWinnerSeat ? "winner-glow" : ""}`}
+                          key={seat.seatIndex}
+                          className="absolute flex flex-col items-center gap-1"
+                          style={pos}
                         >
-                          {/* Avatar + timer ring */}
-                          <div className="relative h-9 w-9 flex items-center justify-center">
+                          {isButton && (
+                            <div className="rounded-full bg-[#FFD700] px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
+                              D
+                            </div>
+                          )}
+
+                          {/* Card fan ABOVE avatar */}
+                          <div className="mb-1 flex justify-center gap-[3px]">
+                            {[0, 1].map((i) => (
+                              <div
+                                key={i}
+                                className={`h-5 w-3 rounded-[3px] border border-white/20 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
+                                  i === 1
+                                    ? "-translate-x-[4px] rotate-[6deg]"
+                                    : "rotate-[-6deg]"
+                                } ${
+                                  isOut ? "opacity-30" : "opacity-90"
+                                }`}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Avatar + timer ring on bumper */}
+                          <div className="relative flex h-10 w-10 items-center justify-center md:h-11 md:w-11">
+                            {/* ring */}
                             <div
                               className="absolute inset-0 rounded-full"
-                              style={
-                                isCurrentTurn &&
-                                actionRemainingMs != null
-                                  ? {
-                                      padding: "2px",
-                                      background: `conic-gradient(
-                                        #22c55e 0deg,
-                                        #22c55e ${Math.max(
-                                          ringAngle * 0.4,
-                                          0
-                                        )}deg,
-                                        #eab308 ${Math.max(
-                                          ringAngle * 0.7,
-                                          0
-                                        )}deg,
-                                        #ef4444 ${Math.max(
-                                          ringAngle,
-                                          0
-                                        )}deg,
-                                        rgba(15,23,42,0.9) ${Math.max(
-                                          ringAngle,
-                                          0
-                                        )}deg 360deg
-                                      )`,
-                                    }
-                                  : {
-                                      padding: "2px",
-                                      background:
-                                        "radial-gradient(circle, rgba(148,163,184,0.4), rgba(15,23,42,0.9))",
-                                    }
-                              }
+                              style={{
+                                padding: "2px",
+                                background: isCurrentTurn
+                                  ? `conic-gradient(
+                                      #22c55e 0deg,
+                                      #22c55e ${ringAngle * 0.4}deg,
+                                      #eab308 ${ringAngle * 0.7}deg,
+                                      #ef4444 ${ringAngle}deg,
+                                      rgba(15,23,42,0.9) ${ringAngle}deg 360deg
+                                    )`
+                                  : "radial-gradient(circle, rgba(148,163,184,0.4), rgba(15,23,42,0.9))",
+                              }}
                             >
-                              <div className="h-full w-full rounded-full bg-slate-900 border border-white/25 flex items-center justify-center overflow-hidden">
-                                {isHeroSeat &&
-                                (profile as any)?.avatarUrl ? (
+                              <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-white/25 bg-slate-900 shadow-[0_0_8px_rgba(0,0,0,0.9)]">
+                                {isHeroSeat && (profile as any)?.avatarUrl ? (
                                   <Image
-                                    src={
-                                      (profile as any).avatarUrl
-                                    }
+                                    src={(profile as any).avatarUrl}
                                     alt="Avatar"
                                     width={28}
                                     height={28}
@@ -1267,681 +1402,619 @@ const MIN_PLAYERS_TO_START = 2;
                                 )}
                               </div>
                             </div>
-                          </div>
 
-                          {/* Name + stack */}
-                          <div className="flex flex-col">
-                            <span className="max-w-[110px] truncate leading-tight font-semibold">
-                              {label}
-                            </span>
-                            {seat.playerId && (
-                              <span className="font-mono text-[10px] text-[#5eead4] leading-tight">
-                                {(seat.chips ?? 1000).toLocaleString()}{" "}
-                                PGLD
-                              </span>
+                            {/* Hero countdown badge on avatar */}
+                            {isHeroSeat &&
+                              isHeroTurn &&
+                              actionSeconds !== null && (
+                                <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 items-center rounded-full bg-black/85 px-2 py-[1px] text-[9px] font-mono text-[#FFD700] shadow shadow-black/80">
+                                  {actionSeconds}s
+                                </div>
+                              )}
+
+                            {isWinnerSeat && (
+                              <div className="absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center rounded-full bg-emerald-500 px-2 py-[1px] text-[8px] font-bold text-black shadow shadow-black/70">
+                                WINNER
+                              </div>
                             )}
                           </div>
-                        </div>
 
-                        {/* Committed chips */}
-                        {committed > 0 && (
-                          <div className="-mt-1">
-                            <ChipStack
-                              amount={committed}
-                              size={18}
-                            />
+                          {/* Per-seat committed chips */}
+                          {committed > 0 && (
+                            <div className="-mt-1 flex flex-col items-center gap-[2px]">
+                              <ChipStack amount={committed} size={18} />
+                              <div className="rounded-full bg-black/75 px-2 py-[1px] text-[9px] text-amber-100 shadow shadow-black/80">
+                                {formatChips(committed)}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stack label */}
+                          <div className="mt-[2px] rounded-full bg-black/70 px-2 py-[1px] text-[9px] text-sky-100 shadow shadow-black/60">
+                            {formatChips(
+                              betting?.players.find(
+                                (p) =>
+                                  p.seatIndex === seat.seatIndex
+                              )?.stack ?? seat.chips
+                            )}{" "}
+                            PGLD
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
             </div>
 
-            {/* Hero action bar */}
-            <div className="mt-3 rounded-2xl bg-black/80 border border-white/20 px-3 py-2 space-y-2">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-[11px] text-white/70">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-white">
-                    {describeHero()}
-                  </span>
-                  {heroBetting && (
-                    <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
-                      Stack:{" "}
-                      <span className="font-mono text-[#FFD700]">
-                        {heroBetting.stack} PGLD
-                      </span>
-                    </span>
-                  )}
-                  <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
-                    Bankroll:{" "}
-                    <span className="font-mono text-[#FFD700]">
-                      {chips.toLocaleString()} PGLD
-                    </span>
-                  </span>
-                  {isSittingOut && (
-                    <span className="rounded-full bg-amber-500/10 border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-300">
-                      Sitting out (auto-fold)
-                    </span>
-                  )}
-                </div>
+           {/* Hero action bar – GG-style slim dock */}
+<div
+  className={`${
+    isFullscreen
+      ? "fixed bottom-0 left-0 right-0 z-40 mx-auto w-full max-w-4xl rounded-t-2xl border-t border-[#FFD700]/40 bg-black/95 backdrop-blur-sm px-3 py-1 space-y-1 shadow-[0_-6px_28px_rgba(0,0,0,0.95)]"
+      : "mt-3 rounded-2xl border border-white/20 bg-black/80 px-3 py-2 space-y-2"
+  }`}
+>
+  {/* Row 1: hero + timer */}
+  <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between text-[11px] text-white/70">
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="font-semibold text-white">
+        {describeHero()}
+      </span>
+      {heroBetting && (
+        <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
+          Stack:{" "}
+          <span className="font-mono text-[#FFD700]">
+            {heroBetting.stack} PGLD
+          </span>
+        </span>
+      )}
+      <span className="rounded-full bg-black/70 border border-white/25 px-2 py-0.5 text-[10px]">
+        Bankroll:{" "}
+        <span className="font-mono text-[#FFD700]">
+          {chips.toLocaleString()} PGLD
+        </span>
+      </span>
+      {isSittingOut && (
+        <span className="rounded-full bg-amber-500/10 border border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-300">
+          Sitting out (auto-fold)
+        </span>
+      )}
+    </div>
 
-                <div className="flex items-center gap-2 text-[10px] text-white/60">
-                  {isHeroTurn && actionSeconds !== null && (
-                    <span className="font-mono text-[#FFD700]">
-                      Action: {actionSeconds}s
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleUseTimeBank}
-                    disabled={
-                      !isHeroTurn ||
-                      !actionDeadline ||
-                      timeBankUsed
-                    }
-                    className="rounded-full border border-sky-400/60 bg-black/70 px-2.5 py-1 text-[10px] text-sky-300 disabled:opacity-40"
-                  >
-                    {timeBankUsed
-                      ? "Time bank used"
-                      : `Time bank +${TIME_BANK_SECONDS}s`}
-                  </button>
-                </div>
-              </div>
+    <div className="flex items-center gap-2 text-[10px] text-white/60">
+      {isHeroTurn && actionSeconds !== null && (
+        <span className="font-mono text-[#FFD700]">
+          Action: {actionSeconds}s
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={handleUseTimeBank}
+        disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
+        className="rounded-full border border-sky-400/60 bg-black/70 px-2.5 py-1 text-[10px] text-sky-300 disabled:opacity-40"
+      >
+        {timeBankUsed
+          ? "Time bank used"
+          : `Time bank +${TIME_BANK_SECONDS}s`}
+      </button>
+    </div>
+  </div>
 
-              {/* Status + action timer bar */}
-              <div className="space-y-1">
-                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between text-[11px]">
-                  <span className="text-white/60 font-semibold">
-                    {!betting || betting.street === "done" ? (
-                      showdown &&
-                      table &&
-                      showdown.handId === table.handId ? (
-                        "Hand complete. Showdown above."
-                      ) : (
-                        "Waiting for next hand. Sit and watch the countdown."
-                      )
-                    ) : !heroSeat || !heroBetting ? (
-                      "Sit to join the action."
-                    ) : isSittingOut ? (
-                      "You are sitting out."
-                    ) : !isHeroTurn ? (
-                      "Waiting for other players…"
-                    ) : (
-                      "Your turn."
-                    )}
-                  </span>
-                  <div className="flex flex-wrap gap-2 text-[10px] text-white/60">
-                    <label className="inline-flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={autoCheck}
-                        onChange={(e) =>
-                          setAutoCheck(e.target.checked)
-                        }
-                        className="h-3 w-3"
-                      />
-                      <span>Auto-check</span>
-                    </label>
-                    <label className="inline-flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={autoFold}
-                        onChange={(e) =>
-                          setAutoFold(e.target.checked)
-                        }
-                        className="h-3 w-3"
-                      />
-                      <span>Auto-fold</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setIsSittingOut((v) => !v)
-                      }
-                      disabled={!heroSeat}
-                      className="rounded-full border border-white/30 px-2 py-0.5 text-[10px] hover:border-[#FFD700] disabled:opacity-40"
-                    >
-                      {isSittingOut ? "Sit in" : "Sit out"}
-                    </button>
-                  </div>
-                </div>
-                {isHeroTurn && (
-                  <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500 transition-[width] duration-250"
-                      style={{ width: `${actionPct}%` }}
-                    />
-                  </div>
-                )}
-              </div>
+  {/* Row 2: status + auto toggles */}
+  <div className="space-y-1">
+    <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between text-[11px]">
+      <span className="font-semibold text-white/60">
+        {!betting || betting.street === "done" ? (
+          showdown &&
+          table &&
+          showdown.handId === table.handId ? (
+            "Hand complete. Showdown above."
+          ) : (
+            "Waiting for next hand. Sit and watch the countdown."
+          )
+        ) : !heroSeat || !heroBetting ? (
+          "Sit to join the action."
+        ) : isSittingOut ? (
+          "You are sitting out."
+        ) : !isHeroTurn ? (
+          "Waiting for other players…"
+        ) : (
+          "Your turn."
+        )}
+      </span>
+      <div className="flex flex-wrap gap-2 text-[10px] text-white/60">
+        <label className="inline-flex cursor-pointer items-center gap-1">
+          <input
+            type="checkbox"
+            checked={autoCheck}
+            onChange={(e) => setAutoCheck(e.target.checked)}
+            className="h-3 w-3"
+          />
+          <span>Auto-check</span>
+        </label>
+        <label className="inline-flex cursor-pointer items-center gap-1">
+          <input
+            type="checkbox"
+            checked={autoFold}
+            onChange={(e) => setAutoFold(e.target.checked)}
+            className="h-3 w-3"
+          />
+          <span>Auto-fold</span>
+        </label>
+        <button
+          type="button"
+          onClick={() => setIsSittingOut((v) => !v)}
+          disabled={!heroSeat}
+          className="rounded-full border border-white/30 px-2 py-0.5 text-[10px] hover:border-[#FFD700] disabled:opacity-40"
+        >
+          {isSittingOut ? "Sit in" : "Sit out"}
+        </button>
+      </div>
+    </div>
 
-              {/* Buttons + raise controls */}
-              <div className="mt-2 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={handleSitOrStand}
-                    disabled={!ready}
-                    className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
-                  >
-                    {heroSeat ? "Stand Up" : "Sit at Table"}
-                  </button>
+    {isHeroTurn && (
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500 transition-[width] duration-250"
+          style={{ width: `${actionPct}%` }}
+        />
+      </div>
+    )}
+  </div>
 
-                  {canManualDeal && (
-  <button
-    onClick={handleManualDeal}
-    className="rounded-lg bg-[#FFD700] px-3 py-1.5 text-xs font-semibold text-black hover:bg-yellow-400"
-  >
-    Deal Next Hand
-  </button>
+  {/* Row 3: buttons row – thin, with pill manual bet at end */}
+  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+    <button
+      onClick={handleSitOrStand}
+      disabled={!ready}
+      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+    >
+      {heroSeat ? "Stand Up" : "Sit at Table"}
+    </button>
+
+    {canManualDeal && isHostClient && (
+      <button
+        onClick={handleManualDeal}
+        className="rounded-lg bg-[#FFD700] px-3 py-1.5 text-xs font-semibold text-black hover:bg-yellow-400"
+      >
+        Deal Next Hand
+      </button>
+    )}
+
+    <button
+      onClick={handleFold}
+      disabled={!isHeroTurn}
+      className="min-w-[72px] flex-1 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-red-400 disabled:opacity-40"
+    >
+      Fold
+    </button>
+    <button
+      onClick={handlePrimaryAction}
+      disabled={!isHeroTurn}
+      className={`min-w-[72px] flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40 ${
+        isHeroTurn
+          ? "bg-slate-700 ring-2 ring-[#FFD700]/70"
+          : "bg-slate-800 hover:bg-slate-600"
+      }`}
+    >
+      {primaryActionLabel}
+    </button>
+    <button
+      onClick={handleBet}
+      disabled={!isHeroTurn || !betting || !heroBetting}
+      className="min-w-[72px] flex-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+    >
+      {(() => {
+        if (!betting || !heroBetting) return "Bet";
+        const callNeeded = Math.max(
+          0,
+          betting.maxCommitted - heroBetting.committed
+        );
+        const minRaise = betting.bigBlind * 2;
+        const rawRaise =
+          manualBet.trim().length > 0
+            ? Number(manualBet)
+            : raiseSize > 0
+            ? raiseSize
+            : minRaise;
+        const raiseDelta = Math.max(
+          minRaise,
+          Number.isFinite(rawRaise) && rawRaise > 0
+            ? Math.floor(rawRaise)
+            : minRaise
+        );
+        const total = callNeeded + raiseDelta;
+        return `Bet ${total} PGLD`;
+      })()}
+    </button>
+
+    {/* Pill-style manual bet after All-in */}
+    {betting && (
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={handleAllIn}
+          disabled={!isHeroTurn || !heroBetting}
+          className="rounded-full border border-red-400/70 px-3 py-1 text-[10px] text-red-300 hover:border-red-300 disabled:opacity-40"
+        >
+          All-in
+        </button>
+        <div className="flex items-center gap-1 rounded-full border border-white/30 bg-black/70 px-2 py-0.5">
+          <span className="text-[10px] text-white/55">Bet</span>
+          <input
+            type="number"
+            min={betting.bigBlind * 2}
+            value={manualBet}
+            onChange={(e) => setManualBet(e.target.value)}
+            className="w-16 bg-transparent text-[10px] text-[#FFD700] outline-none"
+          />
+          <span className="text-[9px] text-white/45">PGLD</span>
+          {manualBet && (
+            <button
+              type="button"
+              onClick={() => setManualBet("")}
+              className="ml-1 text-[10px] text-white/50 hover:text-white"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+
+  {/* Slider + presets ONLY in non-fullscreen to keep FS thin */}
+  {betting && !isFullscreen && (
+    <div className="mt-1 space-y-1.5 text-[10px]">
+      <div className="flex items-center justify-between text-white/45 font-semibold">
+        <span>Raise amount</span>
+        <span className="font-mono text-[#FFD700]">
+          {manualBet.trim() !== ""
+            ? manualBet
+            : raiseSize > 0
+            ? raiseSize
+            : betting.bigBlind * 2}{" "}
+          PGLD
+        </span>
+      </div>
+
+      <input
+        type="range"
+        min={betting.bigBlind * 2}
+        max={Math.max(
+          betting.bigBlind * 8,
+          betting.pot || betting.bigBlind * 4
+        )}
+        step={betting.bigBlind}
+        value={raiseSize || betting.bigBlind * 2}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          setRaiseSize(v);
+          setManualBet("");
+        }}
+        className="w-full accent-[#FFD700]"
+      />
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setRaiseSize(betting.bigBlind * 2)}
+          className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
+        >
+          2x BB
+        </button>
+        <button
+          type="button"
+          onClick={() => setRaiseSize(betting.bigBlind * 3)}
+          className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
+        >
+          3x BB
+        </button>
+        <button
+          type="button"
+          onClick={() => setRaiseSize(betting.bigBlind * 4)}
+          className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
+        >
+          4x BB
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setRaiseSize(betting.pot || betting.bigBlind * 6)
+          }
+          className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
+        >
+          Pot
+        </button>
+      </div>
+    </div>
+  )}
+</div>
+
+
+
+{/* Dealer log + sync note only in normal mode */}
+{!isFullscreen && (
+  <>
+    {/* Dealer log */}
+    <div className="mt-3 rounded-xl bg-black/55 border border-white/15 px-3 py-2 max-h-32 overflow-y-auto text-[11px]">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">
+          Dealer Log
+        </div>
+        <div className="text-[9px] text-white/35">
+          Latest events first
+        </div>
+      </div>
+      {dealerLog.length === 0 ? (
+        <div className="text-white/35">
+          Waiting for players. Sit, watch the countdown, and play.
+        </div>
+      ) : (
+        <ul className="space-y-0.5">
+          {dealerLog.map((entry) => (
+            <li key={entry.id} className="text-white/80">
+              <span className="text-white/35 mr-1">•</span>
+              {entry.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+
+    <div className="mt-3 text-[11px] text-white/40 font-semibold">
+      Seats, blinds, betting, showdown, and chat are all synced live
+      for every player.
+    </div>
+  </>
 )}
 
-
-
-                  <button
-                    onClick={handleFold}
-                    disabled={!isHeroTurn}
-                    className="flex-1 min-w-[80px] rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-red-400 disabled:opacity-40"
-                  >
-                    Fold
-                  </button>
-                  <button
-                    onClick={handlePrimaryAction}
-                    disabled={!isHeroTurn}
-                    className="flex-1 min-w-[80px] rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-600 disabled:opacity-40"
-                  >
-                    {primaryActionLabel}
-                  </button>
-                  <button
-                    onClick={handleBet}
-                    disabled={!isHeroTurn || !betting || !heroBetting}
-                    className="flex-1 min-w-[80px] rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
-                  >
-                    {(() => {
-                      if (!betting || !heroBetting) return "Bet";
-                      const callNeeded = Math.max(
-                        0,
-                        betting.maxCommitted -
-                          heroBetting.committed
-                      );
-                      const minRaise = betting.bigBlind * 2;
-                      const rawRaise =
-                        manualBet.trim().length > 0
-                          ? Number(manualBet)
-                          : raiseSize > 0
-                          ? raiseSize
-                          : minRaise;
-                      const raiseDelta = Math.max(
-                        minRaise,
-                        Number.isFinite(rawRaise) && rawRaise > 0
-                          ? Math.floor(rawRaise)
-                          : minRaise
-                      );
-                      const total = callNeeded + raiseDelta;
-                      return `Bet ${total} PGLD`;
-                    })()}
-                  </button>
-                </div>
-
-                {betting && (
-                  <div className="mt-1 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] text-white/45 font-semibold">
-                      <span>Raise amount</span>
-                      <span className="font-mono text-[#FFD700]">
-                        {manualBet.trim() !== ""
-                          ? manualBet
-                          : raiseSize > 0
-                          ? raiseSize
-                          : betting.bigBlind * 2}{" "}
-                        PGLD
-                      </span>
-                    </div>
-
-                    {/* Slider */}
-                    <input
-                      type="range"
-                      min={betting.bigBlind * 2}
-                      max={Math.max(
-                        betting.bigBlind * 8,
-                        betting.pot || betting.bigBlind * 4
-                      )}
-                      step={betting.bigBlind}
-                      value={
-                        raiseSize || betting.bigBlind * 2
-                      }
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setRaiseSize(v);
-                        setManualBet("");
-                      }}
-                      className="w-full accent-[#FFD700]"
-                    />
-
-                    {/* Presets + all-in */}
-                    <div className="flex flex-wrap gap-2 text-[10px]">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRaiseSize(betting.bigBlind * 2)
-                        }
-                        className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
-                      >
-                        2x BB
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRaiseSize(betting.bigBlind * 3)
-                        }
-                        className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
-                      >
-                        3x BB
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRaiseSize(betting.bigBlind * 4)
-                        }
-                        className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
-                      >
-                        4x BB
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRaiseSize(
-                            betting.pot ||
-                              betting.bigBlind * 6
-                          )
-                        }
-                        className="rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
-                      >
-                        Pot
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAllIn}
-                        disabled={!isHeroTurn || !heroBetting}
-                        className="rounded-full border border-red-400/70 px-2 py-0.5 text-red-300 hover:border-red-300 disabled:opacity-40"
-                      >
-                        All-in
-                      </button>
-                    </div>
-
-                    {/* Manual bet box */}
-                    <div className="flex items-center gap-2 text-[10px]">
-                      <div className="flex-1">
-                        <label className="block mb-0.5 text-white/60 font-semibold">
-                          Manual bet (PGLD)
-                        </label>
-                        <input
-                          type="number"
-                          min={betting.bigBlind * 2}
-                          value={manualBet}
-                          onChange={(e) =>
-                            setManualBet(e.target.value)
-                          }
-                          className="w-full rounded-lg bg-black/70 border border-white/25 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setManualBet("")}
-                        className="mt-4 rounded-full border border-white/30 px-2 py-0.5 hover:border-[#FFD700]"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Showdown */}
-            {showdown && table && showdown.handId === table.handId && (
-              <div className="mt-3 rounded-xl bg-black/60 border border-[#FFD700]/60 px-3 py-2 text-[11px] text-white/80 shadow-[0_0_25px_rgba(250,204,21,0.35)]">
-                <div className="font-semibold text-[#FFD700] mb-1 flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#FFD700] animate-pulse" />
-                  <span>
-                    Showdown • Pot {pot.toLocaleString()} PGLD
-                  </span>
-                </div>
-                {Array.isArray(showdown.players) &&
-                  showdown.players.map((p) => {
-                    const seat = seats.find(
-                      (s) => s.seatIndex === p.seatIndex
-                    );
-                    const label = seat?.name || p.playerId;
-                    const isHero = p.playerId === playerId;
-                    return (
-                      <div
-                        key={p.playerId}
-                        className={`flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-1 rounded-lg px-2 py-1 ${
-                          p.isWinner
-                            ? "bg-[#022c22]/80 border border-emerald-400/70"
-                            : "bg-black/40 border border-white/10"
-                        }`}
-                      >
-                        <div>
-                          <span
-                            className={
-                              p.isWinner
-                                ? "font-semibold text-[#FFD700]"
-                                : "font-semibold"
-                            }
-                          >
-                            {label}
-                          </span>{" "}
-                          <span className="text-white/60">
-                            — {p.rankName}
-                          </span>
-                          {p.isWinner && (
-                            <span className="ml-1 text-emerald-300 font-semibold">
-                              (Winner)
-                            </span>
-                          )}
-                          {isHero && (
-                            <span className="ml-1 text-sky-300 text-[10px]">
-                              (You)
-                            </span>
-                          )}
-                        </div>
-                        {p.bestHand && p.bestHand.length > 0 && (
-                          <div className="flex gap-1">
-                            {p.bestHand.map((c, i) => (
-                              <PokerCard
-                                key={c + i}
-                                card={c}
-                                size="small"
-                                highlight={p.isWinner}
-                                delayIndex={i}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                {hasPotentialSidePot && (
-                  <div className="mt-1 text-[10px] text-amber-300">
-                    Side pots were active this hand. Pots will map to
-                    full on-chain accounting when the cashier is wired.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Dealer log */}
-            <div className="mt-3 rounded-xl bg-black/55 border border-white/15 px-3 py-2 max-h-32 overflow-y-auto text-[11px]">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">
-                  Dealer Log
-                </div>
-                <div className="text-[9px] text-white/35">
-                  Latest events first
-                </div>
-              </div>
-              {dealerLog.length === 0 ? (
-                <div className="text-white/35">
-                  Waiting for players. Sit, watch the countdown, and
-                  play.
-                </div>
-              ) : (
-                <ul className="space-y-0.5">
-                  {dealerLog.map((entry) => (
-                    <li key={entry.id} className="text-white/80">
-                      <span className="text-white/35 mr-1">•</span>
-                      {entry.text}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="mt-3 text-[11px] text-white/40 font-semibold relative z-10">
-              Seats, blinds, betting, showdown, and chat are all synced
-              live for every player.
-            </div>
           </div>
 
-          {/* SIDEBAR */}
-          <div className="space-y-4">
-            {/* Player profile summary */}
-            <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                    Player Profile
-                  </div>
-                  <div className="text-[11px] text-white/50">
-                    This name & avatar show at the table.
-                  </div>
-                </div>
-                <div
-                  className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold text-black shadow-[0_0_20px_rgba(250,204,21,0.7)]"
-                  style={{
-                    backgroundColor:
-                      profile?.avatarColor ?? "#facc15",
-                  }}
-                >
-                  {initials.slice(0, 3).toUpperCase()}
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-1 text-[11px]">
-                <div className="flex items-center justify-between gap-2">
+          {/* SIDEBAR – hidden in fullscreen / full-table mode */}
+          {!isFullscreen && (
+            <div className="space-y-4">
+              {/* Player profile summary */}
+              <div className="space-y-3 rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-white/90 font-semibold">
-                      {profile?.name &&
-                      profile.name.trim().length > 0
-                        ? profile.name
-                        : "Unnamed Player"}
+                    <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                      Player Profile
                     </div>
-                    <div className="text-white/50">
-                      Style:{" "}
-                      <span className="text-white/80">
-                        {profile?.style ?? "balanced"}
+                    <div className="text-[11px] text-white/50">
+                      This name & avatar show at the table.
+                    </div>
+                  </div>
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-black shadow-[0_0_20px_rgba(250,204,21,0.7)]"
+                    style={{
+                      backgroundColor:
+                        profile?.avatarColor ?? "#facc15",
+                    }}
+                  >
+                    {initials.slice(0, 3).toUpperCase()}
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1 text-[11px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-white/90">
+                        {profile?.name &&
+                        profile.name.trim().length > 0
+                          ? profile.name
+                          : "Unnamed Player"}
+                      </div>
+                      <div className="text-white/50">
+                        Style:{" "}
+                        <span className="text-white/80">
+                          {profile?.style ?? "balanced"}
+                        </span>
+                      </div>
+                    </div>
+                    <Link
+                      href="/profile"
+                      className="rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[11px] font-semibold text-[#FFD700] hover:bg-[#111827]"
+                    >
+                      Edit profile →
+                    </Link>
+                  </div>
+
+                  {profile?.bio && (
+                    <p className="line-clamp-3 text-white/60">
+                      {profile.bio}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 pt-1 text-[10px] text-white/55">
+                    {profile?.xHandle && (
+                      <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5">
+                        X: {profile.xHandle}
+                      </span>
+                    )}
+                    {profile?.telegramHandle && (
+                      <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5">
+                        TG: {profile.telegramHandle}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* PGLD credits */}
+                <div className="mt-2 border-t border-white/10 pt-2">
+                  <div className="space-y-1.5">
+                    <div className="mb-1 text-[10px] uppercase tracking-[0.25em] text-white/50">
+                      PGLD Chips
+                    </div>
+                    <div className="text-sm font-semibold text-white/80">
+                      Bankroll:{" "}
+                      <span className="font-mono text-[#FFD700]">
+                        {chips.toLocaleString()} PGLD
                       </span>
                     </div>
+                    <p className="text-[11px] text-white/45">
+                      Sitting takes a PGLD chip buy-in from this
+                      bankroll; standing adds your stack back.
+                    </p>
                   </div>
-                  <Link
-                    href="/profile"
-                    className="rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[11px] font-semibold text-[#FFD700] hover:bg-[#111827]"
-                  >
-                    Edit profile →
-                  </Link>
                 </div>
+              </div>
 
-                {profile?.bio && (
-                  <p className="text-white/60 line-clamp-3">
-                    {profile.bio}
-                  </p>
+              {/* Room controls + invite */}
+              <div className="space-y-3 rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
+                <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                  Room & Invites
+                </div>
+                <p className="text-[11px] text-white/60">
+                  Each device or browser = one seat. Share this link
+                  and play live together.
+                </p>
+
+                <div className="mt-2 space-y-1.5 border-t border-white/10 pt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                      Invite link
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyInvite}
+                      className="rounded-full border border-[#FFD700]/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
+                    >
+                      {copiedInvite ? "Copied ✓" : "Copy link"}
+                    </button>
+                  </div>
+                  <div className="max-h-10 overflow-hidden break-all text-[10px] text-white/40">
+                    {inviteUrl || "Invite URL loads here in browser."}
+                  </div>
+                </div>
+              </div>
+
+              {/* Info blocks (short + mobile friendly) */}
+              <div className="space-y-3 rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-[11px]">
+                {/* How this room works */}
+                <button
+                  type="button"
+                  onClick={() => setOpenHowRoom((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
+                    Table basics
+                  </span>
+                  <span className="text-xs text-white/60">
+                    {openHowRoom ? "−" : "+"}
+                  </span>
+                </button>
+                {openHowRoom && (
+                  <div className="space-y-1 px-1 text-white/70">
+                    <p>
+                      6–9 seat PGLD Hold&apos;em cash game. Chips,
+                      action order, and hands are synced for every
+                      player.
+                    </p>
+                    <p>
+                      Each browser connects as a unique player with
+                      their own stack and bankroll.
+                    </p>
+                  </div>
                 )}
 
-                <div className="flex flex-wrap gap-2 text-[10px] text-white/55 pt-1">
-                  {profile?.xHandle && (
-                    <span className="rounded-full bg-black/60 border border-white/20 px-2 py-0.5">
-                      X: {profile.xHandle}
-                    </span>
-                  )}
-                  {profile?.telegramHandle && (
-                    <span className="rounded-full bg-black/60 border border-white/20 px-2 py-0.5">
-                      TG: {profile.telegramHandle}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* PGLD credits */}
-              <div className="pt-2 border-t border-white/10 mt-2">
-                <div className="space-y-1.5">
-                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50 mb-1">
-                    PGLD Chips
+                {/* How to play Hold'em */}
+                <button
+                  type="button"
+                  onClick={() => setOpenHowPlay((v) => !v)}
+                  className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
+                    Hold&apos;em quick rules
+                  </span>
+                  <span className="text-xs text-white/60">
+                    {openHowPlay ? "−" : "+"}
+                  </span>
+                </button>
+                {openHowPlay && (
+                  <div className="space-y-1 px-1 text-white/70">
+                    <p>
+                      You get 2 hole cards. Up to 5 community cards hit
+                      the board (flop, turn, river). Best 5-card hand
+                      wins.
+                    </p>
+                    <p>
+                      Bet preflop, on the flop, turn, and river. You
+                      can fold, call, or bet/raise when it&apos;s your
+                      turn.
+                    </p>
                   </div>
-                  <div className="text-sm text-white/80 font-semibold">
-                    Bankroll:{" "}
-                    <span className="font-mono text-[#FFD700]">
-                      {chips.toLocaleString()} PGLD
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-white/45">
-                    Sitting takes a PGLD chip buy-in from this
-                    bankroll; standing adds your stack back.
-                  </p>
-                </div>
+                )}
               </div>
             </div>
-
-            {/* Room controls + invite */}
-            <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 space-y-3 text-xs">
-              <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                Room & Invites
-              </div>
-              <p className="text-white/60 text-[11px]">
-                Each device or browser = one seat. Share this link and
-                play live together.
-              </p>
-
-              <div className="pt-3 border-t border-white/10 mt-2 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                    Invite link
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyInvite}
-                    className="rounded-full border border-[#FFD700]/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
-                  >
-                    {copiedInvite ? "Copied ✓" : "Copy link"}
-                  </button>
-                </div>
-                <div className="text-[10px] text-white/40 break-all max-h-10 overflow-hidden">
-                  {inviteUrl || "Invite URL loads here in browser."}
-                </div>
-              </div>
-            </div>
-
-            {/* Info blocks (short + mobile friendly) */}
-            <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 space-y-3 text-[11px]">
-              {/* How this room works */}
-              <button
-                type="button"
-                onClick={() => setOpenHowRoom((v) => !v)}
-                className="flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
-              >
-                <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                  Table basics
-                </span>
-                <span className="text-white/60 text-xs">
-                  {openHowRoom ? "−" : "+"}
-                </span>
-              </button>
-              {openHowRoom && (
-                <div className="px-1 space-y-1 text-white/70">
-                  <p>
-                    6–9 seat PGLD Hold&apos;em cash game. Chips, action
-                    order, and hands are synced for every player.
-                  </p>
-                  <p>
-                    Each browser connects as a unique player with their
-                    own stack and bankroll.
-                  </p>
-                </div>
-              )}
-
-              {/* How to play Hold'em */}
-              <button
-                type="button"
-                onClick={() => setOpenHowPlay((v) => !v)}
-                className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
-              >
-                <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                  Hold&apos;em quick rules
-                </span>
-                <span className="text-white/60 text-xs">
-                  {openHowPlay ? "−" : "+"}
-                </span>
-              </button>
-              {openHowPlay && (
-                <div className="px-1 space-y-1 text-white/70">
-                  <p>
-                    You get 2 hole cards. Up to 5 community cards hit
-                    the board (flop, turn, river). Best 5-card hand
-                    wins.
-                  </p>
-                  <p>
-                    Bet preflop, on the flop, turn, and river. You can
-                    fold, call, or bet/raise when it&apos;s your turn.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
         </section>
 
-        {/* CHAT */}
-        <section className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
-              Table Chat • PGLD Poker Room
-            </div>
-            <div className="text-[10px] text-white/40">
-              Live for all seated players.
-            </div>
-          </div>
-          <div className="max-h-64 overflow-y-auto rounded-lg bg-black/60 p-2 text-[11px] space-y-1">
-            {chatMessages.length === 0 && (
-              <div className="text-white/40">
-                No messages yet. Say hello to the table.
+        {/* CHAT – hidden in fullscreen to keep full-table mobile experience */}
+        {!isFullscreen && (
+          <section className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+                Table Chat • PGLD Poker Room
               </div>
-            )}
-            {chatMessages.map((m, i) => (
-              <div key={i}>
-                <span className="font-mono text-emerald-300">
-                  {(m as any).playerId}
-                </span>
-                <span className="text-white/60">: </span>
-                <span>{(m as any).text}</span>
+              <div className="text-[10px] text-white/40">
+                Live for all seated players.
               </div>
-            ))}
-          </div>
+            </div>
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg bg-black/60 p-2 text-[11px]">
+              {chatMessages.length === 0 && (
+                <div className="text-white/40">
+                  No messages yet. Say hello to the table.
+                </div>
+              )}
+              {chatMessages.map((m, i) => (
+                <div key={i}>
+                  <span className="font-mono text-emerald-300">
+                    {(m as any).playerId}
+                  </span>
+                  <span className="text-white/60">: </span>
+                  <span>{(m as any).text}</span>
+                </div>
+              ))}
+            </div>
 
-          <form
-            onSubmit={handleSendChat}
-            className="mt-2 flex gap-2 text-[11px]"
-          >
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Type a message…"
-              className="flex-1 rounded-lg bg-black/70 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-            />
-            <button
-              type="submit"
-              disabled={!ready || !chatInput.trim()}
-              className="rounded-lg bg-emerald-500 px-3 py-1.5 font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+            <form
+              onSubmit={handleSendChat}
+              className="mt-2 flex gap-2 text-[11px]"
             >
-              Send
-            </button>
-          </form>
-        </section>
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type a message…"
+                className="flex-1 rounded-lg border border-white/20 bg-black/70 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+              />
+              <button
+                type="submit"
+                disabled={!ready || !chatInput.trim()}
+                className="rounded-lg bg-emerald-500 px-3 py-1.5 font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+              >
+                Send
+              </button>
+            </form>
+          </section>
+        )}
       </div>
 
       {/* BUY-IN MODAL */}
       {showBuyIn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="w-full max-w-sm rounded-2xl border border-[#FFD700]/50 bg-gradient-to-b from-black via-[#020617] to-black p-4 shadow-[0_0_40px_rgba(0,0,0,0.9)]">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-[#FFD700]/80 mb-1">
+            <div className="mb-1 text-[10px] uppercase tracking-[0.25em] text-[#FFD700]/80">
               Buy-in
             </div>
-            <h2 className="text-lg font-bold mb-1">
+            <h2 className="mb-1 text-lg font-bold">
               Sit at the Base Gold Rush table
             </h2>
-            <p className="text-[11px] text-white/60 mb-3">
+            <p className="mb-3 text-[11px] text-white/60">
               Choose your PGLD chip buy-in amount for this session.
             </p>
 
-            <div className="space-y-2 mb-3">
+            <div className="mb-3 space-y-2">
               <label className="block text-xs text-white/60">
                 Buy-in (PGLD chips)
               </label>
@@ -1951,7 +2024,7 @@ const MIN_PLAYERS_TO_START = 2;
                 max={chips}
                 value={buyIn}
                 onChange={(e) => setBuyIn(Number(e.target.value))}
-                className="w-full rounded-lg bg-black/70 border border-white/25 px-3 py-2 text-sm outline-none focus:border-[#FFD700]"
+                className="w-full rounded-lg border border-white/25 bg-black/70 px-3 py-2 text-sm outline-none focus:border-[#FFD700]"
               />
               <div className="flex flex-wrap gap-2 text-[10px]">
                 {[250, 500, 1000, 2000].map((preset) => (
@@ -1992,6 +2065,9 @@ const MIN_PLAYERS_TO_START = 2;
           </div>
         </div>
       )}
+    
+  
+
 
       {/* Local CSS animations */}
       <style jsx>{`
