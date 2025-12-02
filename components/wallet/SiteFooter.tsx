@@ -27,15 +27,14 @@ export default function SiteFooter() {
                 BASE GOLD RUSH
               </div>
               <div className="text-[10px] text-white/60 tracking-[0.18em] uppercase">
-                Casino • Slots • Live Poker
+                Poker Room • Casino Floor
               </div>
             </div>
           </div>
 
           <p className="text-sm text-white/60 max-w-sm">
-            Base-native casino onchain. GLD casino chips, PGLD poker chips, and
-            BGLD at the cashier — plus a free-play lane to test every table and
-            slot before you sit down with real chips.
+            Base-native live poker room and casino. GLD chips on the casino floor,
+            PGLD chips at the tables, and BGLD at the cashier when the cage is fully live.
           </p>
 
           {/* Little chip strip */}
@@ -49,32 +48,15 @@ export default function SiteFooter() {
               />
             </div>
             <span className="text-[11px] text-white/55">
-              GLD chips for casino games, PGLD chips for live poker — both tied
-              to your wallet profile.
+              GLD chips power the casino floor; PGLD chips track live poker stacks — all tied to your wallet profile.
             </span>
           </div>
         </div>
 
         {/* Explore Section with game icons */}
         <div>
-          <div className="text-sm font-bold text-white/80">Explore Games</div>
+          <div className="text-sm font-bold text-white/80">Explore</div>
           <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              <Link
-                className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/casino"
-              >
-                <span className="relative h-6 w-6">
-                  <Image
-                    src="/icons/game-slots.png"
-                    alt="Slots"
-                    fill
-                    className="object-contain"
-                  />
-                </span>
-                <span>Gold Rush Slots</span>
-              </Link>
-            </li>
             <li>
               <Link
                 className="flex items-center gap-2 text-white/70 hover:text-white"
@@ -82,13 +64,13 @@ export default function SiteFooter() {
               >
                 <span className="relative h-6 w-6">
                   <Image
-                    src="/icons/game-blackjack.png"
-                    alt="Tables"
+                    src="/icons/game-poker-room.png"
+                    alt="Poker Room"
                     fill
                     className="object-contain"
                   />
                 </span>
-                <span>Poker Room & Table Games</span>
+                <span>Poker Room & Live Tables</span>
               </Link>
             </li>
             <li>
@@ -99,12 +81,28 @@ export default function SiteFooter() {
                 <span className="relative h-6 w-6">
                   <Image
                     src="/icons/game-slots.png"
-                    alt="Free-play arcade"
+                    alt="Casino Floor"
                     fill
                     className="object-contain"
                   />
                 </span>
-                <span>Free-Play Arcade</span>
+                <span>Casino Floor • Slots & Tables</span>
+              </Link>
+            </li>
+            <li>
+              <Link
+                className="flex items-center gap-2 text-white/70 hover:text-white"
+                href="/poker"
+              >
+                <span className="relative h-6 w-6">
+                  <Image
+                    src="/icons/game-video-poker1.png"
+                    alt="Poker hub"
+                    fill
+                    className="object-contain"
+                  />
+                </span>
+                <span>Poker Hub & Profile</span>
               </Link>
             </li>
           </ul>
@@ -114,26 +112,7 @@ export default function SiteFooter() {
         <div>
           <div className="text-sm font-bold text-white/80">On-Chain</div>
           <ul className="mt-2 space-y-1 text-sm">
-            {CASINO && (
-              <li>
-                <a
-                  className="flex items-center gap-2 text-white/70 hover:text-white"
-                  href={`https://basescan.org/address/${CASINO}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className="relative h-5 w-5">
-                    <Image
-                      src="/images/base-logo-light.png"
-                      alt="Base"
-                      fill
-                      className="object-contain"
-                    />
-                  </span>
-                  <span>Casino Contract</span>
-                </a>
-              </li>
-            )}
+            
 
             {BGLD && (
               <li>
@@ -178,9 +157,8 @@ export default function SiteFooter() {
             )}
 
             <li className="pt-2 text-[12px] text-white/50">
-              During early access, some tables may still run in free-play mode
-              with no real-world value. GLD / PGLD denominations only matter
-              once you’ve loaded chips at the cashier.
+              Contract links are provided for transparency. Always verify contract addresses
+               before you send funds or load chips.
             </li>
           </ul>
 
@@ -206,15 +184,14 @@ export default function SiteFooter() {
           {/* Legal Text Block */}
           <div className="mt-4 space-y-2 text-[10px] text-white/40 leading-relaxed">
             <p>
-              Play responsibly. Only use funds and chips you can afford to
-              lose. On-chain games involve risk and transactions cannot be
-              reversed.
+              Play responsibly. Only use funds and chips you can afford to lose.
+              On-chain games involve risk and transactions cannot be reversed.
             </p>
 
             <p>
-              Base Gold Rush is a non-custodial platform. All transactions
-              occur directly through your wallet or chip account. Never share
-              your seed phrase or private keys.
+              Base Gold Rush is a non-custodial platform. All transactions occur
+              directly through your wallet or chip account. Never share your seed
+              phrase or private keys.
             </p>
 
             <p>

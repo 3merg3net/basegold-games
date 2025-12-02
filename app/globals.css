@@ -163,3 +163,23 @@ body { font-feature-settings: "tnum"; }
     }
   }
 }
+
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.25);
+    border-color: rgba(253, 224, 71, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 70px rgba(255, 215, 0, 0.7);
+    border-color: rgba(253, 224, 71, 1);
+  }
+  100% {
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.25);
+    border-color: rgba(253, 224, 71, 0.7);
+  }
+}
+
+.animate-goldPulse {
+  animation: goldPulse 2.6s ease-in-out infinite;
+}
+

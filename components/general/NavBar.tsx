@@ -10,9 +10,10 @@ type NavItem = { href: string; label: string }
 // Top-level sections
 const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
 
+// Floors – poker first, casino second
 const sectionItems: NavItem[] = [
-  { href: '/arcade', label: 'Casino Lobby' },
-  { href: '/live-tables', label: 'Poker & Tables' },
+  { href: '/live-tables', label: 'Poker Room' },
+  { href: '/arcade', label: 'Casino Floor' },
 ]
 
 export default function NavBar() {
@@ -115,6 +116,7 @@ export default function NavBar() {
           <div className="inline-flex items-center rounded-full bg-black/60 border border-white/15 px-1 py-0.5 shadow-[0_0_18px_rgba(0,0,0,0.7)]">
             {sectionItems.map(it => {
               const active = isActive(it.href)
+              const isPoker = it.href === '/live-tables'
               return (
                 <Link
                   key={it.href}
@@ -123,10 +125,20 @@ export default function NavBar() {
                     'px-3 py-1 rounded-full text-[11px] font-semibold transition-colors whitespace-nowrap',
                     active
                       ? 'bg-[#FFD700]/90 text-black shadow-[0_0_14px_rgba(250,204,21,0.9)]'
+                      : isPoker
+                      ? 'text-[#FFD700]/90 hover:bg-white/10 hover:text-white'
                       : 'text-white/75 hover:bg-white/10 hover:text-white',
                   ].join(' ')}
                 >
-                  {it.label}
+                  <span className="flex items-center gap-1">
+                    {it.label}
+                    {isPoker && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        LIVE
+                      </span>
+                    )}
+                  </span>
                 </Link>
               )
             })}
@@ -204,10 +216,11 @@ export default function NavBar() {
 
               {/* Floors */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                Casino Floors
+                Floors
               </div>
               {sectionItems.map(it => {
                 const active = isActive(it.href)
+                const isPoker = it.href === '/live-tables'
                 return (
                   <Link
                     key={it.href}
@@ -221,7 +234,15 @@ export default function NavBar() {
                         : 'bg-black text-white/80 hover:bg-[#0f0f0f]',
                     ].join(' ')}
                   >
-                    {it.label}
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{it.label}</span>
+                      {isPoker && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          LIVE
+                        </span>
+                      )}
+                    </div>
                   </Link>
                 )
               })}
