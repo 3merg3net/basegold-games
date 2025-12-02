@@ -1348,7 +1348,7 @@ useEffect(() => {
 
                         const heroPos: React.CSSProperties = {
                           left: "50%",
-                          bottom: "-10%",
+                          bottom: "-7%",
                           transform: "translate(-50%, 0)",
                         };
 
