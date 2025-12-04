@@ -1315,7 +1315,7 @@ const [winners, setWinners] = useState<WinnerEntry[]>([]);
         />
       </div>
       <div className="text-[9px] font-semibold uppercase tracking-[0.35em] text-[#FFD700]/90 md:text-[10px]">
-        PGLD POKER ROOM
+        BASE GOLD POKER 
       </div>
     </div>
   </div>
@@ -1339,7 +1339,7 @@ const [winners, setWinners] = useState<WinnerEntry[]>([]);
   )}
 
   {/* Board cards – nudged up a bit to avoid clip */}
-  <div className="pointer-events-none absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1 px-2">
+  <div className="pointer-events-none absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1 px-2">
     <div className="flex gap-1.5 md:gap-2">
       {boardCards.map((c, i) => {
         const tilts = [-6, -3, 0, 3, 6];
@@ -1379,8 +1379,8 @@ const [winners, setWinners] = useState<WinnerEntry[]>([]);
 </div>
 
 
-                  {/* SEATS ON BUMPER – hero anchored bottom-center with compact GG-style HUD */}
-<div className="absolute inset-[1.5%] text-[9px] text-white/80 md:text-[10px]">
+               {/* SEATS ON BUMPER – hero anchored bottom-center */}
+<div className="absolute inset-[1.5%] text-[10px] text-white/80 md:text-[11px]">
   {seats
     .filter((s) => s.playerId)
     .map((seat) => {
@@ -1392,47 +1392,25 @@ const [winners, setWinners] = useState<WinnerEntry[]>([]);
           : `Seat ${seat.seatIndex + 1}`;
 
       const isHeroSeat = seat.playerId === playerId;
-
-      const isWinnerSeat =
-        !!showdown &&
-        !!table &&
-        showdown.handId === table.handId &&
-        showdown.players.some(
-          (p) => p.isWinner && p.seatIndex === seat.seatIndex
-        );
-
-      const isButton = buttonSeatIndex === seat.seatIndex;
+      const isWinnerSeat = winnerSeatIndexes.has(seat.seatIndex);
+      const isButton =
+        buttonSeatIndex !== null &&
+        buttonSeatIndex === seat.seatIndex;
 
       const committed =
-  betting?.players.find(
-    (p) => p.seatIndex === seat.seatIndex
-  )?.committed ??
-  committedBySeat[seat.seatIndex] ??
-  0;
+        betting?.players.find(
+          (p) => p.seatIndex === seat.seatIndex
+        )?.committed ?? committedBySeat[seat.seatIndex] ?? 0;
 
-// total amount this seat has put into the pot this hand
-const totalForHand = totalBySeat[seat.seatIndex] ?? 0;
-
+      const stackAmount =
+        betting?.players.find(
+          (p) => p.seatIndex === seat.seatIndex
+        )?.stack ?? seat.chips ?? 0;
 
       const isCurrentTurn =
-        currentSeatIndex === seat.seatIndex &&
-        betting?.street !== "done";
-
-      const maxSeats = SEAT_GEOMETRY.length;
-      const heroSeatIndex = heroSeat ? heroSeat.seatIndex : 0;
-
-      const logicalIndex = heroSeat
-        ? (seat.seatIndex - heroSeatIndex + maxSeats) % maxSeats
-        : seat.seatIndex;
-
-      const stylePos: React.CSSProperties =
-        SEAT_GEOMETRY[logicalIndex] ??
-        SEAT_GEOMETRY[SEAT_GEOMETRY.length - 1];
-
-      const ringAngle =
-        isCurrentTurn && actionRemainingMs != null
-          ? 360 * (1 - actionPct / 100)
-          : 0;
+        currentSeatIndex !== null &&
+        betting?.street !== "done" &&
+        currentSeatIndex === seat.seatIndex;
 
       const isOut =
         betting?.players.some(
@@ -1441,146 +1419,193 @@ const totalForHand = totalBySeat[seat.seatIndex] ?? 0;
             (!p.inHand || p.hasFolded)
         ) ?? false;
 
-      const showHeroCards =
-        isHeroSeat && heroHand && heroHand.length > 0;
+      const maxSeats = SEAT_GEOMETRY.length;
+      const heroSeatIndex = heroSeat ? heroSeat.seatIndex : 0;
 
-      const seatStack = 
-        betting?.players.find(
-          (p) => p.seatIndex === seat.seatIndex
-        )?.stack ?? seat.chips;
+      // Logical position around hero: hero is 0, others wrap around
+      const logicalIndex = heroSeat
+        ? (seat.seatIndex - heroSeatIndex + maxSeats) % maxSeats
+        : seat.seatIndex;
+
+      const stylePos: React.CSSProperties =
+        SEAT_GEOMETRY[logicalIndex] ??
+        SEAT_GEOMETRY[SEAT_GEOMETRY.length - 1];
+
+      // Which cards to show (hero always sees their own, others only when allowed)
+      let visibleCards: string[] | null = null;
+
+      if (isHeroSeat && heroHand && heroHand.length === 2) {
+        visibleCards = heroHand;
+      } else if (seat.playerId) {
+        const manual = revealedHoles[seat.playerId];
+
+        // Manual “show cards” only after river
+        if (
+          betting?.street === "done" &&
+          manual &&
+          manual.length === 2
+        ) {
+          visibleCards = manual;
+        } else if (
+          betting?.street === "done" &&
+          showdown &&
+          table &&
+          showdown.handId === table.handId
+        ) {
+          const sdPlayer = showdown.players.find(
+            (p) => p.seatIndex === seat.seatIndex
+          );
+          if (
+            sdPlayer &&
+            sdPlayer.isWinner && // only auto-show winners at showdown
+            Array.isArray(sdPlayer.holeCards) &&
+            sdPlayer.holeCards.length === 2
+          ) {
+            visibleCards = sdPlayer.holeCards;
+          }
+        }
+      }
+
+      const totalForHand = totalBySeat[seat.seatIndex] ?? 0;
 
       return (
         <div
           key={seat.seatIndex}
-          className="absolute flex flex-col items-center"
+          className="absolute flex flex-col items-center gap-1"
           style={stylePos}
         >
-          {/* Per-seat committed chips for THIS HAND (does not disappear after calls) */}
-{totalForHand > 0 && (
-  <div className="-mt-1 flex flex-col items-center gap-[2px]">
-    <ChipStack amount={totalForHand} size={26} />
-    <div className="rounded-full bg-black/75 px-2 py-[1px] text-[9px] text-amber-100 shadow shadow-black/80">
-      {formatChips(totalForHand)}
-    </div>
-  </div>
-)}
+          {/* Dealer button */}
+          {isButton && (
+            <div className="mb-0.5 rounded-full bg-[#FFD700] px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
+              D
+            </div>
+          )}
 
+          {/* Per-street committed chips */}
+          {committed > 0 && (
+            <div className="-mb-0.5 flex flex-col items-center gap-[2px]">
+              <ChipStack amount={committed} size={18} />
+              <div className="rounded-full bg-black/80 px-2 py-[1px] text-[9px] text-amber-100 shadow shadow-black/80">
+                {formatChips(committed)}
+              </div>
+            </div>
+          )}
 
-
-          {/* Compact GG-style HUD */}
-          <div className="rounded-2xl border border-white/18 bg-black/75 px-2 py-1.5 flex flex-col items-center gap-1 min-w-[80px] max-w-[96px]">
-            {/* Top: cards over avatar */}
-            <div className="relative flex flex-col items-center">
-              {/* Dealer button */}
-              {isButton && (
-                <div className="absolute -left-3 top-[6px] rounded-full bg-[#FFD700] px-1.5 py-[1px] text-[7px] font-bold text-black shadow shadow-black/70">
-                  D
-                </div>
+          {/* Avatar background with overlaid cards + pill */}
+          <div className="relative flex flex-col items-center">
+            {/* Avatar as background */}
+            <div
+              className={[
+                "relative z-0 flex items-center justify-center rounded-full h-13 w-13 md:h-14 md:w-14 overflow-hidden bg-slate-900",
+                isCurrentTurn && !isHeroSeat
+                  ? "animate-soft-glow border border-[#FACC15] shadow-[0_0_16px_rgba(250,204,21,0.8)]"
+                  : "border border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.9)]",
+                isWinnerSeat ? "winner-glow" : "",
+                isOut ? "opacity-40" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {isHeroSeat && (profile as any)?.avatarUrl ? (
+                <Image
+                  src={(profile as any).avatarUrl}
+                  alt="Avatar"
+                  width={56}
+                  height={56}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Image
+                  src="/felt/bgrc-logo.png"
+                  alt="PGLD"
+                  width={34}
+                  height={34}
+                  className="object-contain opacity-90"
+                />
               )}
+            </div>
 
-              {/* Cards – tight over avatar */}
-              <div className="absolute -top-4 flex gap-[3px] z-20">
-                {showHeroCards ? (
-                  heroHand!.map((c, i) => {
-                    const tilts = [-6, 6];
-                    const offset = i === 0 ? -3 : 3;
-                    return (
+            {/* Winner emoji above avatar – not clipped */}
+            {isWinnerSeat && (
+              <div className="absolute -top-9 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center">
+
+                <div className="text-3xl md:text-4xl drop-shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+                  🏆
+                </div>
+              </div>
+            )}
+
+            {/* Overlay pinned to avatar: cards on top half, pill on bottom half */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between">
+              {/* Cards – tight overlap, same size for all seats */}
+              <div className="mt-[4px] flex justify-center">
+                {visibleCards && visibleCards.length === 2 ? (
+                  <div className="relative flex -space-x-4">
+                    {visibleCards.map((c, i) => (
                       <div
-                        key={`${table?.handId ?? 0}-hero-${seat.seatIndex}-${i}-${c}`}
+                        key={`${table?.handId ?? 0}-seat-${seat.seatIndex}-card-${i}-${c}`}
                         className="relative"
                         style={{
-                          transform: `translateX(${offset}px) rotate(${tilts[i] ?? 0}deg)`,
-                          transformOrigin: "50% 90%",
+                          transform: `translateY(2px) scale(0.82) rotate(${
+                            i === 0 ? -8 : 8
+                          }deg)`,
+                          transformOrigin: "50% 75%",
                         }}
                       >
                         <PokerCard
                           card={c}
-                          highlight
+                          highlight={isWinnerSeat}
                           size="small"
-                          delayIndex={i}
                         />
                       </div>
-                    );
-                  })
+                    ))}
+                  </div>
                 ) : (
-                  [0, 1].map((i) => (
-                    <div
-                      key={i}
-                      className={[
-                        "h-5 w-3.5 rounded-[3px] border border-white/25 bg-gradient-to-br from-sky-300 to-sky-500 shadow shadow-black/80",
-                        i === 1
-                          ? "-translate-x-[3px] rotate-[8deg]"
-                          : "rotate-[-8deg]",
-                        isOut ? "opacity-20 grayscale" : "opacity-95",
-                      ].join(" ")}
-                    />
-                  ))
+                  // Backside fan with same footprint as hero cards
+                  <div className="relative flex -space-x-4">
+                    {[0, 1].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-5 w-4 rounded-[3px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
+                          i === 1 ? "rotate-[6deg]" : "rotate-[-6deg]"
+                        } ${isOut ? "opacity-30" : "opacity-90"}`}
+                        style={{
+                          transformOrigin: "50% 75%",
+                          transform: `translateY(2px) scale(0.9)`,
+                        }}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {/* Avatar with timer ring */}
-              <div
-                className={[
-                  "relative mt-3 flex h-8 w-8 items-center justify-center md:h-9 md:w-9",
-                  isWinnerSeat ? "winner-glow" : "",
-                ].join(" ")}
-              >
-                <div
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    padding: "2px",
-                    background: isCurrentTurn
-                      ? `conic-gradient(
-                          #22c55e 0deg,
-                          #22c55e ${ringAngle * 0.4}deg,
-                          #eab308 ${ringAngle * 0.7}deg,
-                          #ef4444 ${ringAngle}deg,
-                          rgba(15,23,42,0.9) ${ringAngle}deg 360deg
-                        )`
-                      : "radial-gradient(circle, rgba(148,163,184,0.45), rgba(15,23,42,0.95))",
-                  }}
-                >
-                  <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-white/25 bg-slate-900 shadow-[0_0_6px_rgba(0,0,0,0.9)]">
-                    {isHeroSeat && (profile as any)?.avatarUrl ? (
-                      <Image
-                        src={(profile as any).avatarUrl}
-                        alt="Avatar"
-                        width={24}
-                        height={24}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <Image
-                        src="/felt/bgrc-logo.png"
-                        alt="PGLD"
-                        width={18}
-                        height={18}
-                        className="object-contain"
-                      />
-                    )}
+              {/* Thin GG-style pill band – ~50% height */}
+              <div className="mb-[3px] flex w-full justify-center">
+                <div className="pointer-events-auto flex min-w-[76px] max-w-[96px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[1px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+                  {/* Top line: total for hand (very small) */}
+                  {totalForHand > 0 && (
+                    <div className="text-[7px] font-mono text-amber-200 leading-tight">
+                      {formatChips(totalForHand)} in pot
+                    </div>
+                  )}
+
+                  {/* Stack */}
+                  <div className="rounded-full bg-black/70 px-2 py-[1px] text-[8px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+                    {formatChips(stackAmount)} PGLD
+                  </div>
+
+                  {/* Name */}
+                  <div className="max-w-[90px] truncate text-[8px] text-white/80 leading-tight mt-[1px]">
+                    {label}
                   </div>
                 </div>
-
-                {isWinnerSeat && (
-                  <div className="absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center rounded-full bg-emerald-500 px-1.5 py-[1px] text-[7px] font-bold text-black shadow shadow-black/70">
-                    WINNER
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Stack + name inside HUD */}
-            <div className="mt-[1px] rounded-full bg-black/60 px-2 py-[1px] text-[8px] text-sky-100 shadow shadow-black/50">
-              {formatChips(seatStack)} PGLD
-            </div>
-            <div className="max-w-[90px] truncate text-center text-[8px] text-white/75">
-              {label}
-            </div>
-
-            {/* Folded status – GG-style subtle tag */}
-            {isOut && betting?.street !== "done" && (
-              <div className="mt-[1px] rounded-full bg-red-500/15 px-2 py-[1px] text-[7px] font-semibold text-red-300">
-                Folded
+            {/* Winner tag under avatar (keep previous behavior) */}
+            {isWinnerSeat && (
+              <div className="mt-1 rounded-full bg-emerald-500/90 px-2 py-[1px] text-[8px] font-bold text-black shadow shadow-black/70">
+                WINNER
               </div>
             )}
           </div>
@@ -1588,6 +1613,12 @@ const totalForHand = totalBySeat[seat.seatIndex] ?? 0;
       );
     })}
 </div>
+
+
+
+
+
+
 
 
 
