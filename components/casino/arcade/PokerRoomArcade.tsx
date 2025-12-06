@@ -1494,14 +1494,15 @@ useEffect(() => {
 
                               {/* Avatar + overlay */}
                               <div className="relative flex flex-col items-center">
-                                {/* Avatar */}
-                               {/* Avatar + hero circular countdown */}
+                                {/* Avatar + global circular countdown */}
 <div className="relative">
-  {isHeroSeat && isHeroTurn && actionSeconds !== null && (
+  {isCurrentTurn && actionSeconds !== null && (
     <div
       className="hero-timer-ring pointer-events-none absolute inset-[-4px] rounded-full"
       style={{
-        backgroundImage: `conic-gradient(#FACC15 ${actionPct}%, transparent 0)`,
+        backgroundImage: `conic-gradient(${
+          actionPhase === "extra" ? "#f97373" : "#FACC15"
+        } ${actionPct}%, transparent 0)`,
       }}
     >
       <div className="absolute inset-[3px] rounded-full bg-transparent" />
@@ -1539,6 +1540,7 @@ useEffect(() => {
     )}
   </div>
 </div>
+
 
 
                                 {/* Winner emoji + banner */}
