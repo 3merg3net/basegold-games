@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, MouseEvent } from 'react'
 import { Menu, X } from 'lucide-react'
 
 type NavItem = { href: string; label: string }
@@ -12,9 +12,49 @@ const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
 
 // Floors – poker first, casino second
 const sectionItems: NavItem[] = [
-  { href: '/live-tables', label: 'Poker Room' },
+  { href: '/live-tables', label: 'Live Tables' },
   { href: '/arcade', label: 'Casino Floor' },
 ]
+
+/**
+ * Helper that falls back to a plain <a> (hard nav) on poker room detail routes.
+ * This avoids any client router weirdness specifically on /poker/[roomId].
+ */
+function NavLink(props: {
+  href: string
+  className?: string
+  children: React.ReactNode
+  onClick?: () => void
+}) {
+  const pathname = usePathname()
+  const { href, className, children, onClick } = props
+
+  // On room routes like /poker/foo, force a full navigation
+  const isPokerRoomDetail =
+    pathname?.startsWith('/poker/') && pathname !== '/poker'
+
+  if (isPokerRoomDetail) {
+    return (
+      <a
+        href={href}
+        className={className}
+        onClick={onClick}
+      >
+        {children}
+      </a>
+    )
+  }
+
+  return (
+    <Link
+      href={href}
+      className={className}
+      onClick={onClick}
+    >
+      {children}
+    </Link>
+  )
+}
 
 export default function NavBar() {
   const pathname = usePathname()
@@ -25,7 +65,7 @@ export default function NavBar() {
   const mobileBoxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
+    const onClick = (e: MouseEvent | globalThis.MouseEvent) => {
       const target = e.target as Node
       const insideMobile = mobileBoxRef.current?.contains(target)
       if (!insideMobile) {
@@ -40,17 +80,17 @@ export default function NavBar() {
       }
     }
 
-    document.addEventListener('mousedown', onClick)
+    document.addEventListener('mousedown', onClick as any)
     document.addEventListener('keydown', onEsc)
     return () => {
-      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('mousedown', onClick as any)
       document.removeEventListener('keydown', onEsc)
     }
   }, [])
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
-    return pathname.startsWith(href)
+    return pathname?.startsWith(href)
   }
 
   const handleInvite = async () => {
@@ -89,6 +129,15 @@ export default function NavBar() {
     }
   }
 
+  const closeCashier = () => setCashierOpen(false)
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // If you click outside the inner card, close the modal
+    if (e.target === e.currentTarget) {
+      closeCashier()
+    }
+  }
+
   return (
     <nav className="relative flex w-full items-center justify-between">
       {/* Desktop nav */}
@@ -97,7 +146,7 @@ export default function NavBar() {
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex items-center gap-2">
             {staticItems.map(it => (
-              <Link
+              <NavLink
                 key={it.href}
                 href={it.href}
                 className={[
@@ -107,7 +156,7 @@ export default function NavBar() {
                 ].join(' ')}
               >
                 {it.label}
-              </Link>
+              </NavLink>
             ))}
             <span className="h-4 w-px bg-white/15" />
           </div>
@@ -118,7 +167,7 @@ export default function NavBar() {
               const active = isActive(it.href)
               const isPoker = it.href === '/live-tables'
               return (
-                <Link
+                <NavLink
                   key={it.href}
                   href={it.href}
                   className={[
@@ -139,7 +188,7 @@ export default function NavBar() {
                       </span>
                     )}
                   </span>
-                </Link>
+                </NavLink>
               )
             })}
           </div>
@@ -154,7 +203,7 @@ export default function NavBar() {
             {inviteCopied ? 'Link Copied' : 'Invite'}
           </button>
 
-          <Link
+          <NavLink
             href="/profile"
             className={[
               'px-3 py-1.5 rounded-full text-[11px] font-semibold border',
@@ -162,7 +211,7 @@ export default function NavBar() {
             ].join(' ')}
           >
             Profile
-          </Link>
+          </NavLink>
 
           <button
             onClick={() => setCashierOpen(true)}
@@ -197,11 +246,10 @@ export default function NavBar() {
               {staticItems.map(it => {
                 const active = isActive(it.href)
                 return (
-                  <Link
+                  <NavLink
                     key={it.href}
                     href={it.href}
                     onClick={() => setOpen(false)}
-                    role="menuitem"
                     className={[
                       'block w-full px-4 py-2.5 text-sm font-semibold',
                       active
@@ -210,7 +258,7 @@ export default function NavBar() {
                     ].join(' ')}
                   >
                     {it.label}
-                  </Link>
+                  </NavLink>
                 )
               })}
 
@@ -222,11 +270,10 @@ export default function NavBar() {
                 const active = isActive(it.href)
                 const isPoker = it.href === '/live-tables'
                 return (
-                  <Link
+                  <NavLink
                     key={it.href}
                     href={it.href}
                     onClick={() => setOpen(false)}
-                    role="menuitem"
                     className={[
                       'block w-full px-4 py-2.5 text-sm font-semibold',
                       active
@@ -243,7 +290,7 @@ export default function NavBar() {
                         </span>
                       )}
                     </div>
-                  </Link>
+                  </NavLink>
                 )
               })}
 
@@ -251,14 +298,13 @@ export default function NavBar() {
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Player
               </div>
-              <Link
+              <NavLink
                 href="/profile"
                 onClick={() => setOpen(false)}
-                role="menuitem"
                 className="block w-full px-4 py-2.5 text-sm font-semibold text-[#FFD700] bg-black hover:bg-[#0f0f0f] border-t border-white/10"
               >
                 Profile &amp; Avatar
-              </Link>
+              </NavLink>
 
               {/* Share */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
@@ -296,8 +342,14 @@ export default function NavBar() {
 
       {/* CASHIER MODAL */}
       {cashierOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#facc15]/40 bg-[#020617] shadow-[0_0_60px_rgba(0,0,0,0.9)] overflow-hidden">
+        <div
+          className="fixed inset-0 z-[99] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={handleBackdropClick}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-2xl border border-[#facc15]/40 bg-[#020617] shadow-[0_0_60px_rgba(0,0,0,0.9)] overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="relative h-40 w-full">
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
               <img
@@ -306,7 +358,7 @@ export default function NavBar() {
                 className="h-full w-full object-cover"
               />
               <button
-                onClick={() => setCashierOpen(false)}
+                onClick={closeCashier}
                 className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-black"
               >
                 Close
@@ -327,13 +379,13 @@ export default function NavBar() {
                 on free-play balances while we finalize the cashier.
               </p>
               <div className="flex items-center justify-between pt-2 text-[11px] text-white/55">
-                <Link
+                <NavLink
                   href="/cashier-preview"
                   className="rounded-full border border-[#facc15]/60 bg-black/70 px-3 py-1.5 text-xs font-semibold text-[#facc15] hover:bg-[#111827]"
-                  onClick={() => setCashierOpen(false)}
+                  onClick={closeCashier}
                 >
                   View Full Cashier Preview →
-                </Link>
+                </NavLink>
                 <span>
                   Real-value play may be region-limited and will include full
                   legal checks.

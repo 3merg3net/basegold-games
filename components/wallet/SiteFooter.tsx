@@ -2,10 +2,37 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 
 const CASINO  = process.env.NEXT_PUBLIC_CASINO_CA as string | undefined
 const BGLD    = process.env.NEXT_PUBLIC_BGLD_CA as string | undefined
 const CASHIER = process.env.NEXT_PUBLIC_CASHIER_CA as string | undefined
+
+function FooterNavLink(props: {
+  href: string
+  className?: string
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+  const { href, className, children } = props
+
+  const isPokerRoomDetail =
+    pathname?.startsWith('/poker/') && pathname !== '/poker'
+
+  if (isPokerRoomDetail) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    )
+  }
+
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  )
+}
 
 export default function SiteFooter() {
   return (
@@ -58,7 +85,7 @@ export default function SiteFooter() {
           <div className="text-sm font-bold text-white/80">Explore</div>
           <ul className="mt-3 space-y-2 text-sm">
             <li>
-              <Link
+              <FooterNavLink
                 className="flex items-center gap-2 text-white/70 hover:text-white"
                 href="/live-tables"
               >
@@ -71,10 +98,10 @@ export default function SiteFooter() {
                   />
                 </span>
                 <span>Poker Room & Live Tables</span>
-              </Link>
+              </FooterNavLink>
             </li>
             <li>
-              <Link
+              <FooterNavLink
                 className="flex items-center gap-2 text-white/70 hover:text-white"
                 href="/arcade"
               >
@@ -87,10 +114,10 @@ export default function SiteFooter() {
                   />
                 </span>
                 <span>Casino Floor • Slots & Tables</span>
-              </Link>
+              </FooterNavLink>
             </li>
             <li>
-              <Link
+              <FooterNavLink
                 className="flex items-center gap-2 text-white/70 hover:text-white"
                 href="/poker"
               >
@@ -103,7 +130,7 @@ export default function SiteFooter() {
                   />
                 </span>
                 <span>Poker Hub & Profile</span>
-              </Link>
+              </FooterNavLink>
             </li>
           </ul>
         </div>
@@ -112,8 +139,6 @@ export default function SiteFooter() {
         <div>
           <div className="text-sm font-bold text-white/80">On-Chain</div>
           <ul className="mt-2 space-y-1 text-sm">
-            
-
             {BGLD && (
               <li>
                 <a
@@ -158,27 +183,27 @@ export default function SiteFooter() {
 
             <li className="pt-2 text-[12px] text-white/50">
               Contract links are provided for transparency. Always verify contract addresses
-               before you send funds or load chips.
+              before you send funds or load chips.
             </li>
           </ul>
 
           {/* Legal Links */}
           <div className="mt-4 flex flex-wrap gap-3 text-[11px] text-white/50">
-            <Link href="/legal/terms" className="hover:text-white">
+            <FooterNavLink href="/legal/terms" className="hover:text-white">
               Terms
-            </Link>
+            </FooterNavLink>
             <span className="opacity-40">•</span>
-            <Link href="/legal/privacy" className="hover:text-white">
+            <FooterNavLink href="/legal/privacy" className="hover:text-white">
               Privacy
-            </Link>
+            </FooterNavLink>
             <span className="opacity-40">•</span>
-            <Link href="/legal/risk" className="hover:text-white">
+            <FooterNavLink href="/legal/risk" className="hover:text-white">
               Risk
-            </Link>
+            </FooterNavLink>
             <span className="opacity-40">•</span>
-            <Link href="/legal/responsible-gaming" className="hover:text-white">
+            <FooterNavLink href="/legal/responsible-gaming" className="hover:text-white">
               Responsible Gaming
-            </Link>
+            </FooterNavLink>
           </div>
 
           {/* Legal Text Block */}
@@ -201,17 +226,17 @@ export default function SiteFooter() {
 
             <div className="mt-2 text-[10px] text-white/40">
               See regional notices:{' '}
-              <Link href="/legal/regions/us" className="hover:text-white">
+              <FooterNavLink href="/legal/regions/us" className="hover:text-white">
                 US
-              </Link>{' '}
+              </FooterNavLink>{' '}
               •{' '}
-              <Link href="/legal/regions/eu" className="hover:text-white">
+              <FooterNavLink href="/legal/regions/eu" className="hover:text-white">
                 EU
-              </Link>{' '}
+              </FooterNavLink>{' '}
               •{' '}
-              <Link href="/legal/regions/au" className="hover:text-white">
+              <FooterNavLink href="/legal/regions/au" className="hover:text-white">
                 AU
-              </Link>
+              </FooterNavLink>
             </div>
           </div>
         </div>

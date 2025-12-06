@@ -1,82 +1,80 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useNetwork } from 'wagmi'
-import NavBar from '@/components/general/NavBar'
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useNetwork } from 'wagmi';
+import FaucetButton from '@/components/wallet/FaucetButton';
+
+// ⬇️ make NavBar a client-only island
+const NavBar = dynamic(
+  () => import('@/components/general/NavBar'),
+  { ssr: false }
+);
 
 export default function SiteHeader() {
-  const { chain } = useNetwork()
-  const [mounted, setMounted] = useState(false)
+  const { chain } = useNetwork();
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => setMounted(true), []);
 
-  const chainId = chain?.id
-  const isBase = chainId === 8453
+  const chainId = chain?.id;
+  const isBase = chainId === 8453;
+  const isSepolia = chainId === 84532;
 
   const netLabel = !mounted
-    ? '—'
+    ? 'Loading…'
     : isBase
     ? 'Base Mainnet'
-    : 'Connect to Base'
-
-  const netClass =
-    'rounded-full px-2.5 py-0.5 text-[10px] border ' +
-    (isBase
-      ? 'border-emerald-400/40 text-emerald-300 bg-emerald-400/10'
-      : 'border-red-400/40 text-red-300 bg-red-400/10')
+    : isSepolia
+    ? 'Base Sepolia'
+    : chain
+    ? chain.name ?? 'Wrong Network'
+    : 'No Network';
 
   return (
-    <header className="md:sticky md:top-0 z-50 w-full border-b border-white/10 bg-black/75 backdrop-blur-lg">
-      {/* MAIN HEADER ROW */}
-      <div className="mx-auto max-w-7xl flex items-center justify-between px-4 py-2.5 gap-3">
-        {/* LEFT — LOGO / BRAND */}
-        <Link href="/" className="flex items-center gap-2 group min-w-0">
-          <div className="relative h-8 w-8 flex-shrink-0">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-black/80 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        {/* Left: logo + brand */}
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/images/base-logo-light.png"
+              src="/felt/bgrc-logo.png"
               alt="Base Gold Rush"
-              fill
-              sizes="32px"
-              className="rounded object-contain group-hover:scale-105 transition-transform"
-              priority
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-full object-contain"
             />
-          </div>
-          <div className="flex flex-col leading-tight overflow-hidden">
-            <span className="text-[11px] font-extrabold tracking-[0.28em] text-[#FFD700] group-hover:text-white transition-colors uppercase">
-              BASE GOLD RUSH
+            <span className="text-sm font-extrabold tracking-[0.3em] text-[#FFD700]">
+              BGLD
             </span>
-            <span className="text-[10px] text-white/45 truncate">
-              Casino • Slots • Live Poker
-            </span>
-          </div>
-        </Link>
+          </Link>
 
-        {/* CENTER — NAV (desktop) */}
-        <div className="hidden md:flex flex-1 justify-center px-2">
-          <NavBar />
+          {/* ⬇️ NavBar rendered client-side only (no SSR, no hydration issues) */}
+          <div className="hidden md:block">
+            <NavBar />
+          </div>
         </div>
 
-        {/* RIGHT — NETWORK / WALLET */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className={`${netClass} hidden sm:inline`}>{netLabel}</span>
+        {/* Right: network + wallet + header buttons */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="hidden sm:inline-flex items-center rounded-full border border-white/20 bg-black/70 px-2 py-1 text-[10px] text-white/70">
+            <span className="mr-1 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {netLabel}
+          </span>
 
-          <div className="flex-shrink-0">
-            <ConnectButton
-              accountStatus="address"
-              chainStatus="icon"
-              showBalance={false}
-            />
-          </div>
+          <FaucetButton />
+
+          <ConnectButton chainStatus="icon" showBalance={false} />
         </div>
       </div>
 
-      {/* MOBILE NAV ROW */}
-      <div className="md:hidden px-4 pb-2">
+      {/* Mobile nav bar */}
+      <div className="border-t border-white/10 bg-black/90 md:hidden">
         <NavBar />
       </div>
     </header>
-  )
+  );
 }
