@@ -46,60 +46,7 @@ const BJ_SEAT_POSITIONS: CSSProperties[] = [
 
 
 
-// --- Card rendering helper ---
-// Used for dealer + player cards on the felt PNG
-function renderCard(code: string, index: number, size: "sm" | "md" = "md") {
-  const isHidden = code === "XX";
 
-  const base =
-    "relative flex items-center justify-center rounded-lg border border-black/60 shadow-[0_4px_12px_rgba(0,0,0,0.9)] bg-white";
-  const sizeClasses =
-    size === "sm"
-      ? "w-11 h-16 text-[11px] md:w-12 md:h-[70px]"
-      : "w-12 h-[74px] text-[12px] md:w-[52px] md:h-[80px]";
-
-  if (isHidden) {
-    return (
-      <div
-        key={`card-${index}-back`}
-        className={`${base} ${sizeClasses} bg-[#0b295a]`}
-      >
-        <div className="h-[72%] w-[72%] rounded-md border border-sky-200/80 bg-[radial-gradient(circle_at_top,#38bdf8_0,#020617_70%)]" />
-      </div>
-    );
-  }
-
-  const rank = code[0];
-  const suit = code[1];
-  const isRed = suit === "h" || suit === "d";
-
-  const rankLabel = rank === "T" ? "10" : rank;
-  const suitSymbol =
-    suit === "h" ? "♥" :
-    suit === "d" ? "♦" :
-    suit === "s" ? "♠" :
-    "♣";
-
-  return (
-    <div
-      key={`card-${index}-${code}`}
-      className={`${base} ${sizeClasses}`}
-    >
-      <div
-        className={`flex flex-col items-center leading-tight ${
-          isRed ? "text-red-600" : "text-slate-900"
-        }`}
-      >
-        <span className="font-extrabold text-[15px] md:text-[16px]">
-          {rankLabel}
-        </span>
-        <span className="text-[11px] md:text-[12px]">
-          {suitSymbol}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 
 
@@ -344,8 +291,19 @@ export default function BlackjackLive() {
      // ── Betting countdown (uses betDeadlineMs from server) ──
 const [betCountdown, setBetCountdown] = useState<number | null>(null);
 
+const showBetTimerOnFelt =
+  phase === "waiting-bets" && betCountdown !== null;
+
+const isBetTimerCritical =
+  phase === "waiting-bets" &&
+  betCountdown !== null &&
+  betCountdown <= 5;
+
+
 const [autoRebet, setAutoRebet] = useState(false);
 const [lastBet, setLastBet] = useState<number | null>(null)
+
+
 
   useEffect(() => {
   if (!table || heroSeatIndex === null) return;
@@ -499,6 +457,89 @@ useEffect(() => {
 
     const activeSeatIndex = table?.activeSeatIndex ?? null;
 
+   
+      const [actionCountdown, setActionCountdown] = useState<number | null>(null);
+  const ACTION_WINDOW_SECONDS = 30;
+
+
+useEffect(() => {
+  // Only run a timer during player-action with a valid active seat
+  if (!table || phase !== "player-action" || activeSeatIndex === null) {
+    setActionCountdown(null);
+    return;
+  }
+
+  const START = 30; // seconds for player action
+  setActionCountdown(START);
+
+  const id = setInterval(() => {
+    setActionCountdown((prev) => {
+      if (prev === null) return null;
+      if (prev <= 1) {
+        clearInterval(id);
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(id);
+}, [table?.roundId, phase, activeSeatIndex]);
+
+const showActionTimerOnFelt =
+  phase === "player-action" &&
+  actionCountdown !== null &&
+  activeSeatIndex !== null;
+
+const isActionTimerCritical =
+  phase === "player-action" &&
+  actionCountdown !== null &&
+  actionCountdown <= 5;
+
+    const actionTimerKey = useMemo(() => {
+    if (!table || table.phase !== "player-action") return null;
+    if (table.activeSeatIndex === null) return null;
+
+    const seat = table.seats[table.activeSeatIndex];
+    if (!seat) return null;
+
+    const hand =
+      seat.hands[table.activeHandIndex ?? 0] ?? seat.hands[0] ?? null;
+
+    const cardsKey = hand?.cards.join(",") ?? "";
+
+    // changes whenever:
+    // - round changes
+    // - active seat changes
+    // - active hand index changes
+    // - cards in that hand change (hit, double, split)
+    return `${table.roundId}-${table.activeSeatIndex}-${table.activeHandIndex}-${cardsKey}`;
+  }, [table]);
+
+  useEffect(() => {
+    if (!actionTimerKey) {
+      setActionCountdown(null);
+      return;
+    }
+
+    setActionCountdown(ACTION_WINDOW_SECONDS);
+    const startedAt = Date.now();
+
+    const id = setInterval(() => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      const remaining = ACTION_WINDOW_SECONDS - elapsed;
+      setActionCountdown(remaining > 0 ? Math.ceil(remaining) : 0);
+    }, 250);
+
+    return () => clearInterval(id);
+  }, [actionTimerKey, ACTION_WINDOW_SECONDS]);
+
+
+
+
+      
+
+
 
   // 🔥 Fallback seats: show 7 circles even before WS state arrives
   const seats: BlackjackSeatState[] =
@@ -581,7 +622,7 @@ useEffect(() => {
     sendAction("reload-demo", heroSeatIndex, 0);
   }
 
-  /* ───────────── Seat rendering ───────────── */
+      /* ───────────── Seat rendering ───────────── */
 
     function renderSeat(seat: BlackjackSeatState) {
     const pos = BJ_SEAT_POSITIONS[seat.seatIndex] ?? BJ_SEAT_POSITIONS[0];
@@ -593,22 +634,24 @@ useEffect(() => {
 
     const primaryHand =
       seat.hands && seat.hands.length > 0 ? seat.hands[0] : null;
+
     const value =
       primaryHand && primaryHand.cards.length > 0
         ? computeBlackjackValue(primaryHand.cards)
         : null;
+
     const resultBadge = primaryHand ? getResultBadge(primaryHand.result) : null;
 
     const isActive = activeSeatIndex === seat.seatIndex;
     const isMySeat = playerId && seat.playerId === playerId;
 
-    // Show “Sit here” only if the seat is empty (or reclaimed after leave)
+    // Show “Sit here” only if the seat is empty
     const showSitButton = !takenByOther && !seatTaken;
     const showLeaveButton = isHero && seatTaken;
 
     // Layout:
     // - "side" for outer seats (0,1,5,6)
-    // - "bottom" for center/bottom seats (2,3,4)
+    // - "bottom" for center seats (2,3,4)
     const layout =
       seat.seatIndex === 0 ||
       seat.seatIndex === 1 ||
@@ -617,19 +660,19 @@ useEffect(() => {
         ? "side"
         : "bottom";
 
-    const isLeftSideSeat = seat.seatIndex >= 3; // used only for side-layout
+    const isLeftSideSeat = seat.seatIndex >= 3;
 
     // Card tilt (only for side-layout outer seats)
     const cardRotate =
       layout === "side"
         ? seat.seatIndex === 0 || seat.seatIndex === 1
-          ? "rotate(-55deg)" // right side, tilt toward dealer
+          ? "rotate(-55deg)"
           : seat.seatIndex === 5 || seat.seatIndex === 6
-          ? "rotate(55deg)" // left side, tilt toward dealer
+          ? "rotate(55deg)"
           : "rotate(0deg)"
         : "rotate(0deg)";
 
-    // Scale down when lots of cards so we don’t overlap neighbors
+    // Scale down when lots of cards
     const cardCount = primaryHand?.cards.length ?? 0;
     const cardScale =
       cardCount >= 5 ? 0.75 : cardCount >= 3 ? 0.85 : 1.0;
@@ -655,7 +698,7 @@ useEffect(() => {
           )}
         </div>
 
-                {/* Bet chips on felt */}
+        {/* Bet chips on felt */}
         {primaryHand && primaryHand.bet > 0 && (
           <div className="mt-1 flex items-center justify-center">
             <div className="flex h-7 items-center justify-center rounded-full border-2 border-white/70 bg-[#FBBF24] px-2 shadow-[0_0_10px_rgba(250,204,21,0.6)]">
@@ -665,8 +708,6 @@ useEffect(() => {
             </div>
           </div>
         )}
-
-
 
         {/* Total + result */}
         {primaryHand && primaryHand.cards.length > 0 && value && (
@@ -724,7 +765,7 @@ useEffect(() => {
       </div>
     );
 
-    // Center/bottom seats: cards on top, info below
+    // ── BOTTOM SEATS ─────────────────────────────────────────
     if (layout === "bottom") {
       return (
         <div
@@ -743,19 +784,43 @@ useEffect(() => {
               <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
             )}
 
-            {/* Cards */}
-            <div
-              className="relative flex gap-1.5 max-w-[120px] justify-center"
-              style={{
-                transform: `scale(${cardScale})`,
-                transformOrigin: "center center",
-              }}
-            >
-              {primaryHand &&
-                primaryHand.cards.map((c, i) =>
-                  renderCard(c, i, "sm")
-                )}
-            </div>
+            {/* Action Timer – ONLY for active seat */}
+            {isActive &&
+              phase === "player-action" &&
+              actionCountdown !== null && (
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-[50]">
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-[11px] font-mono ${
+                      actionCountdown <= 5
+                        ? "border-red-400 bg-red-600/95 text-black shadow-[0_0_22px_rgba(248,113,113,0.95)] animate-pulse"
+                        : "border-emerald-300 bg-emerald-500/95 text-black shadow-[0_0_20px_rgba(16,185,129,0.9)] animate-pulse"
+                    }`}
+                  >
+                    {actionCountdown}
+                  </div>
+                </div>
+              )}
+
+            {/* Cards */}{/* Cards */}
+<div className="relative flex justify-center max-w-[140px]">
+  {primaryHand &&
+    primaryHand.cards.map((c, i) => {
+      const count = primaryHand.cards.length;
+      const overlap = count >= 4;
+      const style: CSSProperties =
+        overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+
+      return (
+        <div
+          key={`bottom-${seat.seatIndex}-card-${i}`}
+          style={style}
+        >
+          <BJCard card={c} small />
+        </div>
+      );
+    })}
+</div>
+
 
             {/* Info + buttons centered below */}
             <div className="relative">{infoBlock("center")}</div>
@@ -764,7 +829,7 @@ useEffect(() => {
       );
     }
 
-    // Side seats: cards in middle, info on the side
+    // ── SIDE SEATS ───────────────────────────────────────────
     return (
       <div
         key={seat.seatIndex}
@@ -782,36 +847,51 @@ useEffect(() => {
             <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
           )}
 
+          {/* Action Timer – ONLY for active seat */}
+          {isActive &&
+            phase === "player-action" &&
+            actionCountdown !== null && (
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-[50]">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-[11px] font-mono ${
+                    actionCountdown <= 5
+                      ? "border-red-400 bg-red-600/95 text-black shadow-[0_0_22px_rgba(248,113,113,0.95)] animate-pulse"
+                      : "border-emerald-300 bg-emerald-500/95 text-black shadow-[0_0_20px_rgba(16,185,129,0.9)] animate-pulse"
+                  }`}
+                >
+                  {actionCountdown}
+                </div>
+              </div>
+            )}
+
           {/* Left side seats: info on left, cards on right.
               Right side seats: cards on left, info on right. */}
           {isLeftSideSeat && (
             <div className="relative z-[1]">{infoBlock("left")}</div>
           )}
 
-                  {/* Player cards */}
-        <div className="flex items-center justify-center">
-          {primaryHand && primaryHand.cards.length > 0 && (
-            <div className="flex">
-              {primaryHand.cards.map((c, i) => {
-                const count = primaryHand.cards.length;
-                // Only overlap when 4+ cards
-                const overlap = count >= 4;
-                const style: React.CSSProperties = overlap && i > 0
-                  ? { marginLeft: "-0.6rem" }
-                  : {};
+          {/* Player cards */}
+          <div className="flex items-center justify-center">
+            {primaryHand && primaryHand.cards.length > 0 && (
+              <div className="flex">
+                {primaryHand.cards.map((c, i) => {
+                  const count = primaryHand.cards.length;
+                  const overlap = count >= 4;
+                  const style: React.CSSProperties =
+                    overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
 
-                return (
-                  <div key={`seat-${seat.seatIndex}-card-${i}`} style={style}>
-                    <BJCard card={c} small />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-
-
+                  return (
+                    <div
+                      key={`seat-${seat.seatIndex}-card-${i}`}
+                      style={style}
+                    >
+                      <BJCard card={c} small />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {!isLeftSideSeat && (
             <div className="relative z-[1]">{infoBlock("left")}</div>
@@ -820,6 +900,9 @@ useEffect(() => {
       </div>
     );
   }
+
+
+
 
 
 
@@ -881,6 +964,25 @@ useEffect(() => {
             priority
           />
 
+                  {/* Global BET TIMER – top center by chip rack */}
+        {phase === "waiting-bets" && betCountdown !== null && (
+          <div className="pointer-events-none absolute left-1/2 top-[8%] z-[40] -translate-x-1/2 flex flex-col items-center gap-1">
+            <div className="rounded-full border border-[#FFD700]/70 bg-black/85 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#FFD700] shadow-[0_0_18px_rgba(250,204,21,0.8)]">
+              Place your bets
+            </div>
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-mono ${
+                betCountdown <= 5
+                  ? "border-red-400 bg-red-600/95 text-black shadow-[0_0_24px_rgba(248,113,113,0.95)] animate-pulse"
+                  : "border-emerald-300 bg-emerald-500/95 text-black shadow-[0_0_22px_rgba(16,185,129,0.9)]"
+              }`}
+            >
+              {betCountdown}
+            </div>
+          </div>
+        )}
+
+
                     {/* Dealer cards (top center) */}
           <div className="pointer-events-none absolute left-1/2 top-[16%] flex -translate-x-1/2 flex-col items-center gap-1.5">
             <div className="flex items-center justify-center">
@@ -921,6 +1023,62 @@ useEffect(() => {
               )}
             </div>
           </div>
+
+          
+
+           {/* BIG bet countdown on felt near chip rack */}
+{showBetTimerOnFelt && (
+  <div className="pointer-events-none absolute left-[68%] top-[22%] flex flex-col items-center gap-1">
+    <div
+      className={[
+        "rounded-full px-5 py-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border text-center",
+        "font-mono text-[9px] md:text-xs tracking-[0.18em] uppercase",
+        isBetTimerCritical
+          ? "bg-red-600 border-red-300 text-black animate-pulse"
+          : "bg-black/85 border-[#FFD700]/70 text-[#FFD700]",
+      ].join(" ")}
+    >
+      Place your bets
+    </div>
+    <div
+      className={[
+        "flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
+        isBetTimerCritical
+          ? "border-red-300 bg-red-700 text-black shadow-[0_0_24px_rgba(248,113,113,0.9)]"
+          : "border-[#FFD700] bg-black/80 text-[#FFD700] shadow-[0_0_24px_rgba(250,204,21,0.8)]",
+      ].join(" ")}
+    >
+      {betCountdown}
+    </div>
+  </div>
+)}
+
+{/* GLOBAL action countdown for current seat */}
+{showActionTimerOnFelt && (
+  <div className="pointer-events-none absolute left-1/2 bottom-[11%] flex -translate-x-1/2 flex-col items-center gap-1">
+    <div
+      className={[
+        "rounded-full px-4 py-1 border text-center font-mono text-[9px] md:text-xs uppercase tracking-[0.18em]",
+        isActionTimerCritical
+          ? "bg-red-600 border-red-300 text-black animate-pulse"
+          : "bg-black/85 border-emerald-300/70 text-emerald-200",
+      ].join(" ")}
+    >
+      Seat {activeSeatIndex! + 1} to act
+    </div>
+    <div
+      className={[
+        "flex h-9 w-9 md:h-11 md:w-11 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
+        isActionTimerCritical
+          ? "border-red-300 bg-red-700 text-black shadow-[0_0_22px_rgba(248,113,113,0.9)]"
+          : "border-emerald-300 bg-black/80 text-emerald-200 shadow-[0_0_22px_rgba(16,185,129,0.8)]",
+      ].join(" ")}
+    >
+      {actionCountdown}
+    </div>
+  </div>
+)}
+
 
           {/* Seats */}
           {seats.map((seat) => renderSeat(seat))}
@@ -1037,6 +1195,17 @@ useEffect(() => {
     </span>
   )}
 </div>
+
+{phase === "player-action" &&
+  heroSeatIndex !== null &&
+  activeSeatIndex === heroSeatIndex &&
+  actionCountdown !== null && (
+    <div className="mt-1 inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/15 px-3 py-1 text-[10px] font-mono text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.6)]">
+      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+      <span>Your action • {actionCountdown}s</span>
+    </div>
+  )}
+
 
 
           {/* Hit / Stand / Double / Split */}

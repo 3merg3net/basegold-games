@@ -50,10 +50,8 @@ export type BlackjackTableState = {
   activeHandIndex: number | null;
   dealer: BlackjackDealerState;
   seats: BlackjackSeatState[];
-  betDeadlineMs?: number | null; // 👈 must be here too
+  betDeadlineMs?: number | null;
 };
-
-
 
 export type UseBlackjackRoomOptions = {
   roomId: string;
@@ -71,98 +69,126 @@ type MessageBase = {
 type ServerToClientMessage = MessageBase & {
   type: string;
   table?: BlackjackTableState;
+  message?: string;
   [key: string]: any;
 };
 
 export function useBlackjackRoom(opts: UseBlackjackRoomOptions | null) {
   const [connected, setConnected] = useState(false);
-  const [table, setTable] = useState<BlackjackTableState | null>(
-    null
-  );
+  const [table, setTable] = useState<BlackjackTableState | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
-  // Connect to WS + send join-room
+  // Connect + auto-reconnect
   useEffect(() => {
     if (!opts) return;
 
+    let stopped = false;
+
     const { wsUrl, roomId, playerId, name } = opts;
 
-    let closed = false;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    function setupSocket() {
+      if (stopped) return;
 
-    ws.onopen = () => {
-      if (closed) return;
-      setConnected(true);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-      const joinMsg: MessageBase & {
-        type: "join-room";
-        name?: string;
-      } = {
-        kind: "blackjack",
-        type: "join-room",
-        roomId,
-        playerId,
-        name,
+      ws.onopen = () => {
+        if (stopped) return;
+        console.log("[BJ hook] ws open");
+        setConnected(true);
+        reconnectAttemptsRef.current = 0;
+
+        const joinMsg: MessageBase & {
+          type: "join-room";
+          name?: string;
+        } = {
+          kind: "blackjack",
+          type: "join-room",
+          roomId,
+          playerId,
+          name,
+        };
+
+        try {
+          ws.send(JSON.stringify(joinMsg));
+        } catch {
+          // ignore
+        }
       };
 
-      try {
-        ws.send(JSON.stringify(joinMsg));
-      } catch {
-        // ignore
-      }
-    };
+      ws.onmessage = (event: MessageEvent) => {
+        if (stopped) return;
+        const raw = event.data as string;
+        console.log("[BJ hook] onmessage raw:", raw);
 
-    ws.onmessage = (event: MessageEvent) => {
-      if (closed) return;
-      const raw = event.data as string;
-      // Debug raw messages
-      console.log("[BJ hook] onmessage raw:", raw);
+        try {
+          const msg = JSON.parse(raw) as ServerToClientMessage;
+          console.log("[BJ hook] onmessage parsed:", msg);
 
-      try {
-        const msg = JSON.parse(raw) as ServerToClientMessage;
-        console.log("[BJ hook] onmessage parsed:", msg);
+          if (msg.kind !== "blackjack") return;
 
-        if (msg.kind !== "blackjack") return;
+          if (
+            (msg.type === "blackjack-state" ||
+              msg.type === "table-state") &&
+            msg.table
+          ) {
+            setTable(msg.table);
+            return;
+          }
 
-        // Accept both "blackjack-state" and "table-state"
-        if (
-          (msg.type === "blackjack-state" ||
-            msg.type === "table-state") &&
-          msg.table
-        ) {
-          setTable(msg.table);
-          return;
+          if (msg.type === "error" && msg.message) {
+            console.warn(
+              "[BJ hook] error from server:",
+              msg.message
+            );
+          }
+        } catch (err) {
+          console.log("[BJ hook] onmessage JSON parse error:", err);
         }
+      };
 
-        if (msg.type === "error" && msg.message) {
-          console.warn("[BJ hook] error from server:", msg.message);
-        }
-      } catch (err) {
-        console.log("[BJ hook] onmessage JSON parse error:", err);
-      }
-    };
+      ws.onclose = () => {
+        if (stopped) return;
+        console.log("[BJ hook] ws closed");
+        setConnected(false);
+        wsRef.current = null;
 
-    ws.onclose = () => {
-      if (closed) return;
-      setConnected(false);
-      wsRef.current = null;
-    };
+        // schedule reconnect
+        reconnectAttemptsRef.current += 1;
+        const attempt = reconnectAttemptsRef.current;
+        const delay = Math.min(1000 * attempt, 10_000);
 
-    ws.onerror = () => {
-      if (closed) return;
-      setConnected(false);
-    };
+        setTimeout(() => {
+          if (!stopped) {
+            console.log(
+              "[BJ hook] reconnecting, attempt",
+              reconnectAttemptsRef.current
+            );
+            setupSocket();
+          }
+        }, delay);
+      };
+
+      ws.onerror = (ev) => {
+        console.log("[BJ hook] ws error", ev);
+        // let onclose handle reconnect
+      };
+    }
+
+    setupSocket();
 
     return () => {
-      closed = true;
+      stopped = true;
+      setConnected(false);
+      const ws = wsRef.current;
+      wsRef.current = null;
       try {
-        ws.close();
+        ws?.close();
       } catch {
         // ignore
       }
-      wsRef.current = null;
     };
   }, [opts?.wsUrl, opts?.roomId, opts?.playerId, opts?.name]);
 
@@ -171,7 +197,10 @@ export function useBlackjackRoom(opts: UseBlackjackRoomOptions | null) {
     const ws = wsRef.current;
 
     if (!ws) {
-      console.log("[BJ hook] sendRaw: no websocket instance yet", payload);
+      console.log(
+        "[BJ hook] sendRaw: no websocket instance yet",
+        payload
+      );
       return;
     }
 

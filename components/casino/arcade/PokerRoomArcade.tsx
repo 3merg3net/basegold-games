@@ -1129,7 +1129,7 @@ useEffect(() => {
     !!table && (!betting || betting.street === "done");
 
   // When a hand is finished (or no betting) and at least 2 players seated,
-  // schedule the next hand after 5 seconds
+  // schedule the next hand after 25 seconds
   if (noActiveHand && seatedCount >= MIN_PLAYERS_TO_START) {
     if (autoDealTimeoutRef.current == null) {
       autoDealTimeoutRef.current = window.setTimeout(() => {
@@ -1140,7 +1140,7 @@ useEffect(() => {
           sendMessage({ type: "start-hand" });
         }
         autoDealTimeoutRef.current = null;
-      }, 15000);
+      }, 25000);
     }
   } else {
     // If a new hand starts or conditions are not met, clear any pending timeout
@@ -1366,21 +1366,24 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
           }
         >
           {/* TABLE */}
-         <div
+<div
   className={
-    "relative rounded-3xl p-4 md:p-6 border border-[#FFD700]/40 bg-gradient-to-b from-black via-[#020617] to-black shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden"
+    "relative flex flex-col justify-between rounded-3xl p-4 md:p-6 border border-[#FFD700]/40 bg-gradient-to-b from-black via-[#020617] to-black shadow-[0_0_50px_rgba(0,0,0,0.9)] pb-32 md:pb-12 overflow-visible"
   }
 >
+
+
 
 
 
          <div
   className={
     isFullscreen
-      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[70vh] [perspective:1600px]"
-      : "relative mx-auto mt-2 w-full max-w-[980px] aspect-[16/9] [perspective:1600px]"
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] flex-1 h-[68vh] md:h-[70vh] [perspective:1600px]"
+      : "relative mx-auto mt-2 w-full max-w-[980px] flex-1 aspect-[16/9] [perspective:1600px]"
   }
 >
+
 
               {/* Exit fullscreen button – floating above table, not over players */}
               {isFullscreen && (
@@ -1564,22 +1567,25 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
 )}
 
 
-                      {/* Board cards */}
-                      <div className="pointer-events-none absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1 px-2">
-                        <div className="flex gap-1.5 md:gap-2">
-                          {boardCards.map((c, i) => {
-                            const tilts = [-6, -3, 0, 3, 6];
-                            return (
-                              <PokerCard
-                                key={`${table?.handId ?? 0}-board-${i}-${c}`}
-                                card={c}
-                                delayIndex={i}
-                                tilt={tilts[i]}
-                              />
-                            );
-                          })}
-                        </div>
-                      </div>
+ {/* Board cards */}
+<div className="pointer-events-none absolute left-1/2 px-2 -translate-x-1/2 top-[42%] md:top-[43%]">
+  <div className="flex gap-1.5 md:gap-2">
+    {boardCards.map((c, i) => {
+      const tilts = [-6, -3, 0, 3, 6];
+      return (
+        <PokerCard
+          key={`${table?.handId ?? 0}-board-${i}-${c}`}
+          card={c}
+          delayIndex={i}
+          tilt={tilts[i]}
+          size="normal"       
+        />
+      );
+    })}
+  </div>
+</div>
+
+
 
                       {/* SHOWDOWN */}
                       {showdown &&
@@ -1762,7 +1768,7 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
           <div className="relative flex flex-col items-center">
     {/* Winner / Fold banners above avatar */}
   {isWinnerSeat && (
-    <div className="pointer-events-none absolute -top-10 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center winner-anim">
+    <div className="pointer-events-none absolute -top-8 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center winner-anim">
       <div className="winner-emoji-pop mb-1 text-[30px] md:text-[38px] drop-shadow-[0_0_10px_rgba(0,0,0,0.9)]">
         🏆
       </div>
@@ -1850,70 +1856,67 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
               </div>
             )}
 
-            {/* Overlay pinned to avatar: cards + pill */}
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between">
-              {/* Cards */}
-              <div className="mt-[4px] flex justify-center">
-                {visibleCards && visibleCards.length === 2 ? (
-                  // real cards
-                  <div className="relative flex -space-x-4">
-                    {visibleCards.map((c, i) => (
-                      <div
-                        key={`${table?.handId ?? 0}-seat-${seat.seatIndex}-card-${i}-${c}`}
-                        className="relative"
-                        style={{
-                          transform: `translateY(2px) scale(0.85) rotate(${
-                            i === 0 ? -8 : 8
-                          }deg)`,
-                          transformOrigin: '50% 75%',
-                        }}
-                      >
-                        <PokerCard
-                          card={c}
-                          highlight={isWinnerSeat}
-                          size="small"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : isInHand ? (
-                  // active in hand but cards hidden → generic backs
-                  <div className="relative flex -space-x-4">
-                    {[0, 1].map((i) => (
-                      <div
-                        key={i}
-                        className={`h-6 w-5 rounded-[3px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
-                          i === 1 ? 'rotate-[8deg]' : 'rotate-[-8deg]'
-                        } ${isOut ? 'opacity-30' : 'opacity-90'}`}
-                        style={{
-                          transformOrigin: '50% 75%',
-                          transform: 'translateY(2px) scale(0.85)',
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+           {/* Overlay pinned to avatar: cards + pill */}
+<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between">
+  {/* Cards */}
+  <div className="mt-[4px] flex justify-center">
+    {visibleCards && visibleCards.length === 2 ? (
+      // real cards
+      <div className="relative flex -space-x-4">
+        {visibleCards.map((c, i) => (
+          <div
+            key={`${table?.handId ?? 0}-seat-${seat.seatIndex}-card-${i}-${c}`}
+            className="relative"
+            style={{
+              transform: `translateY(2px) scale(0.85) rotate(${
+                i === 0 ? -8 : 8
+              }deg)`,
+              transformOrigin: "50% 75%",
+            }}
+          >
+            <PokerCard card={c} highlight={isWinnerSeat} size="small" />
+          </div>
+        ))}
+      </div>
+    ) : isInHand ? (
+      // active in hand but cards hidden → generic backs
+      <div className="relative flex -space-x-4">
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className={`h-6 w-5 rounded-[3px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
+              i === 1 ? "rotate-[8deg]" : "rotate-[-8deg]"
+            } ${isOut ? "opacity-30" : "opacity-90"}`}
+            style={{
+              transformOrigin: "50% 75%",
+              transform: "translateY(2px) scale(0.85)",
+            }}
+          />
+        ))}
+      </div>
+    ) : null}
+  </div>
 
-              {/* GG-style pill band under cards */}
-              <div className="mb-[3px] flex w-full justify-center">
-                <div className="pointer-events-auto flex min-w-[76px] max-w-[96px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[1px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
-                  {totalForHand > 0 && (
-                    <div className="text-[7px] font-mono text-amber-200 leading-tight">
-                      {formatChips(totalForHand)} in pot
-                    </div>
-                  )}
+  {/* GG-style pill band under cards */}
+  <div className="mb-[3px] flex w-full justify-center">
+    <div className="pointer-events-auto flex min-w-[76px] max-w-[96px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[1px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+      {totalForHand > 0 && (
+        <div className="text-[7px] font-mono text-amber-200 leading-tight">
+          {formatChips(totalForHand)} in pot
+        </div>
+      )}
 
-                  <div className="rounded-full bg-black/70 px-2 py-[1px] text-[8px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-                    {formatChips(stackAmount)} PGLD
-                  </div>
+      <div className="rounded-full bg-black/70 px-2 py-[1px] text-[8px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+        {formatChips(stackAmount)} PGLD
+      </div>
 
-                  <div className="mt-[1px] max-w-[90px] truncate text-[8px] text-white/80 leading-tight">
-                    {label}
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div className="mt-[1px] max-w-[90px] truncate text-[8px] text-white/80 leading-tight">
+        {label}
+      </div>
+    </div>
+  </div>
+</div>
+
 
             
 
@@ -1938,6 +1941,7 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
               
 
              
+
 
 {/* HERO ACTION BAR – compact, centered, animated */}
 <div
@@ -2268,7 +2272,6 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
     </div>
   </div>
 </div>
-
 
       {/* PRE-ACTION (auto-check / auto-fold) – only when it's NOT hero's turn */}
       {heroSeat && betting && betting.street !== "done" && !isHeroTurn && (
