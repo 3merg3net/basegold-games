@@ -119,7 +119,7 @@ export default function LiveTablesPage() {
 
           {/* BLACKJACK LIVE TABLES */}
           <Link
-            href="/blackjack"
+            href="/blackjack-live"
             className="group rounded-3xl border border-white/25 bg-gradient-to-b from-[#020617] via-black to-black/95 p-5 flex flex-col justify-between shadow-[0_18px_60px_rgba(0,0,0,0.95)]"
           >
             <div className="space-y-4">

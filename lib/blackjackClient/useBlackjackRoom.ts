@@ -3,150 +3,268 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type BlackjackMessage = any;
+export type BlackjackPhase =
+  | "waiting-bets"
+  | "dealing"
+  | "player-action"
+  | "dealer-turn"
+  | "round-complete";
 
-type UseBlackjackRoomResult = {
-  ready: boolean;
-  messages: BlackjackMessage[];
-  send: (msg: any) => void;
+export type BlackjackHandResult =
+  | "pending"
+  | "win"
+  | "lose"
+  | "push"
+  | "blackjack";
+
+export type BlackjackHandState = {
+  handIndex: number;
+  cards: string[];
+  bet: number;
+  isBusted: boolean;
+  isStanding: boolean;
+  isBlackjack: boolean;
+  result: BlackjackHandResult;
+  payout: number;
 };
 
-const DEFAULT_WS_URL = "ws://localhost:8090";
+export type BlackjackSeatState = {
+  seatIndex: number;
+  playerId: string | null;
+  name?: string;
+  bankroll: number;
+  hands: BlackjackHandState[];
+};
 
-/**
- * Client hook for the live blackjack WebSocket room.
- *
- * Mirrors the pattern of usePokerRoom:
- *   const { ready, messages, send } = useBlackjackRoom(tableId, playerId)
- *
- * The server should accept:
- *   ws://.../ ?tableId=...&playerId=...
- */
-export function useBlackjackRoom(
-  tableId: string,
-  playerId: string
-): UseBlackjackRoomResult {
-  const [ready, setReady] = useState(false);
-  const [messages, setMessages] = useState<BlackjackMessage[]>([]);
+export type BlackjackDealerState = {
+  cards: string[];
+  hideHoleCard: boolean;
+};
+
+export type BlackjackTableState = {
+  roundId: number;
+  phase: BlackjackPhase;
+  minBet: number;
+  maxBet: number;
+  activeSeatIndex: number | null;
+  activeHandIndex: number | null;
+  dealer: BlackjackDealerState;
+  seats: BlackjackSeatState[];
+  betDeadlineMs?: number | null; // 👈 must be here too
+};
+
+
+
+export type UseBlackjackRoomOptions = {
+  roomId: string;
+  playerId: string;
+  name: string;
+  wsUrl: string;
+};
+
+type MessageBase = {
+  kind: "blackjack";
+  roomId: string;
+  playerId: string;
+};
+
+type ServerToClientMessage = MessageBase & {
+  type: string;
+  table?: BlackjackTableState;
+  [key: string]: any;
+};
+
+export function useBlackjackRoom(opts: UseBlackjackRoomOptions | null) {
+  const [connected, setConnected] = useState(false);
+  const [table, setTable] = useState<BlackjackTableState | null>(
+    null
+  );
+
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<number | null>(null);
-  const manuallyClosedRef = useRef(false);
 
-  // Resolve WS URL from env or fallback
-  const wsBase =
-    process.env.NEXT_PUBLIC_BLACKJACK_WS?.trim() || DEFAULT_WS_URL;
-
+  // Connect to WS + send join-room
   useEffect(() => {
-    manuallyClosedRef.current = false;
+    if (!opts) return;
 
-    const url = (() => {
+    const { wsUrl, roomId, playerId, name } = opts;
+
+    let closed = false;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      if (closed) return;
+      setConnected(true);
+
+      const joinMsg: MessageBase & {
+        type: "join-room";
+        name?: string;
+      } = {
+        kind: "blackjack",
+        type: "join-room",
+        roomId,
+        playerId,
+        name,
+      };
+
       try {
-        const u = new URL(wsBase);
-        u.searchParams.set("tableId", tableId);
-        u.searchParams.set("playerId", playerId);
-        return u.toString();
+        ws.send(JSON.stringify(joinMsg));
       } catch {
-        // if env is just host:port
-        const proto = wsBase.startsWith("ws") ? "" : "ws://";
-        return `${proto}${wsBase}?tableId=${encodeURIComponent(
-          tableId
-        )}&playerId=${encodeURIComponent(playerId)}`;
+        // ignore
       }
-    })();
+    };
 
-    function connect() {
-      if (manuallyClosedRef.current) return;
+    ws.onmessage = (event: MessageEvent) => {
+      if (closed) return;
+      const raw = event.data as string;
+      // Debug raw messages
+      console.log("[BJ hook] onmessage raw:", raw);
 
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
+      try {
+        const msg = JSON.parse(raw) as ServerToClientMessage;
+        console.log("[BJ hook] onmessage parsed:", msg);
 
-      ws.onopen = () => {
-        setReady(true);
-        // optional hello
-        ws.send(
-          JSON.stringify({
-            type: "hello",
-            tableId,
-            playerId,
-          })
-        );
-      };
+        if (msg.kind !== "blackjack") return;
 
-      ws.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data);
-          setMessages((prev) => [...prev, data]);
-        } catch {
-          // ignore bad JSON
+        // Accept both "blackjack-state" and "table-state"
+        if (
+          (msg.type === "blackjack-state" ||
+            msg.type === "table-state") &&
+          msg.table
+        ) {
+          setTable(msg.table);
+          return;
         }
-      };
 
-      ws.onclose = () => {
-        setReady(false);
-        wsRef.current = null;
-
-        if (!manuallyClosedRef.current) {
-          // simple backoff reconnect
-          reconnectRef.current = window.setTimeout(() => {
-            connect();
-          }, 1500);
+        if (msg.type === "error" && msg.message) {
+          console.warn("[BJ hook] error from server:", msg.message);
         }
-      };
-
-      ws.onerror = () => {
-        // let onclose handle reconnect
-      };
-    }
-
-    connect();
-
-    // heartbeat ping to keep Railway WS alive
-    const pingId = window.setInterval(() => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "ping" }));
+      } catch (err) {
+        console.log("[BJ hook] onmessage JSON parse error:", err);
       }
-    }, 25000);
+    };
+
+    ws.onclose = () => {
+      if (closed) return;
+      setConnected(false);
+      wsRef.current = null;
+    };
+
+    ws.onerror = () => {
+      if (closed) return;
+      setConnected(false);
+    };
 
     return () => {
-      manuallyClosedRef.current = true;
-
-      if (reconnectRef.current != null) {
-        clearTimeout(reconnectRef.current);
-        reconnectRef.current = null;
+      closed = true;
+      try {
+        ws.close();
+      } catch {
+        // ignore
       }
-
-      if (pingId) {
-        clearInterval(pingId);
-      }
-
-      if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch {
-          // ignore
-        }
-        wsRef.current = null;
-      }
+      wsRef.current = null;
     };
-    // re-connect if table or player changes
-  }, [wsBase, tableId, playerId]);
+  }, [opts?.wsUrl, opts?.roomId, opts?.playerId, opts?.name]);
 
-  const send = (msg: any) => {
+  // ---- Helper to send messages ----
+  function sendRaw(payload: { type: string; [key: string]: any }) {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-    const payload = {
-      ...msg,
-      tableId,
-      playerId,
+    if (!ws) {
+      console.log("[BJ hook] sendRaw: no websocket instance yet", payload);
+      return;
+    }
+
+    if (ws.readyState !== WebSocket.OPEN) {
+      console.log("[BJ hook] sendRaw: websocket not open", {
+        readyState: ws.readyState,
+        payload,
+      });
+      return;
+    }
+
+    if (!opts) {
+      console.log("[BJ hook] sendRaw: no opts", payload);
+      return;
+    }
+
+    const base: MessageBase = {
+      kind: "blackjack",
+      roomId: opts.roomId,
+      playerId: opts.playerId,
     };
+
+    const msg = { ...base, ...payload };
+    console.log("[BJ hook] sendRaw: sending", msg);
 
     try {
-      ws.send(JSON.stringify(payload));
-    } catch {
-      // ignore send errors
+      ws.send(JSON.stringify(msg));
+    } catch (err) {
+      console.log("[BJ hook] sendRaw: error sending", err);
     }
-  };
+  }
 
-  return { ready, messages, send };
+  /** Sit / leave seat */
+  function sendSeat(action: "sit" | "leave", seatIndex: number) {
+    if (!opts) return;
+    console.log("[BJ hook] sendSeat called", { action, seatIndex });
+
+    if (action === "sit") {
+      sendRaw({
+        type: "bj-seat",
+        seatIndex,
+        action: "sit",
+        name: opts.name,
+      });
+    } else {
+      sendRaw({
+        type: "bj-seat",
+        seatIndex,
+        action: "leave",
+      });
+    }
+  }
+
+  /** Place initial bet for the seat */
+  function placeBet(seatIndex: number, amount: number) {
+    console.log("[BJ hook] placeBet", { seatIndex, amount });
+    sendRaw({
+      type: "bj-place-bet",
+      seatIndex,
+      amount,
+    });
+  }
+
+  /** Player action on current hand */
+  function sendAction(
+    action:
+      | "hit"
+      | "stand"
+      | "double"
+      | "split"
+      | "next-round"
+      | "reload-demo",
+    seatIndex: number,
+    handIndex: number
+  ) {
+    console.log("[BJ hook] sendAction", {
+      action,
+      seatIndex,
+      handIndex,
+    });
+    sendRaw({
+      type: "bj-action",
+      seatIndex,
+      handIndex,
+      action,
+    });
+  }
+
+  return {
+    connected,
+    table,
+    sendSeat,
+    placeBet,
+    sendAction,
+  };
 }

@@ -1,6 +1,9 @@
-// app/blackjack-live/page.tsx
 import BlackjackLive from "@/components/casino/blackjacklive";
 
 export default function BlackjackLivePage() {
-  return <BlackjackLive />;
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <BlackjackLive />
+    </main>
+  );
 }
