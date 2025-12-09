@@ -1538,28 +1538,31 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
               >
                 {/* FELT + TABLE wrapper */}
                 <div
-                  className={
-                    isFullscreen
-                      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[62vh] [perspective:1600px]"
-                      : "relative mx-auto mt-2 w-full max-w-[980px] aspect-[10/16] md:aspect-[16/9] [perspective:1600px]"
-                  }
-                >
-                  {/* 3D group */}
-                  <div className="absolute inset-0 [transform:rotateX(18deg)] [transform-style:preserve-3d]">
-                    {/* Outer rail */}
-                    <div className="absolute inset-0 rounded-[999px] bg-[radial-gradient(circle_at_top,#4b2f1a_0,#2b1a0d_50%,#050509_100%)] shadow-[0_26px_90px_rgba(0,0,0,1)]">
-                      <div className="absolute inset-x-[14%] top-[6%] h-5 rounded-full bg-gradient-to-b from-white/18 to-transparent blur-md opacity-80" />
-                    </div>
+  className={
+    isFullscreen
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[72vh] [perspective:1600px]"
+      : "relative mx-auto mt-2 w-full max-w-[980px] aspect-[16/11] md:aspect-[16/9] [perspective:1600px]"
+  }
+>
 
-                    {/* Inner felt */}
-                    <div className="absolute inset-[10%] md:inset-[6%] origin-center scale-[0.9] md:scale-y-[0.9] rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
+                  {/* 3D group */}
+<div className="absolute inset-0 [transform:rotateX(18deg)] [transform-style:preserve-3d]">
+  {/* Outer rail */}
+  <div className="absolute inset-0 rounded-[999px] bg-[radial-gradient(circle_at_top,#4b2f1a_0,#2b1a0d_52%,#050509_100%)] shadow-[0_26px_90px_rgba(0,0,0,1)]">
+    <div className="absolute inset-x-[14%] top-[6%] h-5 rounded-full bg-gradient-to-b from-white/18 to-transparent blur-md opacity-80" />
+  </div>
+
+  {/* Inner felt – slightly larger + flatter = thin bumper, long oval */}
+  <div className="absolute inset-[5.5%] md:inset-[5%] origin-center scale-y-[0.88] md:scale-y-[0.84] rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
+
 
                       {/* Felt texture */}
                       <div className="pointer-events-none absolute inset-0 bg-[url('/felt/felt-texture.png')] mix-blend-soft-light opacity-[0.16]" />
 
                       {/* Center logo */}
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                        <div className="flex translate-y-2 flex-col items-center md:translate-y-1">
+  <div className="flex translate-y-1 flex-col items-center md:translate-y-0">
+
                           <div className="mb-1 opacity-85">
                             <Image
                               src="/felt/bgrc-logo.png"

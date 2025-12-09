@@ -466,15 +466,16 @@ export default function BlackjackLive() {
 
   /* ───────────── Table + seats (desktop seat overlays) ───────────── */
 
-  const seats: BlackjackSeatState[] =
-    table && table.seats && table.seats.length > 0
-      ? table.seats
-      : Array.from({ length: 7 }, (_, i) => ({
-          seatIndex: i,
-          playerId: null,
-          bankroll: 10_000,
-          hands: [],
-        }));
+  // 🔥 Fallback seats: always 7 entries so overlays render
+const seats: BlackjackSeatState[] =
+  table && Array.isArray(table.seats) && table.seats.length > 0
+    ? table.seats
+    : Array.from({ length: 7 }, (_, i) => ({
+        seatIndex: i,
+        playerId: null,
+        bankroll: 10_000,
+        hands: [],
+      }));
 
   const canPlaceBet = useMemo(() => {
     if (heroSeatIndex === null) return false;
@@ -947,13 +948,11 @@ export default function BlackjackLive() {
             </div>
           )}
 
-          {/* DESKTOP seat overlays */}
-          <div className="hidden md:block">
-            {/* Seat overlays on felt (mobile + desktop) */}
-{seats.map((seat) => renderSeat(seat))}
+          {/* Seats – overlays on felt (mobile + desktop, always rendered) */}
+<div className="absolute inset-0 z-[40] pointer-events-none">
+  {seats.map((seat) => renderSeat(seat))}
+</div>
 
-
-          </div>
         </div>
       </div>
 
