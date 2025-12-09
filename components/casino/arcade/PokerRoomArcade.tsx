@@ -23,6 +23,7 @@ import PokerCard from "@/components/poker/PokerCard";
 
 
 
+
 /* ───────────────── Types ───────────────── */
 
 type SeatView = {
@@ -471,6 +472,9 @@ const heroHandHelper = useMemo<HandHelper | null>(() => {
   return getHandHelper(heroHand, table.board);
 }, [table, heroHand]);
 
+const heroTurnPrevRef = useRef(false);
+
+
 
 
 // Is hero actually in this hand (dealt cards and not folded)?
@@ -484,6 +488,23 @@ const isHeroTurn: boolean =
   !!heroBetting &&
   betting.currentSeatIndex === heroSeat.seatIndex &&
   betting.street !== "done";
+
+
+  useEffect(() => {
+  if (typeof window === 'undefined') return; // SSR guard
+
+  const wasHeroTurn = heroTurnPrevRef.current;
+
+  // only vibrate on the moment it becomes your turn
+  if (!wasHeroTurn && isHeroTurn && 'vibrate' in window.navigator) {
+    // optional: only vibrate on smaller screens
+    if (window.innerWidth <= 768) {
+      window.navigator.vibrate(35); // 35ms buzz
+    }
+  }
+
+  heroTurnPrevRef.current = isHeroTurn;
+}, [isHeroTurn]);
 
 const heroHasAction =
   !!heroSeat && !!betting && betting.street !== "done" && !!heroBetting;
@@ -1368,11 +1389,22 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
           }
         >
           {/* TABLE */}
+{/* TABLE */}
+{/* TABLE */}
 <div
-  className={
-    "relative flex flex-col justify-between rounded-3xl p-4 md:p-6 border border-[#FFD700]/40 bg-gradient-to-b from-black via-[#020617] to-black shadow-[0_0_50px_rgba(0,0,0,0.9)] pb-32 md:pb-12 overflow-visible"
-  }
+  className={[
+    "relative flex flex-col rounded-3xl border border-[#FFD700]/40",
+    "bg-gradient-to-b from-black via-[#020617] to-black",
+    "shadow-[0_0_50px_rgba(0,0,0,0.9)]",
+    "p-4 md:p-6",
+    "space-y-3",
+    // 🔑 Clamp overflow on mobile so the felt / avatars / chips
+    // can't hang down over the Player Profile card:
+    "overflow-hidden md:overflow-visible",
+  ].join(" ")}
 >
+
+
 
 
 

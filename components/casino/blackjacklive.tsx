@@ -18,39 +18,21 @@ import {
 const ROOM_ID = "bgld-blackjack-room-1";
 const MIN_DEMO_BET = 50;
 
-
 /**
- * Seat positions (7 seats).
+ * Seat positions (7 seats) for DESKTOP only.
  * 0 = far right, 6 = far left, arcing up toward table edge.
  */
-// 7 seats, indexed 0–6, from RIGHT to LEFT, aligned to the 7 logos on the felt
-// 7 seats, indexed 0–6, from RIGHT to LEFT
 const BJ_SEAT_POSITIONS: CSSProperties[] = [
-  // Seat 0 – far right
-  { left: "87%", top: "22%" },
-  // Seat 1
-  { left: "83%", top: "42%" },
-  // Seat 2
-  { left: "65%", top: "64%" },
-  // Seat 3 – center
-  { left: "45%", top: "70%" },
-  // Seat 4
-  { left: "23%", top: "65%" },
-  // Seat 5
-  { left: "6%", top: "42%" },
-  // Seat 6 – far left
-  { left: "1%", top: "22%" },
+  { left: "87%", top: "22%" }, // 0 right
+  { left: "83%", top: "42%" }, // 1
+  { left: "65%", top: "64%" }, // 2 bottom-right
+  { left: "45%", top: "70%" }, // 3 center
+  { left: "23%", top: "65%" }, // 4 bottom-left
+  { left: "6%", top: "42%" },  // 5
+  { left: "1%", top: "22%" },  // 6 left
 ];
 
-
-
-
-
-
-
-
-
-/* ───────────── Extra card helpers (for BJCard) ───────────── */
+/* ───────────── Card helpers ───────────── */
 
 const RANK_LABELS: Record<string, string> = {
   A: "A",
@@ -82,16 +64,13 @@ const SUIT_COLORS: Record<string, string> = {
   d: "text-red-500",
 };
 
-/**
- * Compute blackjack hand value from card codes like "Ah", "Td", "9c".
- * Ignores "XX" (hidden dealer card).
- */
 function computeBlackjackValue(cards: string[]) {
   let total = 0;
   let aces = 0;
 
   for (const c of cards) {
-    const rank = c[0]; // "A", "K", "Q", "J", "T", ...
+    if (!c || c === "XX") continue;
+    const rank = c[0];
     if (rank === "A") {
       aces += 1;
       total += 11;
@@ -178,7 +157,6 @@ type BJCardProps = {
   small?: boolean;
 };
 
-// Not currently used in layout, but kept for future polish
 function BJCard({ card, small = false }: BJCardProps) {
   const { isBack, rankLabel, suitLabel, suitColor } = parseCard(card);
 
@@ -252,9 +230,7 @@ export default function BlackjackLive() {
     }
   }, []);
 
-  const wsUrl =
-    process.env.NEXT_PUBLIC_BLACKJACK_WS || "Local";
-
+  const wsUrl = process.env.NEXT_PUBLIC_BLACKJACK_WS || "Local";
   const [betAmount, setBetAmount] = useState<number>(MIN_DEMO_BET);
 
   const hookOpts =
@@ -270,7 +246,7 @@ export default function BlackjackLive() {
   const { connected, table, sendSeat, placeBet, sendAction } =
     useBlackjackRoom(hookOpts);
 
-  // Log full table on each update so we can confirm hands/cards
+  // Log table updates for debugging
   useEffect(() => {
     if (table) {
       console.log(
@@ -280,120 +256,27 @@ export default function BlackjackLive() {
     }
   }, [table]);
 
+  /* ───────────── Derived core state ───────────── */
+
   const heroSeatIndex = useMemo(() => {
     if (!table || !playerId) return null;
     const seat = table.seats.find((s) => s.playerId === playerId);
     return seat ? seat.seatIndex : null;
   }, [table, playerId]);
+
   const phase: BlackjackTableState["phase"] =
     table?.phase ?? "waiting-bets";
 
-     // ── Betting countdown (uses betDeadlineMs from server) ──
-const [betCountdown, setBetCountdown] = useState<number | null>(null);
+  const [betCountdown, setBetCountdown] = useState<number | null>(null);
+  const [autoRebet, setAutoRebet] = useState(false);
+  const [lastBet, setLastBet] = useState<number | null>(null);
 
-const showBetTimerOnFelt =
-  phase === "waiting-bets" && betCountdown !== null;
-
-const isBetTimerCritical =
-  phase === "waiting-bets" &&
-  betCountdown !== null &&
-  betCountdown <= 5;
-
-
-const [autoRebet, setAutoRebet] = useState(false);
-const [lastBet, setLastBet] = useState<number | null>(null)
-
-
-
-  useEffect(() => {
-  if (!table || heroSeatIndex === null) return;
-
-  
-
-  const phaseNow = table.phase;
-  const heroSeatNow = table.seats.find(
-    (s) => s.seatIndex === heroSeatIndex
-  );
-
-  // 1) Capture the last bet amount when a round completes
-  if (phaseNow === "round-complete" && heroSeatNow?.hands?.length) {
-    const h0 = heroSeatNow.hands[0];
-    if (h0.bet > 0) {
-      setLastBet(h0.bet);
-    }
-  }
-
-  // 2) Auto re-bet when we enter waiting-bets and the seat is clear
-  if (
-    autoRebet &&
-    phaseNow === "waiting-bets" &&
-    (!heroSeatNow?.hands || heroSeatNow.hands.length === 0) &&
-    lastBet && lastBet > 0
-  ) {
-    console.log("[BJ UI] autoRebet placing bet", {
-      heroSeatIndex,
-      lastBet,
-    });
-    placeBet(heroSeatIndex, lastBet);
-  }
-}, [table, heroSeatIndex, autoRebet, lastBet, placeBet]);
-
-
-  
-
-  
-
-useEffect(() => {
-  // If no table or no deadline → clear countdown
-  if (!table || !table.betDeadlineMs) {
-    setBetCountdown(null);
-    return;
-  }
-
-  function update() {
-    // Protect against null table or deadline
-    if (!table || !table.betDeadlineMs) {
-      setBetCountdown(null);
-      return;
-    }
-
-    const ms = table.betDeadlineMs - Date.now();
-    setBetCountdown(ms > 0 ? Math.ceil(ms / 1000) : 0);
-  }
-
-  update(); // initial run
-
-  const id = setInterval(update, 250);
-  return () => clearInterval(id);
-}, [table?.betDeadlineMs, table]);
-
- 
-
-  const tablePhase = table?.phase ?? "waiting-bets";
-
-    const canPlaceBet = useMemo(() => {
-    if (heroSeatIndex === null) return false;
-    if (!table) return true; // allow; server will normalize phase
-
-    const seat = table.seats.find(
-      (s) => s.seatIndex === heroSeatIndex
-    );
-    if (!seat) return false;
-
-    // If this seat already has a hand with a bet and any cards,
-    // don’t let them place another bet mid-hand.
-    const hasLiveHand = seat.hands.some(
-      (h) => h.bet > 0 && h.cards.length > 0 && h.result === "pending"
-    );
-    if (hasLiveHand) return false;
-
-    return true;
-  }, [table, heroSeatIndex]);
-
-
+  // Pull out dealer + active seat
+  const dealerCards = table?.dealer.cards ?? [];
+  const activeSeatIndex = table?.activeSeatIndex ?? null;
   const activeHandIndex = table?.activeHandIndex ?? null;
 
-  // Dealer totals (only visible cards while hole is hidden)
+  // Dealer visible value
   const dealerValue = useMemo(() => {
     if (!table) return null;
     const cards = table.dealer?.cards ?? [];
@@ -410,8 +293,8 @@ useEffect(() => {
     return { total, soft, hideHole };
   }, [table, phase]);
 
-  // Hero seat + active hand
-  const heroSeat =
+  // Hero seat + hero hand
+  const heroSeat: BlackjackSeatState | null =
     table && heroSeatIndex !== null
       ? table.seats.find((s) => s.seatIndex === heroSeatIndex) ?? null
       : null;
@@ -427,12 +310,12 @@ useEffect(() => {
     return { total, soft };
   }, [heroHand]);
 
-    const heroBankroll = heroSeat?.bankroll ?? null;
-  const DEMO_START = 10_000; // matches START_BANKROLL on server
+  const heroBankroll = heroSeat?.bankroll ?? null;
+  const DEMO_START = 10_000;
   const heroNet =
     heroBankroll !== null ? heroBankroll - DEMO_START : null;
 
-      const isHeroTurn =
+  const isHeroTurn =
     phase === "player-action" &&
     heroSeatIndex !== null &&
     table?.activeSeatIndex === heroSeatIndex;
@@ -453,16 +336,122 @@ useEffect(() => {
     heroSeat.hands.length < 2 &&
     heroHand.cards[0]?.[0] === heroHand.cards[1]?.[0];
 
+  /* ───────────── Bet countdown from server betDeadlineMs ───────────── */
 
-    
+  useEffect(() => {
+    if (!table || !table.betDeadlineMs) {
+      setBetCountdown(null);
+      return;
+    }
 
+    function update() {
+      if (!table || !table.betDeadlineMs) {
+        setBetCountdown(null);
+        return;
+      }
+      const ms = table.betDeadlineMs - Date.now();
+      setBetCountdown(ms > 0 ? Math.ceil(ms / 1000) : 0);
+    }
 
-    const activeSeatLabel =
-    table && typeof table.activeSeatIndex === "number" && table.activeSeatIndex >= 0
-      ? `Seat ${table.activeSeatIndex + 1}`
-      : null;
+    update();
+    const id = setInterval(update, 250);
+    return () => clearInterval(id);
+  }, [table?.betDeadlineMs, table]);
 
-    const statusMessage =
+  const showBetTimerOnFelt =
+    phase === "waiting-bets" && betCountdown !== null;
+  const isBetTimerCritical =
+    phase === "waiting-bets" &&
+    betCountdown !== null &&
+    betCountdown <= 5;
+
+  /* ───────────── Auto re-bet logic ───────────── */
+
+  useEffect(() => {
+    if (!table || heroSeatIndex === null) return;
+
+    const phaseNow = table.phase;
+    const heroSeatNow = table.seats.find(
+      (s) => s.seatIndex === heroSeatIndex
+    );
+
+    // capture last bet at round-complete
+    if (phaseNow === "round-complete" && heroSeatNow?.hands?.length) {
+      const h0 = heroSeatNow.hands[0];
+      if (h0.bet > 0) {
+        setLastBet(h0.bet);
+      }
+    }
+
+    // auto re-bet when we re-enter waiting-bets with clear hands
+    if (
+      autoRebet &&
+      phaseNow === "waiting-bets" &&
+      (!heroSeatNow?.hands || heroSeatNow.hands.length === 0) &&
+      lastBet &&
+      lastBet > 0
+    ) {
+      console.log("[BJ UI] autoRebet placing bet", {
+        heroSeatIndex,
+        lastBet,
+      });
+      placeBet(heroSeatIndex, lastBet);
+    }
+  }, [table, heroSeatIndex, autoRebet, lastBet, placeBet]);
+
+  /* ───────────── Action countdown (global per active hand) ───────────── */
+
+  const ACTION_WINDOW_SECONDS = 30;
+  const [actionCountdown, setActionCountdown] = useState<number | null>(
+    null
+  );
+
+  const actionTimerKey = useMemo(() => {
+    if (!table || table.phase !== "player-action") return null;
+    if (table.activeSeatIndex === null) return null;
+
+    const seat = table.seats[table.activeSeatIndex];
+    if (!seat) return null;
+
+    const hand =
+      seat.hands[table.activeHandIndex ?? 0] ?? seat.hands[0] ?? null;
+
+    const cardsKey = hand?.cards.join(",") ?? "";
+
+    return `${table.roundId}-${table.activeSeatIndex}-${table.activeHandIndex}-${cardsKey}`;
+  }, [table]);
+
+  useEffect(() => {
+    if (!actionTimerKey) {
+      setActionCountdown(null);
+      return;
+    }
+
+    const startedAt = Date.now();
+    setActionCountdown(ACTION_WINDOW_SECONDS);
+
+    const id = setInterval(() => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      const remaining = ACTION_WINDOW_SECONDS - elapsed;
+      setActionCountdown(remaining > 0 ? Math.ceil(remaining) : 0);
+    }, 250);
+
+    return () => clearInterval(id);
+  }, [actionTimerKey]);
+
+  const showActionTimerOnFelt =
+    phase === "player-action" &&
+    actionCountdown !== null &&
+    activeSeatIndex !== null;
+
+  const isActionTimerCritical =
+    phase === "player-action" &&
+    actionCountdown !== null &&
+    actionCountdown <= 5;
+
+  /* ───────────── Status message ───────────── */
+
+  const statusMessage =
     phase === "waiting-bets"
       ? betCountdown !== null
         ? `Place your bets — dealing in ${betCountdown}s…`
@@ -475,100 +464,8 @@ useEffect(() => {
       ? "Dealer is drawing out their hand."
       : "Round complete. Place a new bet for the next hand.";
 
+  /* ───────────── Table + seats (desktop seat overlays) ───────────── */
 
-
-  const dealerCards = table?.dealer.cards ?? [];
-
-    const activeSeatIndex = table?.activeSeatIndex ?? null;
-
-      
-
-
-   
-      const [actionCountdown, setActionCountdown] = useState<number | null>(null);
-  const ACTION_WINDOW_SECONDS = 30;
-
-
-useEffect(() => {
-  // Only run a timer during player-action with a valid active seat
-  if (!table || phase !== "player-action" || activeSeatIndex === null) {
-    setActionCountdown(null);
-    return;
-  }
-
-  const START = 30; // seconds for player action
-  setActionCountdown(START);
-
-  const id = setInterval(() => {
-    setActionCountdown((prev) => {
-      if (prev === null) return null;
-      if (prev <= 1) {
-        clearInterval(id);
-        return 0;
-      }
-      return prev - 1;
-    });
-  }, 1000);
-
-  return () => clearInterval(id);
-}, [table?.roundId, phase, activeSeatIndex]);
-
-const showActionTimerOnFelt =
-  phase === "player-action" &&
-  actionCountdown !== null &&
-  activeSeatIndex !== null;
-
-const isActionTimerCritical =
-  phase === "player-action" &&
-  actionCountdown !== null &&
-  actionCountdown <= 5;
-
-    const actionTimerKey = useMemo(() => {
-    if (!table || table.phase !== "player-action") return null;
-    if (table.activeSeatIndex === null) return null;
-
-    const seat = table.seats[table.activeSeatIndex];
-    if (!seat) return null;
-
-    const hand =
-      seat.hands[table.activeHandIndex ?? 0] ?? seat.hands[0] ?? null;
-
-    const cardsKey = hand?.cards.join(",") ?? "";
-
-    // changes whenever:
-    // - round changes
-    // - active seat changes
-    // - active hand index changes
-    // - cards in that hand change (hit, double, split)
-    return `${table.roundId}-${table.activeSeatIndex}-${table.activeHandIndex}-${cardsKey}`;
-  }, [table]);
-
-  useEffect(() => {
-    if (!actionTimerKey) {
-      setActionCountdown(null);
-      return;
-    }
-
-    setActionCountdown(ACTION_WINDOW_SECONDS);
-    const startedAt = Date.now();
-
-    const id = setInterval(() => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const remaining = ACTION_WINDOW_SECONDS - elapsed;
-      setActionCountdown(remaining > 0 ? Math.ceil(remaining) : 0);
-    }, 250);
-
-    return () => clearInterval(id);
-  }, [actionTimerKey, ACTION_WINDOW_SECONDS]);
-
-
-
-
-      
-
-
-
-  // 🔥 Fallback seats: show 7 circles even before WS state arrives
   const seats: BlackjackSeatState[] =
     table && table.seats && table.seats.length > 0
       ? table.seats
@@ -579,7 +476,22 @@ const isActionTimerCritical =
           hands: [],
         }));
 
-  /* ───────────── Send helpers ───────────── */
+  const canPlaceBet = useMemo(() => {
+    if (heroSeatIndex === null) return false;
+    if (!table) return true;
+
+    const seat = table.seats.find(
+      (s) => s.seatIndex === heroSeatIndex
+    );
+    if (!seat) return false;
+
+    const hasLiveHand = seat.hands.some(
+      (h) => h.bet > 0 && h.cards.length > 0 && h.result === "pending"
+    );
+    if (hasLiveHand) return false;
+
+    return true;
+  }, [table, heroSeatIndex]);
 
   function handleSit(seatIndex: number) {
     console.log("[BJ UI] handleSit", { seatIndex });
@@ -591,7 +503,7 @@ const isActionTimerCritical =
     sendSeat("leave", seatIndex);
   }
 
-    function handlePlaceBet() {
+  function handlePlaceBet() {
     if (heroSeatIndex === null) return;
 
     const minBet = table?.minBet ?? 50;
@@ -605,13 +517,12 @@ const isActionTimerCritical =
     });
 
     placeBet(heroSeatIndex, amount);
-    setLastBet(amount); // 🔥 remember last manual bet
+    setLastBet(amount);
   }
 
-
-  
-
-  function handleAction(action: "hit" | "stand" | "double" | "split") {
+  function handleAction(
+    action: "hit" | "stand" | "double" | "split"
+  ) {
     if (!table || heroSeatIndex === null) {
       console.log(
         "[BJ UI] handleAction: missing table or heroSeatIndex"
@@ -649,17 +560,20 @@ const isActionTimerCritical =
     sendAction("reload-demo", heroSeatIndex, 0);
   }
 
-      
-
-      /* ───────────── Seat rendering ───────────── */
+  /* ───────────── Desktop seat renderer (overlays on felt) ───────────── */
 
   function renderSeat(seat: BlackjackSeatState) {
-    const pos = BJ_SEAT_POSITIONS[seat.seatIndex] ?? BJ_SEAT_POSITIONS[0];
+    const pos =
+      BJ_SEAT_POSITIONS[seat.seatIndex] ?? BJ_SEAT_POSITIONS[0];
 
     const isHero = heroSeatIndex === seat.seatIndex;
     const seatTaken = !!seat.playerId;
     const takenByOther =
       seat.playerId && playerId && seat.playerId !== playerId;
+
+    // Hide empty seats during live rounds to keep felt clean
+    const tableInRound = phase !== "waiting-bets";
+    if (!seatTaken && tableInRound) return null;
 
     const primaryHand =
       seat.hands && seat.hands.length > 0 ? seat.hands[0] : null;
@@ -667,20 +581,18 @@ const isActionTimerCritical =
       primaryHand && primaryHand.cards.length > 0
         ? computeBlackjackValue(primaryHand.cards)
         : null;
-    const resultBadge = primaryHand ? getResultBadge(primaryHand.result) : null;
+    const resultBadge = primaryHand
+      ? getResultBadge(primaryHand.result)
+      : null;
 
     const isActive = activeSeatIndex === seat.seatIndex;
     const isMySeat = playerId && seat.playerId === playerId;
 
-        // Only show sit button in waiting-bets to avoid clutter mid-hand
+    // Show sit only in waiting-bets phase
     const showSitButton =
-      phase === "waiting-bets" && !takenByOther && !seatTaken;
+      !takenByOther && !seatTaken && phase === "waiting-bets";
     const showLeaveButton = isHero && seatTaken;
 
-
-    // Layout:
-    // - "side" for outer seats (0,1,5,6)
-    // - "bottom" for center/bottom seats (2,3,4)
     const layout =
       seat.seatIndex === 0 ||
       seat.seatIndex === 1 ||
@@ -689,106 +601,102 @@ const isActionTimerCritical =
         ? "side"
         : "bottom";
 
-    const isLeftSideSeat = seat.seatIndex >= 3; // used only for side-layout
+    const isLeftSideSeat = seat.seatIndex >= 3;
 
     const cardCount = primaryHand?.cards.length ?? 0;
     const cardScale =
       cardCount >= 5 ? 0.8 : cardCount >= 3 ? 0.9 : 1.0;
 
-    // On mobile:
-    // - hero seat pops a bit larger
-    // - non-hero seats shrink slightly / dim a bit
     const mobileScale = isHero ? 1.06 : 0.9;
     const mobileOpacity = isHero ? "opacity-100" : "opacity-80";
 
     const infoBlock = (align: "left" | "center") => {
-  const playerInitial =
-    seat.name?.trim()?.[0]?.toUpperCase() ?? "P";
+      const playerInitial =
+        seat.name?.trim()?.[0]?.toUpperCase() ?? "P";
 
-  return (
-    <div
-      className={
-        "flex flex-col gap-1 text-[9px] text-white/75 " +
-        (align === "center"
-          ? "items-center text-center"
-          : "items-start text-left")
-      }
-    >
-      {/* Avatar + name row */}
-      <div className="flex items-center gap-1.5 max-w-[180px]">
-        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white/35 bg-black/70 text-[10px] font-semibold text-white/85">
-          {seatTaken ? playerInitial : "?"}
-        </div>
-        <div className="truncate text-[9px] text-white/70">
-          {seat.name || (seatTaken ? "Player" : "Empty")}
-        </div>
-      </div>
-
-      {/* Bet chips on felt */}
-      {primaryHand && primaryHand.bet > 0 && (
-        <div className="mt-1 flex items-center justify-center">
-          <div className="flex h-7 items-center justify-center rounded-full border-2 border-white/70 bg-[#FBBF24] px-2 shadow-[0_0_10px_rgba(250,204,21,0.6)]">
-            <span className="font-mono text-[10px] text-black">
-              {primaryHand.bet.toLocaleString()} GLD
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Total + result + turn badge */}
-      {primaryHand && primaryHand.cards.length > 0 && value && (
-        <div className="flex flex-col gap-0.5 max-w-[180px]">
-          <div className="rounded-full bg-black/80 px-2 py-[1px] font-mono border border-white/25">
-            Total {value.total}
-            {value.soft ? " (soft)" : ""}
+      return (
+        <div
+          className={
+            "flex flex-col gap-1 text-[9px] text-white/75 " +
+            (align === "center"
+              ? "items-center text-center"
+              : "items-start text-left")
+          }
+        >
+          {/* Avatar + name */}
+          <div className="flex items-center gap-1.5 max-w-[180px]">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white/35 bg-black/70 text-[10px] font-semibold text-white/85">
+              {seatTaken ? playerInitial : "?"}
+            </div>
+            <div className="truncate text-[9px] text-white/70">
+              {seat.name || (seatTaken ? "Player" : "Empty")}
+            </div>
           </div>
 
-          {resultBadge && (
-            <div
-              className={
-                "rounded-full px-2 py-[1px] font-bold shadow " +
-                resultBadge.className
-              }
-            >
-              {resultBadge.label}
+          {/* Bet chips */}
+          {primaryHand && primaryHand.bet > 0 && (
+            <div className="mt-1 flex items-center justify-center">
+              <div className="flex h-7 items-center justify-center rounded-full border-2 border-white/70 bg-[#FBBF24] px-2 shadow-[0_0_10px_rgba(250,204,21,0.6)]">
+                <span className="font-mono text-[10px] text-black">
+                  {primaryHand.bet.toLocaleString()} GLD
+                </span>
+              </div>
             </div>
           )}
 
-          {isActive && isMySeat && (
-            <div className="rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
-              Your turn
+          {/* Total + result + turn badge */}
+          {primaryHand && primaryHand.cards.length > 0 && value && (
+            <div className="flex flex-col gap-0.5 max-w-[180px]">
+              <div className="rounded-full bg-black/80 px-2 py-[1px] font-mono border border-white/25">
+                Total {value.total}
+                {value.soft ? " (soft)" : ""}
+              </div>
+
+              {resultBadge && (
+                <div
+                  className={
+                    "rounded-full px-2 py-[1px] font-bold shadow " +
+                    resultBadge.className
+                  }
+                >
+                  {resultBadge.label}
+                </div>
+              )}
+
+              {isActive && isMySeat && (
+                <div className="rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
+                  Your turn
+                </div>
+              )}
             </div>
           )}
+
+          {/* Sit / leave */}
+          <div>
+            {showSitButton && (
+              <button
+                type="button"
+                onClick={() => handleSit(seat.seatIndex)}
+                className="rounded-full bg-[#FFD700] px-3 py-[3px] font-semibold text-black hover:bg-yellow-400"
+              >
+                Sit here
+              </button>
+            )}
+            {showLeaveButton && (
+              <button
+                type="button"
+                onClick={() => handleLeave(seat.seatIndex)}
+                className="rounded-full bg-slate-700 px-3 py-[3px] font-semibold text-white hover:bg-slate-600"
+              >
+                Leave
+              </button>
+            )}
+          </div>
         </div>
-      )}
+      );
+    };
 
-      {/* Sit / Leave button */}
-      <div>
-        {showSitButton && (
-          <button
-            type="button"
-            onClick={() => handleSit(seat.seatIndex)}
-            className="rounded-full bg-[#FFD700] px-3 py-[3px] font-semibold text-black hover:bg-yellow-400"
-          >
-            Sit here
-          </button>
-        )}
-        {showLeaveButton && (
-          <button
-            type="button"
-            onClick={() => handleLeave(seat.seatIndex)}
-            className="rounded-full bg-slate-700 px-3 py-[3px] font-semibold text-white hover:bg-slate-600"
-          >
-            Leave
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-
-    // Center/bottom seats: cards on top, info below
+    // Bottom seats (center row)
     if (layout === "bottom") {
       return (
         <div
@@ -801,16 +709,13 @@ const isActionTimerCritical =
               "relative flex flex-col items-center gap-1 transition-transform " +
               (isActive ? "md:scale-[1.03]" : "") +
               " " +
-              // mobile hero emphasis
               `scale-[${mobileScale}] md:scale-100 ${mobileOpacity}`
             }
           >
-            {/* Glow for active seat */}
             {isActive && (
               <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
             )}
 
-            {/* Cards */}
             <div
               className="relative flex max-w-[130px] justify-center"
               style={{
@@ -835,14 +740,13 @@ const isActionTimerCritical =
                 })}
             </div>
 
-            {/* Info + buttons centered below */}
             <div className="relative">{infoBlock("center")}</div>
           </div>
         </div>
       );
     }
 
-    // Side seats: cards in middle, info on the side
+    // Side seats
     return (
       <div
         key={seat.seatIndex}
@@ -854,22 +758,17 @@ const isActionTimerCritical =
             "relative flex items-center gap-2 transition-transform " +
             (isActive ? "md:scale-[1.03]" : "") +
             " " +
-            // mobile hero emphasis
             `scale-[${mobileScale}] md:scale-100 ${mobileOpacity}`
           }
         >
-          {/* Glow for active seat */}
           {isActive && (
             <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
           )}
 
-          {/* Left side seats: info on left, cards on right.
-              Right side seats: cards on left, info on right. */}
           {isLeftSideSeat && (
             <div className="relative z-[1]">{infoBlock("left")}</div>
           )}
 
-          {/* Player cards */}
           <div className="flex items-center justify-center">
             {primaryHand && primaryHand.cards.length > 0 && (
               <div className="flex">
@@ -900,19 +799,10 @@ const isActionTimerCritical =
     );
   }
 
-
-
-
-
-
-
-
-
   /* ───────────── Render ───────────── */
 
   return (
-    <div className="space-y-3 pb-10 md:pb-6">
-
+    <div className="space-y-3 pb-20 md:space-y-4 md:pb-8">
       {/* Header */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
@@ -948,16 +838,15 @@ const isActionTimerCritical =
       </div>
 
       {/* Table container */}
-      <div className="relative rounded-3xl border border-[#FFD700]/40 bg-gradient-to-b from-black via-slate-950 to-black p-4 md:p-6 shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden">
+      <div className="relative rounded-3xl border border-[#FFD700]/40 bg-gradient-to-b from-black via-slate-950 to-black p-3 md:p-6 shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden">
         {/* Glow */}
         <div className="pointer-events-none absolute inset-0 opacity-40">
           <div className="absolute -top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-sky-500/20 blur-3xl" />
           <div className="absolute bottom-0 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#FFD700]/20 blur-[70px]" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-[840px] aspect-[16/9] md:max-w-[820px]">
-
-          {/* Table PNG */}
+        {/* Felt */}
+        <div className="relative mx-auto w-full max-w-[900px] aspect-[4/3] md:aspect-[16/9]">
           <Image
             src="/felt/bgr-blackjack-table.png"
             alt="Base Gold Rush Live Blackjack Table"
@@ -966,35 +855,15 @@ const isActionTimerCritical =
             priority
           />
 
-                  {/* Global BET TIMER – top center by chip rack */}
-        {phase === "waiting-bets" && betCountdown !== null && (
-          <div className="pointer-events-none absolute left-1/2 top-[8%] z-[40] -translate-x-1/2 flex flex-col items-center gap-1">
-            <div className="rounded-full border border-[#FFD700]/70 bg-black/85 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#FFD700] shadow-[0_0_18px_rgba(250,204,21,0.8)]">
-              Place your bets
-            </div>
-            <div
-              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-mono ${
-                betCountdown <= 5
-                  ? "border-red-400 bg-red-600/95 text-black shadow-[0_0_24px_rgba(248,113,113,0.95)] animate-pulse"
-                  : "border-emerald-300 bg-emerald-500/95 text-black shadow-[0_0_22px_rgba(16,185,129,0.9)]"
-              }`}
-            >
-              {betCountdown}
-            </div>
-          </div>
-        )}
-
-
-                    {/* Dealer cards (top center) */}
+          {/* Dealer cards (top center) */}
           <div className="pointer-events-none absolute left-1/2 top-[16%] flex -translate-x-1/2 flex-col items-center gap-1.5">
             <div className="flex items-center justify-center">
               <div className="flex">
                 {dealerCards.map((c: string, i: number) => {
                   const count = dealerCards.length;
                   const overlap = count >= 4;
-                  const style: React.CSSProperties = overlap && i > 0
-                    ? { marginLeft: "-0.6rem" }
-                    : {};
+                  const style: CSSProperties =
+                    overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
 
                   return (
                     <div key={`dealer-card-${i}`} style={style}>
@@ -1005,7 +874,6 @@ const isActionTimerCritical =
               </div>
             </div>
 
-            {/* Dealer label + total */}
             <div className="flex flex-col items-center gap-1">
               <div className="rounded-full bg-black/70 px-3 py-1 text-[10px] text-white/80 border border-white/20">
                 Dealer
@@ -1026,81 +894,82 @@ const isActionTimerCritical =
             </div>
           </div>
 
-          
+          {/* BIG bet countdown on felt near chip rack */}
+          {showBetTimerOnFelt && (
+            <div className="pointer-events-none absolute left-1/2 top-[9%] -translate-x-1/2 z-[45] flex flex-col items-center gap-1">
+              <div
+                className={[
+                  "rounded-full px-5 py-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border text-center",
+                  "font-mono text-[9px] md:text-xs tracking-[0.18em] uppercase",
+                  isBetTimerCritical
+                    ? "bg-red-600 border-red-300 text-black animate-pulse"
+                    : "bg-black/85 border-[#FFD700]/70 text-[#FFD700]",
+                ].join(" ")}
+              >
+                Place your bets
+              </div>
+              <div
+                className={[
+                  "flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
+                  isBetTimerCritical
+                    ? "border-red-300 bg-red-700 text-black shadow-[0_0_24px_rgba(248,113,113,0.9)]"
+                    : "border-[#FFD700] bg-black/80 text-[#FFD700] shadow-[0_0_24px_rgba(250,204,21,0.8)]",
+                ].join(" ")}
+              >
+                {betCountdown}
+              </div>
+            </div>
+          )}
 
-           {/* BIG bet countdown on felt near chip rack */}
-{showBetTimerOnFelt && (
-  <div className="pointer-events-none absolute left-[68%] top-[22%] flex flex-col items-center gap-1">
-    <div
-      className={[
-        "rounded-full px-5 py-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border text-center",
-        "font-mono text-[9px] md:text-xs tracking-[0.18em] uppercase",
-        isBetTimerCritical
-          ? "bg-red-600 border-red-300 text-black animate-pulse"
-          : "bg-black/85 border-[#FFD700]/70 text-[#FFD700]",
-      ].join(" ")}
-    >
-      Place your bets
-    </div>
-    <div
-      className={[
-        "flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
-        isBetTimerCritical
-          ? "border-red-300 bg-red-700 text-black shadow-[0_0_24px_rgba(248,113,113,0.9)]"
-          : "border-[#FFD700] bg-black/80 text-[#FFD700] shadow-[0_0_24px_rgba(250,204,21,0.8)]",
-      ].join(" ")}
-    >
-      {betCountdown}
-    </div>
-  </div>
-)}
+          {/* GLOBAL action countdown for current seat */}
+          {showActionTimerOnFelt && (
+            <div className="pointer-events-none absolute left-1/2 bottom-[11%] flex -translate-x-1/2 flex-col items-center gap-1">
+              <div
+                className={[
+                  "rounded-full px-4 py-1 border text-center font-mono text-[9px] md:text-xs uppercase tracking-[0.18em]",
+                  isActionTimerCritical
+                    ? "bg-red-600 border-red-300 text-black animate-pulse"
+                    : "bg-black/85 border-emerald-300/70 text-emerald-200",
+                ].join(" ")}
+              >
+                Seat {activeSeatIndex! + 1} to act
+              </div>
+              <div
+                className={[
+                  "flex h-9 w-9 md:h-11 md:w-11 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
+                  isActionTimerCritical
+                    ? "border-red-300 bg-red-700 text-black shadow-[0_0_22px_rgba(248,113,113,0.9)]"
+                    : "border-emerald-300 bg-black/80 text-emerald-200 shadow-[0_0_22px_rgba(16,185,129,0.8)]",
+                ].join(" ")}
+              >
+                {actionCountdown}
+              </div>
+            </div>
+          )}
 
-{/* GLOBAL action countdown for current seat */}
-{showActionTimerOnFelt && (
-  <div className="pointer-events-none absolute left-1/2 bottom-[11%] flex -translate-x-1/2 flex-col items-center gap-1">
-    <div
-      className={[
-        "rounded-full px-4 py-1 border text-center font-mono text-[9px] md:text-xs uppercase tracking-[0.18em]",
-        isActionTimerCritical
-          ? "bg-red-600 border-red-300 text-black animate-pulse"
-          : "bg-black/85 border-emerald-300/70 text-emerald-200",
-      ].join(" ")}
-    >
-      Seat {activeSeatIndex! + 1} to act
-    </div>
-    <div
-      className={[
-        "flex h-9 w-9 md:h-11 md:w-11 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
-        isActionTimerCritical
-          ? "border-red-300 bg-red-700 text-black shadow-[0_0_22px_rgba(248,113,113,0.9)]"
-          : "border-emerald-300 bg-black/80 text-emerald-200 shadow-[0_0_22px_rgba(16,185,129,0.8)]",
-      ].join(" ")}
-    >
-      {actionCountdown}
-    </div>
-  </div>
-)}
-
-
-          {/* Seats */}
-          {seats.map((seat) => renderSeat(seat))}
+          {/* DESKTOP seat overlays */}
+          <div className="hidden md:block">
+            {seats.map((seat) => renderSeat(seat))}
+          </div>
         </div>
       </div>
 
-           {/* Table status strip under felt */}
-<div className="mt-2 rounded-full ... px-3 py-1.5 text-[11px] ...">
+      {/* Table status strip under felt (shared) */}
+      <div className="mt-2 rounded-full border border-white/15 bg-gradient-to-r from-black via-slate-900 to-black px-3 py-1.5 text-[11px] text-white/80 shadow-[0_0_25px_rgba(0,0,0,0.7)]">
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+          Table Status&nbsp;&nbsp;
+        </span>
+        <span>{statusMessage}</span>
+        {activeSeatIndex !== null && table && (
+          <span className="ml-3 text-white/65">
+            • Current turn: Seat {activeSeatIndex + 1}
+            {table.seats[activeSeatIndex]?.playerId === playerId &&
+              " (you)"}
+          </span>
+        )}
+      </div>
 
-  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
-    Table Status&nbsp;&nbsp;
-  </span>
-
-  {/* Core status message (what you already had) */}
-  <span>{statusMessage}</span>
-
-
-
-
-      {/* Mobile hero action bar (shown only on small screens) */}
+      {/* MOBILE hero layout (no seat overlays on felt) */}
       {heroSeat && (
         <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-white/15 bg-gradient-to-b from-black to-slate-950 p-3 text-[11px] text-white/80 md:hidden">
           <div className="flex items-center justify-between gap-2">
@@ -1114,9 +983,29 @@ const isActionTimerCritical =
             )}
           </div>
 
+          {/* Hero cards BIG on mobile */}
+          {heroHand && (
+            <div className="mt-1 flex items-center justify-center gap-2">
+              {heroHand.cards.map((c, i) => {
+                const count = heroHand.cards.length;
+                const overlap = count >= 4;
+                const style: CSSProperties =
+                  overlap && i > 0 ? { marginLeft: "-0.5rem" } : {};
+                return (
+                  <div
+                    key={`hero-mobile-card-${i}`}
+                    style={style}
+                  >
+                    <BJCard card={c} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Hero totals + session stats */}
           {heroHand && heroValue && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-black/70 px-3 py-1 font-semibold text-white border border-white/25">
                 Total:{" "}
                 <span className="font-mono text-[#FFD700]">
@@ -1132,6 +1021,12 @@ const isActionTimerCritical =
               {typeof heroHand.bet === "number" && heroHand.bet > 0 && (
                 <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-[#FFD700] border border-[#FFD700]/40">
                   Bet: {heroHand.bet.toLocaleString()} GLD
+                </span>
+              )}
+
+              {heroBankroll !== null && (
+                <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-[#FFD700] border border-[#FFD700]/40">
+                  Bankroll: {heroBankroll.toLocaleString()} GLD
                 </span>
               )}
 
@@ -1155,8 +1050,58 @@ const isActionTimerCritical =
             </div>
           )}
 
+          {/* Mini banners for other seats (hero-centric view) */}
+          {table && (
+            <div className="mt-2 flex flex-col gap-1">
+              {table.seats
+                .filter(
+                  (s) =>
+                    s.playerId &&
+                    s.seatIndex !== heroSeatIndex &&
+                    s.hands.length > 0
+                )
+                .map((s) => {
+                  const h = s.hands[0];
+                  const v = computeBlackjackValue(h.cards);
+                  const badge = getResultBadge(h.result);
+                  return (
+                    <div
+                      key={`mini-seat-${s.seatIndex}`}
+                      className="flex items-center justify-between gap-2 rounded-full bg-black/60 px-2 py-1 border border-white/15"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white/30 bg-black/70 text-[10px] font-semibold text-white/85">
+                          {s.name?.trim()?.[0]?.toUpperCase() ??
+                            "P"}
+                        </div>
+                        <span className="text-[10px] text-white/70">
+                          Seat {s.seatIndex + 1}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-[10px] text-[#FFD700]">
+                          {v.total}
+                          {v.soft ? " (s)" : ""}
+                        </span>
+                        {badge && (
+                          <span
+                            className={
+                              "rounded-full px-2 py-[1px] text-[9px] font-bold " +
+                              badge.className
+                            }
+                          >
+                            {badge.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
           {/* Betting controls (mobile) */}
-          <div className="mt-1 flex flex-wrap items-center gap-3">
+          <div className="mt-2 flex flex-wrap items-center gap-3">
             <div>
               <div className="text-[10px] text-white/50">
                 Demo bet amount
@@ -1201,8 +1146,8 @@ const isActionTimerCritical =
             </button>
           </div>
 
-          {/* Auto re-bet toggle */}
-          <div className="mt-1 flex flex-wrap items-center gap-2">
+          {/* Auto re-bet (mobile) */}
+          <div className="mt-2 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-[10px] text-white/60">
               <input
                 type="checkbox"
@@ -1223,7 +1168,7 @@ const isActionTimerCritical =
             )}
           </div>
 
-          {/* Hero action buttons (mobile) */}
+          {/* Hero action buttons (mobile, hero-centric) */}
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
@@ -1244,7 +1189,7 @@ const isActionTimerCritical =
             <button
               type="button"
               onClick={() => handleAction("double")}
-              disabled={!isHeroTurn}
+              disabled={!isHeroTurn || !canDouble}
               className="flex-1 rounded-lg bg-amber-500 px-3 py-1.5 text-center font-semibold text-black hover:bg-amber-400 disabled:opacity-40"
             >
               Double
@@ -1252,7 +1197,7 @@ const isActionTimerCritical =
             <button
               type="button"
               onClick={() => handleAction("split")}
-              disabled={!isHeroTurn}
+              disabled={!isHeroTurn || !canSplit}
               className="flex-1 rounded-lg bg-purple-500 px-3 py-1.5 text-center font-semibold text-black hover:bg-purple-400 disabled:opacity-40"
             >
               Split
@@ -1261,29 +1206,15 @@ const isActionTimerCritical =
         </div>
       )}
 
-
-
-  {/* Current turn indicator */}
-  {activeSeatIndex !== null && table && (
-    <span className="ml-3 text-white/65">
-      • Current turn: Seat {activeSeatIndex + 1}
-      {table.seats[activeSeatIndex]?.playerId === playerId && " (you)"}
-    </span>
-  )}
-</div>
-
-
-
-      {/* Controls row */}
+      {/* DESKTOP controls row */}
       <div className="mt-3 hidden gap-3 md:grid md:grid-cols-[2fr_1.2fr]">
         {/* Player controls */}
-        <div className="space-y-2 rounded-2xl border border-white/15 bg-gradient-to-b from-slate-950 to-black p-3 md:p-4 text-[11px] text-white/80">
-
+        <div className="space-y-2 rounded-2xl border border-white/15 bg-gradient-to-b from-slate-950 to-black p-4 text-[11px] text-white/80">
           <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-white/50">
             Your Controls
           </div>
 
-          {/* Bet + main action buttons */}
+          {/* Bet + main buttons */}
           <div className="flex flex-wrap items-center gap-3">
             <div>
               <div className="text-[10px] text-white/50">
@@ -1309,14 +1240,15 @@ const isActionTimerCritical =
             </div>
 
             <button
-  type="button"
-  onClick={handlePlaceBet}
-  disabled={!canPlaceBet}
-  className="rounded-lg bg-[#FFD700] px-3 py-1.5 font-semibold text-black hover:bg-yellow-400 disabled:opacity-40"
->
-  {phase === "round-complete" ? "Bet for next hand" : "Place bet"}
-</button>
-
+              type="button"
+              onClick={handlePlaceBet}
+              disabled={!canPlaceBet}
+              className="rounded-lg bg-[#FFD700] px-3 py-1.5 font-semibold text-black hover:bg-yellow-400 disabled:opacity-40"
+            >
+              {phase === "round-complete"
+                ? "Bet for next hand"
+                : "Place bet"}
+            </button>
 
             {phase === "round-complete" && (
               <button
@@ -1338,159 +1270,151 @@ const isActionTimerCritical =
             </button>
           </div>
 
+          {/* Auto rebet + hero action countdown */}
           <div className="mt-2 flex flex-wrap items-center gap-3">
-  <label className="flex items-center gap-2 text-[10px] text-white/60">
-    <input
-      type="checkbox"
-      checked={autoRebet}
-      onChange={(e) => setAutoRebet(e.target.checked)}
-      className="h-3 w-3 rounded border-white/40 bg-black/60"
-    />
-    <span>Auto re-bet last amount</span>
-  </label>
+            <label className="flex items-center gap-2 text-[10px] text-white/60">
+              <input
+                type="checkbox"
+                checked={autoRebet}
+                onChange={(e) => setAutoRebet(e.target.checked)}
+                className="h-3 w-3 rounded border-white/40 bg-black/60"
+              />
+              <span>Auto re-bet last amount</span>
+            </label>
 
-  {lastBet !== null && (
-    <span className="text-[10px] text-white/45">
-      Last bet:{" "}
-      <span className="font-mono text-[#FFD700]">
-        {lastBet.toLocaleString()} GLD
-      </span>
-    </span>
-  )}
-</div>
+            {lastBet !== null && (
+              <span className="text-[10px] text-white/45">
+                Last bet:{" "}
+                <span className="font-mono text-[#FFD700]">
+                  {lastBet.toLocaleString()} GLD
+                </span>
+              </span>
+            )}
 
-{phase === "player-action" &&
-  heroSeatIndex !== null &&
-  activeSeatIndex === heroSeatIndex &&
-  actionCountdown !== null && (
-    <div className="mt-1 inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/15 px-3 py-1 text-[10px] font-mono text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.6)]">
-      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-      <span>Your action • {actionCountdown}s</span>
-    </div>
-  )}
+            {phase === "player-action" &&
+              heroSeatIndex !== null &&
+              activeSeatIndex === heroSeatIndex &&
+              actionCountdown !== null && (
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/15 px-3 py-1 text-[10px] font-mono text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.6)]">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Your action • {actionCountdown}s</span>
+                </div>
+              )}
+          </div>
 
+          {/* Hero action bar – only when it’s your turn */}
+          {isHeroTurn && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleAction("hit")}
+                className="rounded-lg bg-emerald-500 px-3 py-1.5 font-semibold text-black hover:bg-emerald-400"
+              >
+                Hit
+              </button>
 
+              <button
+                type="button"
+                onClick={() => handleAction("stand")}
+                className="rounded-lg bg-slate-700 px-3 py-1.5 font-semibold text-white hover:bg-slate-600"
+              >
+                Stand
+              </button>
 
-         {/* Hero action bar – only when it’s your turn */}
-{isHeroTurn && (
-  <div className="mt-2 flex flex-wrap items-center gap-2">
-    <button
-      type="button"
-      onClick={() => handleAction("hit")}
-      className="rounded-lg bg-emerald-500 px-3 py-1.5 font-semibold text-black hover:bg-emerald-400"
-    >
-      Hit
-    </button>
+              {canDouble && (
+                <button
+                  type="button"
+                  onClick={() => handleAction("double")}
+                  className="rounded-lg bg-amber-500 px-3 py-1.5 font-semibold text-black hover:bg-amber-400"
+                >
+                  Double
+                </button>
+              )}
 
-    <button
-      type="button"
-      onClick={() => handleAction("stand")}
-      className="rounded-lg bg-slate-700 px-3 py-1.5 font-semibold text-white hover:bg-slate-600"
-    >
-      Stand
-    </button>
+              {canSplit && (
+                <button
+                  type="button"
+                  onClick={() => handleAction("split")}
+                  className="rounded-lg bg-purple-500 px-3 py-1.5 font-semibold text-black hover:bg-purple-400"
+                >
+                  Split
+                </button>
+              )}
+            </div>
+          )}
 
-    {canDouble && (
-      <button
-        type="button"
-        onClick={() => handleAction("double")}
-        className="rounded-lg bg-amber-500 px-3 py-1.5 font-semibold text-black hover:bg-amber-400"
-      >
-        Double
-      </button>
-    )}
+          {/* Hero hand info + bankroll/session */}
+          {heroHand && heroValue && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="rounded-full bg-black/70 px-3 py-1 font-semibold text-white border border-white/25">
+                Your hand:{" "}
+                <span className="font-mono text-[#FFD700]">
+                  {heroValue.total}
+                </span>
+                {heroValue.soft && (
+                  <span className="ml-1 text-[10px] text-emerald-300">
+                    soft
+                  </span>
+                )}
+              </span>
 
-    {canSplit && (
-      <button
-        type="button"
-        onClick={() => handleAction("split")}
-        className="rounded-lg bg-purple-500 px-3 py-1.5 font-semibold text-black hover:bg-purple-400"
-      >
-        Split
-      </button>
-    )}
-  </div>
-)}
+              {typeof heroHand.bet === "number" &&
+                heroHand.bet > 0 && (
+                  <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-[#FFD700] border border-[#FFD700]/40">
+                    Bet: {heroHand.bet.toLocaleString()} GLD
+                  </span>
+                )}
 
+              {heroBankroll !== null && (
+                <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-[#FFD700] border border-[#FFD700]/40">
+                  Bankroll: {heroBankroll.toLocaleString()} GLD
+                </span>
+              )}
 
-           {/* Your hand info + result pill */}
-{heroHand && heroValue && (
-  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-    {/* Current hand total */}
-    <span className="rounded-full bg-black/70 px-3 py-1 font-semibold text-white border border-white/25">
-      Your hand:{" "}
-      <span className="font-mono text-[#FFD700]">
-        {heroValue.total}
-      </span>
-      {heroValue.soft && (
-        <span className="ml-1 text-[10px] text-emerald-300">
-          soft
-        </span>
-      )}
-    </span>
+              {heroHand.isBusted && (
+                <span className="rounded-full bg-red-500/90 px-3 py-1 text-[10px] font-bold text-black border border-red-200 shadow-[0_0_10px_rgba(239,68,68,0.6)]">
+                  BUST
+                </span>
+              )}
 
-    {/* Current hand bet */}
-    {typeof heroHand.bet === "number" && heroHand.bet > 0 && (
-      <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-[#FFD700] border border-[#FFD700]/40">
-        Bet: {heroHand.bet.toLocaleString()} GLD
-      </span>
-    )}
+              {getResultBadge(heroHand.result) && (
+                <span
+                  className={
+                    "rounded-full px-3 py-1 text-[10px] font-bold " +
+                    getResultBadge(heroHand.result)!.className
+                  }
+                >
+                  {getResultBadge(heroHand.result)!.label}
+                </span>
+              )}
 
-    {/* 🔥 Hero bankroll (moved here from seat bubbles) */}
-    {heroBankroll !== null && (
-      <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-[#FFD700] border border-[#FFD700]/40">
-        Bankroll: {heroBankroll.toLocaleString()} GLD
-      </span>
-    )}
+              {typeof heroHand.payout === "number" &&
+                phase === "round-complete" && (
+                  <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-white/80 border border-white/15">
+                    {heroHand.payout > 0 && "+"}
+                    {heroHand.payout.toLocaleString()} GLD
+                  </span>
+                )}
 
-    {/* Last hand result pill */}
-    {heroHand.isBusted && (
-      <span className="rounded-full bg-red-500/90 px-3 py-1 text-[10px] font-bold text-black border border-red-200 shadow-[0_0_10px_rgba(239,68,68,0.6)]">
-        BUST
-      </span>
-    )}
-
-    {getResultBadge(heroHand.result) && (
-      <span
-        className={
-          "rounded-full px-3 py-1 text-[10px] font-bold " +
-          getResultBadge(heroHand.result)!.className
-        }
-      >
-        {getResultBadge(heroHand.result)!.label}
-      </span>
-    )}
-
-    {/* Last hand payout */}
-    {typeof heroHand.payout === "number" &&
-      phase === "round-complete" && (
-        <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-white/80 border border-white/15">
-          {heroHand.payout > 0 && "+"}
-          {heroHand.payout.toLocaleString()} GLD
-        </span>
-      )}
-
-    {/* Session net vs starting 10,000 demo GLD */}
-    {heroNet !== null && (
-      <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-white/75 border border-white/15">
-        Session:{" "}
-        <span
-          className={
-            heroNet > 0
-              ? "text-emerald-300"
-              : heroNet < 0
-              ? "text-red-300"
-              : "text-white/70"
-          }
-        >
-          {heroNet > 0 && "+"}
-          {heroNet.toLocaleString()} GLD
-        </span>
-      </span>
-    )}
-  </div>
-)}
-
+              {heroNet !== null && (
+                <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-mono text-white/75 border border-white/15">
+                  Session:{" "}
+                  <span
+                    className={
+                      heroNet > 0
+                        ? "text-emerald-300"
+                        : heroNet < 0
+                        ? "text-red-300"
+                        : "text-white/70"
+                    }
+                  >
+                    {heroNet > 0 && "+"}
+                    {heroNet.toLocaleString()} GLD
+                  </span>
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="mt-2 text-[10px] text-white/50">
             Flow: sit at a seat, set your demo bet, press{" "}
@@ -1505,34 +1429,31 @@ const isActionTimerCritical =
           </div>
         </div>
 
-       {/* Status / debug */}
-<div className="hidden md:block space-y-2 rounded-2xl border border-white/15 bg-gradient-to-b from-slate-950 to-black p-4 text-[11px] text-white/80">
-  <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-white/50">
-    Table Status
-  </div>
-  <p>
-    Phase: <span className="font-mono">{phase}</span>
-  </p>
-  <p className="text-[10px] text-white/55">
-    {statusMessage}
-  </p>
-
-  {/* Tiny debug for hero seat */}
-  <div className="mt-2 rounded-lg bg-black/40 p-2 text-[10px] font-mono text-white/60">
-    <div>Hero seat: {heroSeatIndex ?? "none"}</div>
-    {heroSeatIndex !== null && table && (
-      <div>
-        Cards in hero first hand:{" "}
-        {(
-          table.seats.find(
-            (s) => s.seatIndex === heroSeatIndex
-          )?.hands[0]?.cards.length ?? 0
-        ).toString()}
-      </div>
-    )}
-  </div>
-</div>
-
+        {/* Status / debug (desktop only) */}
+        <div className="hidden md:block space-y-2 rounded-2xl border border-white/15 bg-gradient-to-b from-slate-950 to-black p-4 text-[11px] text-white/80">
+          <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-white/50">
+            Table Status
+          </div>
+          <p>
+            Phase: <span className="font-mono">{phase}</span>
+          </p>
+          <p className="text-[10px] text-white/55">
+            {statusMessage}
+          </p>
+          <div className="mt-2 rounded-lg bg-black/40 p-2 text-[10px] font-mono text-white/60">
+            <div>Hero seat: {heroSeatIndex ?? "none"}</div>
+            {heroSeatIndex !== null && table && (
+              <div>
+                Cards in hero first hand:{" "}
+                {(
+                  table.seats.find(
+                    (s) => s.seatIndex === heroSeatIndex
+                  )?.hands[0]?.cards.length ?? 0
+                ).toString()}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
