@@ -592,7 +592,7 @@ const seats: BlackjackSeatState[] =
     // Show sit only in waiting-bets phase
     const showSitButton =
       !takenByOther && !seatTaken && phase === "waiting-bets";
-    const showLeaveButton = isHero && seatTaken;
+    
 
     const layout =
       seat.seatIndex === 0 ||
@@ -672,27 +672,19 @@ const seats: BlackjackSeatState[] =
             </div>
           )}
 
-          {/* Sit / leave */}
-          <div>
-            {showSitButton && (
-              <button
-                type="button"
-                onClick={() => handleSit(seat.seatIndex)}
-                className="rounded-full bg-[#FFD700] px-3 py-[3px] font-semibold text-black hover:bg-yellow-400"
-              >
-                Sit here
-              </button>
-            )}
-            {showLeaveButton && (
-              <button
-                type="button"
-                onClick={() => handleLeave(seat.seatIndex)}
-                className="rounded-full bg-slate-700 px-3 py-[3px] font-semibold text-white hover:bg-slate-600"
-              >
-                Leave
-              </button>
-            )}
-          </div>
+          {/* Sit button (leave is handled in hero controls now) */}
+<div>
+  {showSitButton && (
+    <button
+      type="button"
+      onClick={() => handleSit(seat.seatIndex)}
+      className="rounded-full bg-[#FFD700] px-3 py-[3px] font-semibold text-black hover:bg-yellow-400"
+    >
+      Sit here
+    </button>
+  )}
+</div>
+
         </div>
       );
     };
@@ -948,10 +940,11 @@ const seats: BlackjackSeatState[] =
             </div>
           )}
 
-          {/* Seats – overlays on felt (mobile + desktop, always rendered) */}
-<div className="absolute inset-0 z-[40] pointer-events-none">
+          {/* Seats – overlays on felt (mobile + desktop) */}
+<div className="absolute inset-0 z-[40]">
   {seats.map((seat) => renderSeat(seat))}
 </div>
+
 
         </div>
       </div>
@@ -1103,50 +1096,66 @@ const seats: BlackjackSeatState[] =
           )}
 
           {/* Betting controls (mobile) */}
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <div>
-              <div className="text-[10px] text-white/50">
-                Demo bet amount
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={MIN_DEMO_BET}
-                  max={5000}
-                  value={betAmount}
-                  onChange={(e) =>
-                    setBetAmount(
-                      Number(e.target.value) || MIN_DEMO_BET
-                    )
-                  }
-                  className="w-24 rounded-lg border border-white/25 bg-black/70 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
-                />
-                <span className="font-mono text-[#FFD700]">
-                  GLD
-                </span>
-              </div>
-            </div>
+<div className="mt-2 flex flex-col gap-2">
+  {/* Bet input */}
+  <div>
+    <div className="text-[10px] text-white/50">
+      Demo bet amount
+    </div>
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        min={MIN_DEMO_BET}
+        max={5000}
+        value={betAmount}
+        onChange={(e) =>
+          setBetAmount(
+            Number(e.target.value) || MIN_DEMO_BET
+          )
+        }
+        className="w-24 rounded-lg border border-white/25 bg-black/70 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
+      />
+      <span className="font-mono text-[#FFD700]">
+        GLD
+      </span>
+    </div>
+  </div>
 
-            <button
-              type="button"
-              onClick={handlePlaceBet}
-              disabled={!canPlaceBet}
-              className="rounded-lg bg-[#FFD700] px-3 py-1.5 font-semibold text-black hover:bg-yellow-400 disabled:opacity-40"
-            >
-              {phase === "round-complete"
-                ? "Bet next hand"
-                : "Place bet"}
-            </button>
+  {/* Buttons row */}
+  <div className="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      onClick={handlePlaceBet}
+      disabled={!canPlaceBet}
+      className="rounded-lg bg-[#FFD700] px-3 py-1.5 font-semibold text-black hover:bg-yellow-400 disabled:opacity-40"
+    >
+      {phase === "round-complete"
+        ? "Bet next hand"
+        : "Place bet"}
+    </button>
 
-            <button
-              type="button"
-              onClick={handleReloadDemo}
-              disabled={heroSeatIndex === null}
-              className="rounded-lg bg-slate-800 px-3 py-1.5 font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
-            >
-              Reload demo
-            </button>
-          </div>
+    <button
+      type="button"
+      onClick={handleReloadDemo}
+      disabled={heroSeatIndex === null}
+      className="rounded-lg bg-slate-800 px-3 py-1.5 font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+    >
+      Reload demo
+    </button>
+
+    {heroSeatIndex !== null && (
+      <button
+        type="button"
+        onClick={() => handleLeave(heroSeatIndex)}
+        className="rounded-lg border border-slate-600 bg-black/75 px-3 py-1.5 font-semibold text-white hover:bg-slate-800"
+      >
+        Leave seat
+      </button>
+    )}
+  </div>
+</div>
+
+
 
           {/* Auto re-bet (mobile) */}
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -1270,6 +1279,16 @@ const seats: BlackjackSeatState[] =
             >
               Reload demo GLD
             </button>
+            {heroSeatIndex !== null && (
+  <button
+    type="button"
+    onClick={() => handleLeave(heroSeatIndex)}
+    className="rounded-lg border border-slate-600 bg-black/75 px-3 py-1.5 font-semibold text-white hover:bg-slate-800"
+  >
+    Leave seat
+  </button>
+)}
+
           </div>
 
           {/* Auto rebet + hero action countdown */}
