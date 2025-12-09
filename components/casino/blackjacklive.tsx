@@ -949,7 +949,9 @@ export default function BlackjackLive() {
 
           {/* DESKTOP seat overlays */}
           <div className="hidden md:block">
-            {seats.map((seat) => renderSeat(seat))}
+            {/* Seat overlays on felt (mobile + desktop) */}
+{seats.map((seat) => renderSeat(seat))}
+
           </div>
         </div>
       </div>

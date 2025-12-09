@@ -1413,10 +1413,18 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
          <div
   className={
     isFullscreen
-      ? "relative mx-auto mt-1 w-full max-w-[1100px] flex-1 h-[68vh] md:h-[70vh] [perspective:1600px]"
-      : "relative mx-auto mt-2 w-full max-w-[980px] flex-1 aspect-[16/9] [perspective:1600px]"
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[62vh] [perspective:1600px]"
+      : [
+          "relative mx-auto mt-2 w-full max-w-[980px]",
+          // mobile: fixed height (shorter table)
+          "h-[340px] sm:h-[380px]",
+          // from md up: go back to 16:9 aspect
+          "md:h-auto md:aspect-[16/9]",
+          "[perspective:1600px]",
+        ].join(" ")
   }
 >
+
 
 
               {/* Exit fullscreen button – floating above table, not over players */}
