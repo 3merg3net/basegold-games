@@ -1,165 +1,126 @@
 // components/poker/PokerCard.tsx
-import React from "react";
+import Image from "next/image";
 
-type PokerCardProps = {
-  card?: string;                // e.g. "As", "Td"
-  size?: "small" | "normal";
+export type PokerCardProps = {
+  card: string;                 // e.g. "As", "Td"
   highlight?: boolean;
+  size?: "small" | "normal";
   delayIndex?: number;
   tilt?: number;
   isBack?: boolean;
 };
 
-const SUIT_SYMBOL: Record<string, string> = {
-  s: "♠",
-  h: "♥",
-  d: "♦",
-  c: "♣",
-};
+// --- tiny helper to turn "As" → labels/colors ---
+function parseCard(card: string) {
+  const rankChar = card[0]?.toUpperCase() ?? "A";
+  const suitChar = card[1]?.toLowerCase() ?? "s";
 
-const SUIT_NAME: Record<string, string> = {
-  s: "Spades",
-  h: "Hearts",
-  d: "Diamonds",
-  c: "Clubs",
-};
+  const rankLabel =
+    rankChar === "T" ? "10" : rankChar; // show "10" instead of "T"
+
+  const suitMap: Record<string, { label: string; color: string }> = {
+    s: { label: "♠", color: "text-slate-900" },   // spades – black
+    c: { label: "♣", color: "text-slate-900" },   // clubs – black
+    h: { label: "♥", color: "text-red-500" },     // hearts – red
+    d: { label: "♦", color: "text-red-500" },     // diamonds – red
+  };
+
+  const suit = suitMap[suitChar] ?? suitMap.s;
+  return {
+    rankLabel,
+    suitLabel: suit.label,
+    suitColor: suit.color,
+  };
+}
 
 export default function PokerCard({
   card,
-  size = "normal",
   highlight = false,
+  size = "normal",
   delayIndex = 0,
   tilt = 0,
   isBack = false,
 }: PokerCardProps) {
-  const rank = card ? card[0] : "A";
-  const suitChar = card ? card[1] : "s";
+  const { rankLabel, suitLabel, suitColor } = parseCard(card);
 
-  const suitSymbol = SUIT_SYMBOL[suitChar] ?? "♠";
-  const suitName = SUIT_NAME[suitChar] ?? "Spades";
-
-  const isRed = suitChar === "h" || suitChar === "d";
-
-  const dims =
+  // card size presets
+  const baseSize =
     size === "small"
-      ? "w-[34px] h-[46px]"
-      : "w-[44px] h-[62px]";
+      ? "w-9 h-12 text-[11px] md:w-10 md:h-14 md:text-[12px]"
+      : "w-12 h-18 text-sm md:w-14 md:h-20 md:text-base";
 
-  const rankText =
-    size === "small" ? "text-[11px]" : "text-[13px] md:text-[14px]";
-  const suitText =
-    size === "small" ? "text-[13px]" : "text-[16px] md:text-[18px]";
+  const delay = `${0.05 * delayIndex}s`;
 
-  const delayMs = 80 * delayIndex;
-
-  if (isBack) {
-    // Simple back pattern – used when we don’t want to show face
-    return (
-      <div
-        className={[
-          "relative rounded-[6px] border border-white/25 bg-gradient-to-br",
-          "from-slate-200 via-slate-300 to-slate-400 shadow-[0_0_18px_rgba(0,0,0,0.9)]",
-          dims,
-        ].join(" ")}
-        style={{
-          transform: `rotate(${tilt}deg)`,
-        }}
-      >
-        <div className="absolute inset-[3px] rounded-[4px] bg-[radial-gradient(circle_at_center,#0f172a_0,#020617_60%,#000000_100%)]" />
-        <div className="absolute inset-[5px] rounded-[3px] border border-white/25 border-dashed opacity-70" />
-        <div className="relative flex h-full w-full items-center justify-center">
-          <div className="h-[65%] w-[65%] rounded-full border border-yellow-200/70 bg-yellow-300/20 shadow-[0_0_10px_rgba(250,204,21,0.4)]" />
-        </div>
-      </div>
-    );
-  }
+  // background for front vs back
+  const bgClass = isBack
+    ? "bg-gradient-to-br from-slate-300 via-slate-400 to-slate-500"
+    : "bg-white";
 
   return (
     <div
       className={[
-        "relative select-none rounded-[6px] border bg-white shadow-[0_8px_20px_rgba(0,0,0,0.9)]",
-        "overflow-hidden",
+        "card-deal relative flex flex-col justify-between px-1.5 py-1",
+        "rounded-xl border shadow-[0_4px_14px_rgba(0,0,0,0.7)]",
+        baseSize,
+        bgClass,
         highlight
-          ? "border-[#FACC15] ring-1 ring-[#FACC15]/80 shadow-[0_0_22px_rgba(250,204,21,0.7)]"
-          : "border-slate-200",
-        dims,
-      ].join(" ")}
+          ? "border-[#FFD700] shadow-[0_0_18px_rgba(250,204,21,0.95)]"
+          : "border-slate-300",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{
-        transform: `rotate(${tilt}deg) translateZ(1px)`,
-        transition:
-          "transform 180ms ease-out, box-shadow 180ms ease-out, border-color 180ms ease-out",
-        transitionDelay: `${delayMs}ms`,
+        animationDelay: delay,
+        transform: `rotate(${tilt}deg)`,
+        transformOrigin: "50% 60%",
       }}
     >
-      {/* Subtle gradient base */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white via-slate-50 to-slate-200" />
+      {/* subtle inner border to make the edge feel real */}
+      <div className="pointer-events-none absolute inset-[2px] rounded-[10px] border border-slate-200" />
 
-      {/* Soft inner glow */}
-      <div className="pointer-events-none absolute inset-[2px] rounded-[5px] border border-white/60 shadow-[inset_0_0_4px_rgba(0,0,0,0.25)]" />
-
-      {/* Corner rank & suit (top-left) */}
-      <div className="pointer-events-none absolute left-[3px] top-[2px] flex flex-col items-center leading-none">
-        <span
-          className={[
-            rankText,
-            "font-bold",
-            isRed ? "text-red-600" : "text-slate-900",
-          ].join(" ")}
-        >
-          {rank}
-        </span>
-        <span
-          className={[
-            "mt-[1px] leading-none",
-            size === "small" ? "text-[9px]" : "text-[10px]",
-            isRed ? "text-red-500" : "text-slate-700",
-          ].join(" ")}
-        >
-          {suitSymbol}
-        </span>
-      </div>
-
-      {/* Mirrored rank bottom-right (rotated) */}
-      <div className="pointer-events-none absolute bottom-[2px] right-[3px] flex flex-col items-center leading-none rotate-180">
-        <span
-          className={[
-            rankText,
-            "font-bold",
-            isRed ? "text-red-600" : "text-slate-900",
-          ].join(" ")}
-        >
-          {rank}
-        </span>
-        <span
-          className={[
-            "mt-[1px] leading-none",
-            size === "small" ? "text-[9px]" : "text-[10px]",
-            isRed ? "text-red-500" : "text-slate-700",
-          ].join(" ")}
-        >
-          {suitSymbol}
-        </span>
-      </div>
-
-      {/* Large suit in center – THIS is the only big suit, fully inside card */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="flex flex-col items-center">
-          <span
-            className={[
-              suitText,
-              "drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]",
-              isRed ? "text-red-500" : "text-slate-800",
-            ].join(" ")}
-          >
-            {suitSymbol}
-          </span>
-          {size === "normal" && (
-            <span className="mt-[1px] text-[8px] uppercase tracking-[0.16em] text-slate-400">
-              {suitName}
+      {!isBack ? (
+        <>
+          {/* top rank + suit */}
+          <div className="relative z-10 flex items-start justify-between leading-none">
+            <span className="font-bold text-slate-900">{rankLabel}</span>
+            <span className={`text-[11px] md:text-xs ${suitColor}`}>
+              {suitLabel}
             </span>
-          )}
+          </div>
+
+          {/* big center suit pip */}
+          <div className="relative z-10 flex flex-1 items-center justify-center">
+            <span
+              className={[
+                suitColor,
+                "leading-none text-xl md:text-2xl",
+              ].join(" ")}
+            >
+              {suitLabel}
+            </span>
+          </div>
+
+          {/* bottom mirror suit in corner */}
+          <div className="relative z-10 flex items-end justify-end">
+            <span className={`text-[11px] md:text-xs ${suitColor}`}>
+              {suitLabel}
+            </span>
+          </div>
+        </>
+      ) : (
+        // Card back: simple logo on metallic gradient
+        <div className="relative z-10 flex flex-1 items-center justify-center">
+          <div className="h-8 w-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/60">
+            <Image
+              src="/felt/bgrc-logo.png"
+              alt="Card back"
+              width={24}
+              height={24}
+              className="object-contain opacity-80"
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

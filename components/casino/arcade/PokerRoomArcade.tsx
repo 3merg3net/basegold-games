@@ -15,6 +15,10 @@ import Image from "next/image";
 import { usePokerRoom } from "@/lib/pokerClient/usePokerRoom";
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 import { getHandHelper, HandHelper } from '@/lib/poker/handHelper';
+import PokerCard from "@/components/poker/PokerCard";
+
+
+
 
 
 
@@ -138,24 +142,43 @@ function breakdownChips(amount: number): number[] {
 
 function ChipStack({ amount, size = 32 }: { amount: number; size?: number }) {
   if (!amount || amount <= 0) return null;
+
   const chips = breakdownChips(amount);
   if (chips.length === 0) return null;
 
+  // limit how tall the stack can get visually
+  const visibleChips = chips.slice(0, 6);
+
+  const chipSize = size;
+  const offset = chipSize * 0.35; // vertical spacing between chips
+
   return (
-    <div className="flex items-end -space-x-2 chip-fly">
-      {chips.map((d, i) => {
+    <div
+      className="relative"
+      style={{
+        height: chipSize + offset * (visibleChips.length - 1),
+        width: chipSize * 1.4,
+      }}
+    >
+      {visibleChips.map((d, i) => {
         const src = CHIP_SOURCES[d];
         if (!src) return null;
-        const w = size + i * 1.5;
-        const h = size + i * 1.5;
+
+        const bottom = i * offset;
+        const scale = 1 - (visibleChips.length - 1 - i) * 0.04;
+
         return (
           <Image
             key={`${d}-${i}`}
             src={src}
             alt={`PGLD ${d}`}
-            width={w}
-            height={h}
-            className="rounded-full drop-shadow-[0_0_6px_rgba(0,0,0,0.8)]"
+            width={chipSize}
+            height={chipSize}
+            className="absolute left-1/2 -translate-x-1/2 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.75)]"
+            style={{
+              bottom,
+              transform: `translateX(-50%) scale(${scale})`,
+            }}
           />
         );
       })}
@@ -163,13 +186,23 @@ function ChipStack({ amount, size = 32 }: { amount: number; size?: number }) {
   );
 }
 
-// Small helper to format chip amounts
-function formatChips(n: number | undefined | null) {
-  if (!n || n <= 0) return "";
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "m";
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
-  return n.toString();
+
+export function formatChips(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return "0";
+
+  // Show 1.2k, 15.4k, 1.3M, etc – but never collapse into a fixed label
+  if (amount >= 1_000_000) {
+    const v = amount / 1_000_000;
+    return `${v.toFixed(v >= 10 ? 1 : 2).replace(/\.0+$/, "")}M`;
+  }
+  if (amount >= 1_000) {
+    const v = amount / 1_000;
+    return `${v.toFixed(v >= 10 ? 1 : 2).replace(/\.0+$/, "")}k`;
+  }
+
+  return Math.floor(amount).toString();
 }
+
 
 
 
@@ -223,88 +256,9 @@ function parseCard(card: string) {
   return { rank, suit: suitRaw, rankLabel, suitLabel, suitColor };
 }
 
-function PokerCard({
-  card,
-  highlight = false,
-  size = "normal",
-  delayIndex = 0,
-  tilt = 0,
-  isBack = false,
-}: PokerCardProps) {
-  const { rankLabel, suitLabel, suitColor } = parseCard(card);
 
-  const baseSize =
-    size === "small"
-      ? "w-9 h-12 text-[11px] md:w-10 md:h-14 md:text-[12px]"
-      : "w-11 h-16 text-sm md:w-12 md:h-18 md:text-base";
 
-  const delay = `${0.05 * delayIndex}s`;
 
-  // When isBack, use a generic gold/silver felt-style back
-  const cardClasses = isBack
-    ? "bg-gradient-to-br from-slate-200 via-slate-400 to-slate-600"
-    : "bg-white";
-
-  return (
-    <div
-      className={`card-deal ${baseSize} rounded-lg flex flex-col justify-between px-1.5 py-1 border relative shadow-[0_4px_10px_rgba(0,0,0,0.55)] ${
-        highlight
-          ? "border-[#FFD700] shadow-[0_0_18px_rgba(250,204,21,0.9)]"
-          : "border-slate-400"
-      } ${cardClasses}`}
-      style={{
-        animationDelay: delay,
-        transform: `rotate(${tilt}deg)`,
-        transformOrigin: "50% 60%",
-      }}
-    >
-      <div className="pointer-events-none absolute inset-[1px] rounded-[7px] border border-slate-200" />
-
-      {!isBack && (
-        <>
-          {/* top rank / suit */}
-          <div className="relative flex items-start justify-between">
-            <span className="font-bold text-slate-900 leading-none">
-              {rankLabel}
-            </span>
-            <span className={`text-[11px] md:text-xs ${suitColor}`}>
-              {suitLabel}
-            </span>
-          </div>
-
-          {/* big center pip */}
-          <div className="relative flex flex-1 items-center justify-center">
-            <span
-              className={`leading-none ${suitColor} text-xl md:text-2xl`}
-            >
-              {suitLabel}
-            </span>
-          </div>
-
-          {/* bottom suit */}
-          <div className="relative flex items-end justify-end">
-            <span className={`text-[11px] md:text-xs ${suitColor}`}>
-              {suitLabel}
-            </span>
-          </div>
-        </>
-      )}
-
-      {isBack && (
-        <div className="relative flex flex-1 items-center justify-center">
-          {/* subtle logo / pattern for card back */}
-          <Image
-            src="/felt/bgrc-logo.png"
-            alt="Card back"
-            width={32}
-            height={32}
-            className="opacity-70 object-contain"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
 
 // GG-style arc: hero bottom-center, others fanned around
@@ -313,7 +267,7 @@ const SEAT_GEOMETRY: CSSProperties[] = [
   { bottom: "7%", left: "50%", transform: "translate(-50%, 0)" },
 
   // logical 1–3: up the left rail
-  { bottom: "18%", left: "24%", transform: "translate(-50%, 0)" },
+  { bottom: "10%", left: "24%", transform: "translate(-50%, 0)" },
   { bottom: "32%", left: "12%", transform: "translate(-50%, 0)" },
   { top: "24%",   left: "20%", transform: "translate(-50%, -50%)" },
 
@@ -731,7 +685,25 @@ const heroHasAction =
 
 
   const boardCards = table?.board ?? [];
-  const pot = betting?.pot ?? 0;
+
+  // ---------- POT: compute from live committed chips ----------
+const pot = useMemo(() => {
+  if (!betting || !Array.isArray(betting.players)) {
+    // fall back to whatever the table says, or 0
+    return (table as any)?.pot ?? 0;
+  }
+
+  // Sum all committed chips across all players
+  const livePot = betting.players.reduce((sum, p) => {
+    const committed = typeof p.committed === "number" ? p.committed : 0;
+    return sum + committed;
+  }, 0);
+
+  return livePot;
+}, [betting, table]);
+
+
+
   const buttonSeatIndex = betting?.buttonSeatIndex ?? null;
   const currentSeatIndex = betting?.currentSeatIndex ?? null;
 
@@ -838,6 +810,22 @@ const bigBlindSeatIndex = useMemo(() => {
         p.stack === 0 &&
         (p.committed > 0 || betting.pot > 0)
     );
+
+   // Pot helpers – keep UI in sync with live betting
+
+// committedBySeat is a Record<number, number>, so turn it into an array first
+const committedValues = Object.values(committedBySeat ?? {});
+const committedPot =
+  committedValues.length > 0
+    ? committedValues.reduce((sum, v) => sum + v, 0)
+    : 0;
+
+// Server-reported pot comes from betting, not table
+const serverPot = betting?.pot ?? 0;
+
+
+
+
 
    
 
@@ -1076,6 +1064,8 @@ function handleReloadDemoBankroll() {
 
     return set;
   }, [showdown, table]);
+
+  
 
   /* ───────────────── Collapsibles ───────────────── */
 
@@ -1321,9 +1311,21 @@ useEffect(() => {
 
   
 
-  /* ───────────────── Layout helpers for seats ───────────────── */
+ /* ───────────────── Layout helpers for seats ───────────────── */
 
 const [winners, setWinners] = useState<WinnerEntry[]>([]);
+
+// History of winners for the side panel
+const [lastWinners, setLastWinners] = useState<WinnerEntry[]>([]);
+
+const [showLastWinners, setShowLastWinners] = useState(false);
+const [showDealerLog, setShowDealerLog] = useState(false);
+
+// For JSX – always a WinnerEntry[]
+const winnersToShow: WinnerEntry[] = lastWinners;
+
+
+
 
 
 // Toggle behavior:
@@ -1538,37 +1540,35 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
                         </div>
                       </div>
 
-                      {/* TOTAL POT */}
-                      {(pot > 0 || betting?.street === "done") && (
-                        <div className="pointer-events-none absolute left-1/2 top-[24%] flex -translate-x-1/2 flex-col items-center gap-1 md:gap-1.5">
-                          {pot > 0 && (
-                            <div className="flex items-center gap-2 rounded-full border border-[#FFD700]/90 bg-black/90 px-4 py-1.5 text-[11px] md:text-xs font-mono shadow-[0_0_26px_rgba(0,0,0,0.95)]">
-                              <span className="font-semibold text-[#FFD700]">
-                                Total Pot {pot.toLocaleString()} PGLD
-                              </span>
-                              {hasPotentialSidePot && (
-                                <span className="text-[10px] text-amber-300">
-                                  • Side pots active
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Center pot chip stack */}
-{betting && betting.pot > 0 && (
-  <div className="pointer-events-none absolute left-1/2 top-[36%] flex -translate-x-1/2 flex-col items-center gap-1">
-    <ChipStack amount={betting.pot} size={26} />
-    <div className="rounded-full bg-black/80 px-3 py-[2px] text-[10px] text-amber-100 font-mono shadow shadow-black/80">
-      {formatChips(betting.pot)} in pot
+                      {/* TOTAL POT – always above board cards, all streets */}
+{pot > 0 && (
+  <div className="
+    pointer-events-none absolute left-1/2 top-[7%]
+    -translate-x-1/2 z-[60]
+  ">
+    <div className="
+      rounded-full px-7 py-1.5
+      bg-black/90 border border-[#FFD700]/85
+      text-[#FFD700] font-semibold font-mono text-sm md:text-base
+      shadow-[0_0_25px_rgba(255,215,0,0.75)]
+      animate-[pulse_2.2s_ease-in-out_infinite]
+    ">
+      Total Pot {pot.toLocaleString()} PGLD
     </div>
   </div>
 )}
 
 
- {/* Board cards */}
-<div className="pointer-events-none absolute left-1/2 px-2 -translate-x-1/2 top-[42%] md:top-[43%]">
+
+
+
+
+
+
+
+
+ {/* Board cards – vertically centered on felt */}
+<div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-2 z-20">
   <div className="flex gap-1.5 md:gap-2">
     {boardCards.map((c, i) => {
       const tilts = [-6, -3, 0, 3, 6];
@@ -1578,7 +1578,6 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
           card={c}
           delayIndex={i}
           tilt={tilts[i]}
-          size="normal"       
         />
       );
     })}
@@ -1587,27 +1586,38 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
 
 
 
-                      {/* SHOWDOWN */}
-                      {showdown &&
-                        table &&
-                        showdown.handId === table.handId && (
-                          <div className="pointer-events-none absolute left-1/2 top-[16%] flex -translate-x-1/2 flex-col items-center gap-1 md:gap-1.5 text-[10px] md:text-xs">
-                            <div className="rounded-full bg-black/85 px-3 py-1 font-semibold text-emerald-300 shadow-md shadow-black/80">
-                              Showdown • Pot {pot.toLocaleString()} PGLD
-                            </div>
-                            {Array.isArray(showdown.players) &&
-                              showdown.players
-                                .filter((p) => p.isWinner)
-                                .map((p) => (
-                                  <div
-                                    key={p.playerId + p.seatIndex}
-                                    className="rounded-full bg-black/80 px-3 py-0.5 text-[10px] md:text-[11px] text-amber-100 shadow shadow-black/80"
-                                  >
-                                    Seat {p.seatIndex + 1} wins — {p.rankName}
-                                  </div>
-                                ))}
-                          </div>
-                        )}
+
+
+                    {/* SHOWDOWN – sits just under Total Pot, clear separation */}
+{showdown &&
+  table &&
+  showdown.handId === table.handId && (
+    <div className="pointer-events-none absolute left-1/2 top-[16%] z-40 flex -translate-x-1/2 flex-col items-center gap-1.5 text-[11px] md:text-sm">
+      <div
+        className={[
+          "rounded-full bg-black/90 px-4 py-1.5 font-semibold",
+          "text-emerald-300 shadow-[0_0_18px_rgba(0,0,0,0.9)]",
+          "border border-emerald-400/70",
+        ].join(" ")}
+      >
+        Showdown • Pot {pot.toLocaleString()} PGLD
+      </div>
+
+      {Array.isArray(showdown.players) &&
+        showdown.players
+          .filter((p) => p.isWinner)
+          .map((p) => (
+            <div
+              key={p.playerId + p.seatIndex}
+              className="rounded-full bg-black/85 px-3.5 py-1 text-[10px] md:text-[11px] text-amber-100 shadow shadow-black/80 border border-[#FFD700]/60"
+            >
+              Seat {p.seatIndex + 1} wins — {p.rankName}
+            </div>
+          ))}
+    </div>
+  )}
+
+
                     </div>
 
                     {/* SEATS ON BUMPER – table-centric layout, optional hero-center toggle */}
@@ -1761,6 +1771,7 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
     </div>
   </div>
 )}
+
 
 
 
@@ -2312,71 +2323,106 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
               {/* Dealer area – HIDDEN in fullscreen */}
               {!isFullscreen && (
                 <>
-                  {/* LAST WINNERS */}
-                  {winners.length > 0 && (
-                    <div className="mt-3 rounded-xl border border-emerald-500/40 bg-black/75 px-3 py-2 text-[11px] shadow-[0_0_18px_rgba(0,0,0,0.9)]">
-                      <div className="mb-1 flex items-center justify-between">
-                        <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-300">
-                          Last winners
-                        </div>
-                        <span className="text-[9px] text-emerald-200/80">
-                          Last {Math.min(winners.length, 5)} hands
-                        </span>
-                      </div>
-                      <ul className="space-y-0.5">
-                        {winners.slice(0, 5).map((w) => (
-                          <li
-                            key={`${w.handId}-${w.playerId}-${w.seatIndex}`}
-                            className="flex items-center justify-between text-white/90"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-full bg-emerald-500/15 px-2 py-[1px] text-[9px] font-semibold text-emerald-300">
-                                Hand #{w.handId}
-                              </span>
-                              <span className="text-[10px]">
-                                Seat {w.seatIndex + 1}{" "}
-                                <span className="font-semibold text-white">
-                                  {w.name && w.name.trim().length > 0
-                                    ? w.name
-                                    : w.playerId.slice(0, 6)}
-                                </span>
-                              </span>
-                            </div>
-                            <span className="text-[10px] text-amber-200">
-                              {w.rankName}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {/* LAST WINNERS – collapsible */}
+<div className="mt-3 rounded-2xl border border-white/15 bg-black/70 px-3 py-2 text-[11px] text-white/80 shadow-[0_0_20px_rgba(0,0,0,0.85)]">
+  <button
+    type="button"
+    onClick={() => setShowLastWinners((v) => !v)}
+    className="flex w-full items-center justify-between gap-2"
+  >
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] uppercase tracking-[0.25em] text-white/45">
+        Last winners
+      </span>
+      {winnersToShow.length > 0 && (
+        <span className="rounded-full bg-emerald-500/15 px-2 py-[1px] text-[9px] text-emerald-300 border border-emerald-500/40">
+          Last {Math.min(winnersToShow.length, 5)} hands
+        </span>
+      )}
+    </div>
 
-                  {/* Dealer log */}
-                  <div className="mt-3 max-h-32 overflow-y-auto rounded-xl border border-white/15 bg-black/55 px-3 py-2 text-[11px]">
-                    <div className="mb-1 flex items-center justify-between">
-                      <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">
-                        Dealer Log
-                      </div>
-                      <div className="text-[9px] text-white/35">
-                        Latest events first
-                      </div>
-                    </div>
-                    {dealerLog.length === 0 ? (
-                      <div className="text-white/35">
-                        Waiting for players. Sit, watch the countdown, and
-                        play.
-                      </div>
-                    ) : (
-                      <ul className="space-y-0.5">
-                        {dealerLog.map((entry) => (
-                          <li key={entry.id} className="text-white/80">
-                            <span className="mr-1 text-white/35">•</span>
-                            {entry.text}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+    <span className="text-[11px] text-white/60">
+      {showLastWinners ? "▾" : "▸"}
+    </span>
+  </button>
+
+  {showLastWinners && winnersToShow.length > 0 && (
+    <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
+      {winnersToShow.slice(0, 5).map((w: WinnerEntry, idx: number) => (
+  <div
+    key={w.handId ?? idx}
+    className="flex items-center justify-between gap-2"
+  >
+    <span className="font-mono text-white/75">
+      Hand #{w.handId ?? "–"}
+    </span>
+    <span className="truncate text-white/65">
+      Seat {(w.seatIndex ?? 0) + 1} • {w.rankName ?? "Winner"}
+    </span>
+  </div>
+))}
+
+    </div>
+  )}
+
+  {showLastWinners && winnersToShow.length === 0 && (
+    <div className="mt-2 border-t border-white/10 pt-2 text-[10px] text-white/55">
+      No completed hands yet.
+    </div>
+  )}
+</div>
+
+
+
+                  {/* DEALER LOG – collapsible */}
+<div className="mt-3 rounded-2xl border border-white/15 bg-black/75 px-3 py-2 text-[11px] text-white/80 shadow-[0_0_20px_rgba(0,0,0,0.85)]">
+  <button
+    type="button"
+    onClick={() => setShowDealerLog(v => !v)}
+    className="flex w-full items-center justify-between gap-2"
+  >
+    <div className="flex flex-col">
+      <span className="text-[10px] uppercase tracking-[0.25em] text-white/45">
+        Dealer log
+      </span>
+      <span className="text-[9px] text-white/50">
+        Latest events first
+      </span>
+    </div>
+    <span className="text-[11px] text-white/60">
+      {showDealerLog ? "▾" : "▸"}
+    </span>
+  </button>
+
+  {showDealerLog && dealerLog.length > 0 && (
+  <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5 text-[10px] text-white/75">
+    {dealerLog
+      .slice()
+      .reverse()
+      .slice(0, 15)
+      .map((entry: DealerLogEntry, idx: number) => {
+        const e = entry as any;
+        const tsLabel = e.timestamp
+          ? new Date(e.timestamp).toLocaleTimeString()
+          : "";
+        const msg = e.message ?? e.text ?? String(e);
+
+        return (
+          <div key={idx} className="flex gap-2">
+            {tsLabel && (
+              <span className="min-w-[52px] font-mono text-white/40">
+                {tsLabel}
+              </span>
+            )}
+            <span className="flex-1">{msg}</span>
+          </div>
+        );
+      })}
+  </div>
+)}
+
+</div>
+
 
                   <div className="relative mt-3 text-[11px] font-semibold text-white/40">
                     Seats, blinds, betting, showdown, and winners are all
