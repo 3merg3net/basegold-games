@@ -952,6 +952,7 @@ export default function BlackjackLive() {
             {/* Seat overlays on felt (mobile + desktop) */}
 {seats.map((seat) => renderSeat(seat))}
 
+
           </div>
         </div>
       </div>

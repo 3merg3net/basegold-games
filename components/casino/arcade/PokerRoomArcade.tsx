@@ -1410,18 +1410,12 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
 
 
 
-         <div
+         {/* FELT + TABLE wrapper */}
+<div
   className={
     isFullscreen
-      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[62vh] [perspective:1600px]"
-      : [
-          "relative mx-auto mt-2 w-full max-w-[980px]",
-          // mobile: fixed height (shorter table)
-          "h-[340px] sm:h-[380px]",
-          // from md up: go back to 16:9 aspect
-          "md:h-auto md:aspect-[16/9]",
-          "[perspective:1600px]",
-        ].join(" ")
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[70vh] md:h-[68vh] [perspective:1600px]"
+      : "relative mx-auto mt-2 w-full max-w-[980px] h-[420px] sm:h-[460px] md:aspect-[16/9] [perspective:1600px]"
   }
 >
 
@@ -1558,7 +1552,8 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
                     </div>
 
                     {/* Inner felt */}
-                    <div className="absolute inset-[7%] md:inset-[6%] origin-center scale-y-[0.96] md:scale-y-[0.9] rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
+                    <div className="absolute inset-[10%] md:inset-[6%] origin-center scale-[0.9] md:scale-y-[0.9] rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
+
                       {/* Felt texture */}
                       <div className="pointer-events-none absolute inset-0 bg-[url('/felt/felt-texture.png')] mix-blend-soft-light opacity-[0.16]" />
 
