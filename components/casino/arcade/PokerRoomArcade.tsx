@@ -125,20 +125,26 @@ const CHIP_SOURCES: Record<number, string> = {
   1000: "/chips/chip-bgrc-1000.png",
 };
 
-const CHIP_DENOMS = [1000, 500, 100, 25, 10, 5, 1];
+const CHIP_DENOMS = [500, 100, 25, 5, 1] as const;
 
 function breakdownChips(amount: number): number[] {
-  const result: number[] = [];
+  const chips: number[] = [];
   let remaining = Math.max(0, Math.floor(amount));
+  const maxChips = 6; // keep stack short
 
   for (const d of CHIP_DENOMS) {
-    while (remaining >= d) {
-      result.push(d);
+    while (remaining >= d && chips.length < maxChips) {
+      chips.push(d);
       remaining -= d;
-      if (result.length >= 12) return result;
     }
+    if (chips.length >= maxChips) break;
   }
-  return result;
+
+  if (chips.length === 0 && amount > 0) {
+    chips.push(1);
+  }
+
+  return chips;
 }
 
 function ChipStack({ amount, size = 32 }: { amount: number; size?: number }) {
@@ -147,45 +153,33 @@ function ChipStack({ amount, size = 32 }: { amount: number; size?: number }) {
   const chips = breakdownChips(amount);
   if (chips.length === 0) return null;
 
-  // limit how tall the stack can get visually
-  const visibleChips = chips.slice(0, 6);
-
-  const chipSize = size;
-  const offset = chipSize * 0.35; // vertical spacing between chips
+  const scale = 0.9;
 
   return (
-    <div
-      className="relative"
-      style={{
-        height: chipSize + offset * (visibleChips.length - 1),
-        width: chipSize * 1.4,
-      }}
-    >
-      {visibleChips.map((d, i) => {
+    <div className="flex flex-col-reverse items-center -space-y-1">
+      {chips.map((d, i) => {
         const src = CHIP_SOURCES[d];
         if (!src) return null;
 
-        const bottom = i * offset;
-        const scale = 1 - (visibleChips.length - 1 - i) * 0.04;
+        const w = size * scale;
+        const h = size * scale;
 
         return (
           <Image
             key={`${d}-${i}`}
             src={src}
             alt={`PGLD ${d}`}
-            width={chipSize}
-            height={chipSize}
-            className="absolute left-1/2 -translate-x-1/2 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.75)]"
-            style={{
-              bottom,
-              transform: `translateX(-50%) scale(${scale})`,
-            }}
+            width={w}
+            height={h}
+            className="rounded-full drop-shadow-[0_0_6px_rgba(0,0,0,0.8)]"
           />
         );
       })}
     </div>
   );
 }
+
+
 
 
 export function formatChips(amount: number): string {
@@ -474,6 +468,10 @@ const heroHandHelper = useMemo<HandHelper | null>(() => {
 
 const heroTurnPrevRef = useRef(false);
 
+// Default buy-in for this room (used for auto top-up + modal default)
+const DEFAULT_BUYIN = 500; // or 1000, whatever you prefer
+
+
 
 
 
@@ -591,6 +589,39 @@ const heroHasAction =
       playDeal();
     }
 
+    useEffect(() => {
+  if (!autoTopUp) return;
+  if (!betting || !heroSeat) return;
+
+  // Only consider at the *start* of a hand, preflop
+  if (betting.street !== "preflop") return;
+
+  const heroBet = betting.players.find(
+    (p) => p.seatIndex === heroSeat.seatIndex
+  );
+  if (!heroBet) return;
+
+  // If we still have stack, no need to top up
+  if ((heroBet.stack ?? 0) > 0) return;
+
+  // No bankroll, nothing to do
+  if (chips <= 0) return;
+
+  const buyAmount = Math.min(DEFAULT_BUYIN, chips);
+  if (buyAmount <= 0) return;
+
+  // Tell server: top-up (you wire this in coordinator)
+  sendMessage({
+    type: "action",
+    action: "rebuy",
+    amount: buyAmount,
+  });
+
+  // Locally reduce bankroll
+  setChips((prev: number) => Math.max(0, prev - buyAmount));
+}, [autoTopUp, betting?.street, table?.handId, heroSeat?.seatIndex, chips]);
+
+
     const count = table.board.length;
     if (count > lastBoardCountRef.current) {
       playDeal();
@@ -707,21 +738,7 @@ const heroHasAction =
 
   const boardCards = table?.board ?? [];
 
-  // ---------- POT: compute from live committed chips ----------
-const pot = useMemo(() => {
-  if (!betting || !Array.isArray(betting.players)) {
-    // fall back to whatever the table says, or 0
-    return (table as any)?.pot ?? 0;
-  }
-
-  // Sum all committed chips across all players
-  const livePot = betting.players.reduce((sum, p) => {
-    const committed = typeof p.committed === "number" ? p.committed : 0;
-    return sum + committed;
-  }, 0);
-
-  return livePot;
-}, [betting, table]);
+  
 
 
 
@@ -822,6 +839,26 @@ const bigBlindSeatIndex = useMemo(() => {
     }
   });
 
+  // ---------- POT (single source of truth) ----------
+// Prefer coordinator's pot if provided; otherwise, sum per-seat totals.
+const serverPot =
+  (betting && typeof betting.pot === "number" ? betting.pot : 0) ||
+  ((table as any)?.pot ?? 0);
+
+const handPot = Object.values(totalBySeat).reduce<number>(
+  (sum, v) => sum + (v ?? 0),
+  0
+);
+
+// Final pot value used everywhere in UI
+const pot =
+  serverPot > 0 && handPot > 0
+    ? Math.max(serverPot, handPot)
+    : serverPot > 0
+    ? serverPot
+    : handPot;
+
+
   const hasPotentialSidePot =
     !!betting &&
     betting.players.some(
@@ -832,17 +869,14 @@ const bigBlindSeatIndex = useMemo(() => {
         (p.committed > 0 || betting.pot > 0)
     );
 
-   // Pot helpers – keep UI in sync with live betting
+   useEffect(() => {
+  // whenever handId changes, it's a new hand
+  if (!table?.handId) return;
 
-// committedBySeat is a Record<number, number>, so turn it into an array first
-const committedValues = Object.values(committedBySeat ?? {});
-const committedPot =
-  committedValues.length > 0
-    ? committedValues.reduce((sum, v) => sum + v, 0)
-    : 0;
+  perSeatLastCommittedRef.current = {};
+  setHandTotals({});
+}, [table?.handId]);
 
-// Server-reported pot comes from betting, not table
-const serverPot = betting?.pot ?? 0;
 
 
 
@@ -896,8 +930,10 @@ const serverPot = betting?.pot ?? 0;
 
   /* ───────────────── Buy-in / sit / stand ───────────────── */
 
+  const [buyIn, setBuyIn] = useState<number>(DEFAULT_BUYIN);
+  const [autoTopUp, setAutoTopUp] = useState<boolean>(true);
+
   const [showBuyIn, setShowBuyIn] = useState(false);
-  const [buyIn, setBuyIn] = useState<number>(500);
 
   
 
@@ -1005,38 +1041,58 @@ function handleReloadDemoBankroll() {
   const [manualBet, setManualBet] = useState<string>("");
 
   function handleBet() {
-    if (!isHeroTurn || !betting || !heroBetting) return;
+  if (!isHeroTurn || !betting || !heroBetting) return;
 
-    const callNeeded = Math.max(
-      0,
-      betting.maxCommitted - heroBetting.committed
-    );
-    const minRaise = betting.bigBlind * 2;
+  const alreadyCommitted = heroBetting.committed ?? 0;
+  const stack = heroBetting.stack ?? 0;
 
-    let raiseDelta =
-      manualBet.trim().length > 0
-        ? Number(manualBet)
-        : raiseSize > 0
-        ? raiseSize
-        : minRaise;
+  // No chips to bet
+  if (stack <= 0) return;
 
-    if (!Number.isFinite(raiseDelta) || raiseDelta <= 0) {
-      raiseDelta = minRaise;
-    }
+  const callNeeded = Math.max(0, betting.maxCommitted - alreadyCommitted);
+  const minRaise = betting.bigBlind * 2;
 
-    raiseDelta = Math.max(minRaise, Math.floor(raiseDelta));
-    const totalSpend = Math.min(heroBetting.stack, callNeeded + raiseDelta);
+  // Pick a base value from manual input or slider
+  let raiseDelta =
+    manualBet.trim().length > 0
+      ? Number(manualBet)
+      : raiseSize > 0
+      ? raiseSize
+      : minRaise;
 
-    pushLog(
-      `${describeHero()} bets ${totalSpend} PGLD (call ${callNeeded}, raise ${raiseDelta}).`
-    );
-
-    sendMessage({
-      type: "action",
-      action: "bet",
-      amount: raiseDelta,
-    });
+  if (!Number.isFinite(raiseDelta) || raiseDelta <= 0) {
+    raiseDelta = minRaise;
   }
+
+  raiseDelta = Math.max(minRaise, Math.floor(raiseDelta));
+
+  // This is how many chips we want to push into the pot this action
+  let totalSpend = callNeeded + raiseDelta;
+
+  // Clamp to hero stack (all-in if needed)
+  if (totalSpend > stack) {
+    totalSpend = stack;
+  }
+
+  if (totalSpend <= 0) return;
+
+  pushLog(
+    `${describeHero()} bets ${totalSpend} PGLD (call ${callNeeded}, raise ${raiseDelta}).`
+  );
+
+  // 🔥 IMPORTANT: send totalSpend, not just raiseDelta
+  sendMessage({
+    type: "action",
+    action: "bet",
+    amount: totalSpend,
+  });
+
+  // Clear manualBet so slider rules next time
+  // (optional, but usually feels better)
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  setManualBet?.("");
+}
+
 
   function handleAllIn() {
     if (!isHeroTurn || !betting || !heroBetting) return;
@@ -1366,6 +1422,11 @@ const prevSeatsRef = useRef<Map<number, string | null>>(new Map());
 const maxSeats = SEAT_GEOMETRY.length;
 const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
 
+const [showProfileCard, setShowProfileCard] = useState(false);
+const [showChipsCard, setShowChipsCard] = useState(false);
+const [showRoomCard, setShowRoomCard] = useState(false);
+const [showInfoCard, setShowInfoCard] = useState(false);
+
 
 
 
@@ -1583,7 +1644,7 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
                       {/* TOTAL POT – always above board cards, all streets */}
 {pot > 0 && (
   <div className="
-    pointer-events-none absolute left-1/2 top-[7%]
+    pointer-events-none absolute left-1/2 top-[3%]
     -translate-x-1/2 z-[60]
   ">
     <div className="
@@ -1738,7 +1799,12 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
         SEAT_GEOMETRY[logicalIndex] ??
         SEAT_GEOMETRY[SEAT_GEOMETRY.length - 1];
 
-      const totalForHand = totalBySeat[seat.seatIndex] ?? 0;
+      // chips this seat has committed *in the current hand*
+const totalForHand =
+  seatBetting?.committed ??
+  committedBySeat[seat.seatIndex] ??
+  0;
+
 
       // Which cards to show (hero always sees their own, others only when allowed)
       let visibleCards: string[] | null = null;
@@ -2474,185 +2540,238 @@ const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
           </div>
 
           {/* SIDEBAR – HIDE in fullscreen */}
-          {!isFullscreen && (
-            <div className="space-y-4">
-              {/* Player profile summary */}
-              <div className="space-y-3 rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                      Player Profile
-                    </div>
-                    <div className="text-[11px] text-white/50">
-                      This name & avatar show at the table.
-                    </div>
-                  </div>
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-black shadow-[0_0_20px_rgba(250,204,21,0.7)]"
-                    style={{
-                      backgroundColor: profile?.avatarColor ?? "#facc15",
-                    }}
-                  >
-                    {initials.slice(0, 3).toUpperCase()}
-                  </div>
-                </div>
+{!isFullscreen && (
+  <div className="space-y-4">
+    {/* Player profile summary – COLLAPSIBLE */}
+    <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-3">
+      <button
+        type="button"
+        onClick={() => setShowProfileCard((v) => !v)}
+        className="flex w-full items-center justify-between gap-2"
+      >
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+            Player Profile
+          </div>
+          <div className="text-[11px] text-white/50">
+            This name & avatar show at the table.
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold text-black shadow-[0_0_16px_rgba(250,204,21,0.7)]"
+            style={{
+              backgroundColor: profile?.avatarColor ?? "#facc15",
+            }}
+          >
+            {initials.slice(0, 3).toUpperCase()}
+          </div>
+          <span className="text-[12px] text-white/60">
+            {showProfileCard ? "▾" : "▸"}
+          </span>
+        </div>
+      </button>
 
-                <div className="space-y-2 pt-1 text-[11px]">
-                  <div className="flex items-center justify-between gap-2">
-  <div>
-    <div className="font-semibold text-white/90">
-      {profile?.name && profile.name.trim().length > 0
-        ? profile.name
-        : "Unnamed Player"}
-    </div>
-    <div className="text-white/50">
-      Style:{" "}
-      <span className="text-white/80">
-        {profile?.style ?? "balanced"}
-      </span>
-    </div>
-  </div>
-</div>
-
-<p className="mt-1 text-[10px] text-white/45">
-  Edit your name & avatar on the main profile page before joining live tables.
-</p>
-
-
-                  {profile?.bio && (
-                    <p className="line-clamp-3 text-white/60">{profile.bio}</p>
-                  )}
-
-                  <div className="flex flex-wrap gap-2 pt-1 text-[10px] text-white/55">
-                    {profile?.xHandle && (
-                      <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5">
-                        X: {profile.xHandle}
-                      </span>
-                    )}
-                    {profile?.telegramHandle && (
-                      <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5">
-                        TG: {profile.telegramHandle}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* PGLD credits */}
-<div className="mt-2 border-t border-white/10 pt-2">
-  <div className="space-y-1.5">
-    <div className="mb-1 text-[10px] uppercase tracking-[0.25em] text-white/50">
-      PGLD Chips
-    </div>
-    <div className="text-sm font-semibold text-white/80">
-      Bankroll:{" "}
-      <span className="font-mono text-[#FFD700]">
-        {chips.toLocaleString()} PGLD
-      </span>
-    </div>
-    <p className="text-[11px] text-white/45">
-      Sitting takes a PGLD chip buy-in from this bankroll;
-      standing adds your stack back.
-    </p>
-
-    {/* Demo reload control */}
-    <button
-      type="button"
-      onClick={handleReloadDemoBankroll}
-      className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
-    >
-      Reload demo bankroll
-      <span className="text-[9px] text-white/60">(5,000 PGLD)</span>
-    </button>
-  </div>
-</div>
-
+      {showProfileCard && (
+        <div className="mt-2 border-t border-white/10 pt-2 space-y-2 text-[11px]">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="font-semibold text-white/90">
+                {profile?.name && profile.name.trim().length > 0
+                  ? profile.name
+                  : "Unnamed Player"}
               </div>
-
-              {/* Room controls + invite */}
-              <div className="space-y-3 rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
-                <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                  Room & Invites
-                </div>
-                <p className="text-[11px] text-white/60">
-                  Each device or browser = one seat. Share this link and play
-                  live together.
-                </p>
-
-                <div className="mt-2 space-y-1.5 border-t border-white/10 pt-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-                      Invite link
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyInvite}
-                      className="rounded-full border border-[#FFD700]/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
-                    >
-                      {copiedInvite ? "Copied ✓" : "Copy link"}
-                    </button>
-                  </div>
-                  <div className="max-h-10 break-all overflow-hidden text-[10px] text-white/40">
-                    {inviteUrl || "Invite URL loads here in browser."}
-                  </div>
-                </div>
-              </div>
-
-              {/* Info blocks */}
-              <div className="space-y-3 rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-[11px]">
-                {/* Table basics */}
-                <button
-                  type="button"
-                  onClick={() => setOpenHowRoom((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
-                >
-                  <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                    Table basics
-                  </span>
-                  <span className="text-xs text-white/60">
-                    {openHowRoom ? "−" : "+"}
-                  </span>
-                </button>
-                {openHowRoom && (
-                  <div className="px-1 space-y-1 text-white/70">
-                    <p>
-                      6–9 seat PGLD Hold&apos;em cash game. Chips, action
-                      order, and hands are synced for every player.
-                    </p>
-                    <p>
-                      Each browser connects as a unique player with their own
-                      stack and bankroll.
-                    </p>
-                  </div>
-                )}
-
-                {/* Hold'em quick rules */}
-                <button
-                  type="button"
-                  onClick={() => setOpenHowPlay((v) => !v)}
-                  className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
-                >
-                  <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
-                    Hold&apos;em quick rules
-                  </span>
-                  <span className="text-xs text-white/60">
-                    {openHowPlay ? "−" : "+"}
-                  </span>
-                </button>
-                {openHowPlay && (
-                  <div className="px-1 space-y-1 text-white/70">
-                    <p>
-                      You get 2 hole cards. Up to 5 community cards hit the
-                      board (flop, turn, river). Best 5-card hand wins.
-                    </p>
-                    <p>
-                      Bet preflop, on the flop, turn, and river. You can fold,
-                      call, or bet/raise when it&apos;s your turn.
-                    </p>
-                  </div>
-                )}
+              <div className="text-white/50">
+                Style:{" "}
+                <span className="text-white/80">
+                  {profile?.style ?? "balanced"}
+                </span>
               </div>
             </div>
+          </div>
+
+          <p className="mt-1 text-[10px] text-white/45">
+            Edit your name & avatar on the main profile page before joining
+            live tables.
+          </p>
+
+          {profile?.bio && (
+            <p className="line-clamp-3 text-white/60">{profile.bio}</p>
           )}
+
+          <div className="flex flex-wrap gap-2 pt-1 text-[10px] text-white/55">
+            {profile?.xHandle && (
+              <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5">
+                X: {profile.xHandle}
+              </span>
+            )}
+            {profile?.telegramHandle && (
+              <span className="rounded-full border border-white/20 bg-black/60 px-2 py-0.5">
+                TG: {profile.telegramHandle}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* PGLD credits – COLLAPSIBLE */}
+    <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-3">
+      <button
+        type="button"
+        onClick={() => setShowChipsCard((v) => !v)}
+        className="flex w-full items-center justify-between"
+      >
+        <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+          PGLD Chips
+        </div>
+        <span className="text-[12px] text-white/60">
+          {showChipsCard ? "▾" : "▸"}
+        </span>
+      </button>
+
+      {showChipsCard && (
+        <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
+          <div className="text-sm font-semibold text-white/80">
+            Bankroll:{" "}
+            <span className="font-mono text-[#FFD700]">
+              {chips.toLocaleString()} PGLD
+            </span>
+          </div>
+          <p className="text-[11px] text-white/45">
+            Sitting takes a PGLD chip buy-in from this bankroll; standing adds
+            your stack back.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleReloadDemoBankroll}
+            className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
+          >
+            Reload demo bankroll
+            <span className="text-[9px] text-white/60">(5,000 PGLD)</span>
+          </button>
+        </div>
+      )}
+    </div>
+
+    {/* Room controls + invite – COLLAPSIBLE */}
+    <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-3 text-xs">
+      <button
+        type="button"
+        onClick={() => setShowRoomCard((v) => !v)}
+        className="flex w-full items-center justify-between"
+      >
+        <span className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+          Room & Invites
+        </span>
+        <span className="text-[12px] text-white/60">
+          {showRoomCard ? "▾" : "▸"}
+        </span>
+      </button>
+
+      {showRoomCard && (
+        <div className="mt-2 border-t border-white/10 pt-2 space-y-3">
+          <p className="text-[11px] text-white/60">
+            Each device or browser = one seat. Share this link and play live
+            together.
+          </p>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                Invite link
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyInvite}
+                className="rounded-full border border-[#FFD700]/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
+              >
+                {copiedInvite ? "Copied ✓" : "Copy link"}
+              </button>
+            </div>
+            <div className="max-h-10 break-all overflow-hidden text-[10px] text-white/40">
+              {inviteUrl || "Invite URL loads here in browser."}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* Info blocks – COLLAPSIBLE “Table info” shell, keeps existing sub-toggles */}
+    <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-3 text-[11px]">
+      <button
+        type="button"
+        onClick={() => setShowInfoCard((v) => !v)}
+        className="flex w-full items-center justify-between"
+      >
+        <span className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+          Table Info
+        </span>
+        <span className="text-[12px] text-white/60">
+          {showInfoCard ? "▾" : "▸"}
+        </span>
+      </button>
+
+      {showInfoCard && (
+        <div className="mt-2 border-t border-white/10 pt-2 space-y-3">
+          {/* Table basics (your existing toggle) */}
+          <button
+            type="button"
+            onClick={() => setOpenHowRoom((v) => !v)}
+            className="flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
+          >
+            <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
+              Table basics
+            </span>
+            <span className="text-xs text-white/60">
+              {openHowRoom ? "−" : "+"}
+            </span>
+          </button>
+          {openHowRoom && (
+            <div className="px-1 space-y-1 text-white/70">
+              <p>
+                6–9 seat PGLD Hold&apos;em cash game. Chips, action order, and
+                hands are synced for every player.
+              </p>
+              <p>
+                Each browser connects as a unique player with their own stack
+                and bankroll.
+              </p>
+            </div>
+          )}
+
+          {/* Hold'em quick rules (existing toggle) */}
+          <button
+            type="button"
+            onClick={() => setOpenHowPlay((v) => !v)}
+            className="mt-3 flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left"
+          >
+            <span className="text-[10px] uppercase tracking-[0.25em] text-white/70">
+              Hold&apos;em quick rules
+            </span>
+            <span className="text-xs text-white/60">
+              {openHowPlay ? "−" : "+"}
+            </span>
+          </button>
+          {openHowPlay && (
+            <div className="px-1 space-y-1 text-white/70">
+              <p>
+                You get 2 hole cards. Up to 5 community cards hit the board
+                (flop, turn, river). Best 5-card hand wins.
+              </p>
+              <p>
+                Bet preflop, on the flop, turn, and river. You can fold, call,
+                or bet/raise when it&apos;s your turn.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
         </section>
 
         {/* CHAT – hide in fullscreen */}
