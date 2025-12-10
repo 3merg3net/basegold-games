@@ -1460,10 +1460,11 @@ const [showInfoCard, setShowInfoCard] = useState(false);
   return (
     <>
       <div
-        className={
-          isFullscreen ? "space-y-0 pb-0 md:pb-0" : "space-y-6 pb-16 md:pb-4"
-        }
-      >
+  className={
+    isFullscreen ? "space-y-0 pb-0 md:pb-0" : "space-y-6 pb-8 md:pb-4"
+  }
+>
+
         {/* TABLE + SIDEBAR */}
         <section
           className={
@@ -1481,9 +1482,8 @@ const [showInfoCard, setShowInfoCard] = useState(false);
     "shadow-[0_0_50px_rgba(0,0,0,0.9)]",
     "p-4 md:p-6",
     "space-y-3",
-    // 🔑 Clamp overflow on mobile so the felt / avatars / chips
-    // can't hang down over the Player Profile card:
-    "overflow-hidden md:overflow-visible",
+    // Let felt + hero bar + pre-action all flow on mobile too
+    "overflow-visible",
   ].join(" ")}
 >
 
@@ -1493,14 +1493,18 @@ const [showInfoCard, setShowInfoCard] = useState(false);
 
 
 
+
          {/* FELT + TABLE wrapper */}
+
 <div
   className={
     isFullscreen
-      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[62vh] [perspective:1600px]"
-      : "relative mx-auto mt-2 w-full max-w-[980px] h-[60vh] [perspective:1600px]"
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[62vh] md:h-[60vh] [perspective:1600px]"
+      : "relative mx-auto mt-1 w-full max-w-[980px] h-[380px] sm:h-[440px] md:aspect-[16/9] [perspective:1600px]"
   }
 >
+
+
 
 
 
@@ -1621,13 +1625,15 @@ const [showInfoCard, setShowInfoCard] = useState(false);
                 }
               >
                 {/* FELT + TABLE wrapper */}
+{/* FELT + TABLE wrapper */}
 <div
   className={
     isFullscreen
-      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[62vh] [perspective:1600px]"
-      : "relative mx-auto mt-2 w-full max-w-[980px] aspect-[10/16] md:aspect-[16/9] [perspective:1600px]"
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[70vh] md:h-[68vh] [perspective:1600px]"
+      : "relative mx-auto mt-2 w-full max-w-[980px] h-[520px] sm:h-[560px] md:aspect-[16/9] [perspective:1600px]"
   }
 >
+
 
 
                   {/* 3D group */}
