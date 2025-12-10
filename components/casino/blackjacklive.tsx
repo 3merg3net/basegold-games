@@ -866,41 +866,36 @@ return (
   return (
     <div className="space-y-3 pb-20 md:space-y-4 md:pb-8">
       {/* Header */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">
-            Base Gold Rush • Live Blackjack
-          </div>
-          <div className="text-sm text-white/80">
-            Room ID:{" "}
-            <span className="font-mono text-[#FFD700]/90">
-              {ROOM_ID}
-            </span>
-          </div>
-          <div className="text-[11px] text-white/60">
-            Phase: <span className="font-mono">{phase}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 text-[11px] text-white/60">
-          <span className="font-mono text-xs text-white/50">
-            WS: {wsUrl}
-          </span>
-          {connected ? (
-            <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-300">
-              <span className="mr-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              Connected
-            </span>
-          ) : (
-            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
-              <span className="mr-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-              Connecting…
-            </span>
-          )}
-        </div>
+<div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+  {/* Left: title */}
+  <div>
+    <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">
+      Base Gold Rush • Live Blackjack
+    </div>
+
+    {/* Room / phase only on md+ */}
+    <div className="hidden md:block">
+      <div className="text-sm text-white/80">
+        Room ID:{" "}
+        <span className="font-mono text-[#FFD700]/90">{ROOM_ID}</span>
       </div>
+      <div className="text-[11px] text-white/60">
+        Phase: <span className="font-mono">{phase}</span>
+      </div>
+    </div>
+  </div>
+
+  {/* WS / Connected only on md+ */}
+  <div className="hidden md:flex items-center gap-3 text-[11px] text-white/60">
+    <span className="font-mono text-xs text-white/50">WS: {wsUrl}</span>
+    {/* connected pill… */}
+  </div>
+</div>
+
 
       {/* Table container */}
       <div className="relative rounded-3xl border border-[#FFD700]/40 bg-gradient-to-b from-black via-slate-950 to-black p-3 md:p-6 shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden">
+
         {/* Glow */}
         <div className="pointer-events-none absolute inset-0 opacity-40">
           <div className="absolute -top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-sky-500/20 blur-3xl" />
@@ -908,15 +903,14 @@ return (
         </div>
 
         {/* Felt */}
-        <div className="relative mx-auto w-full max-w-[900px] aspect-[5/4] sm:aspect-[4/3] md:aspect-[16/9]">
-
-          <Image
-            src="/felt/bgr-blackjack-table.png"
-            alt="Base Gold Rush Live Blackjack Table"
-            fill
-            className="object-contain pointer-events-none select-none"
-            priority
-          />
+        <div className="relative mx-auto w-full max-w-[900px] aspect-[10/11] md:aspect-[16/9]">
+  <Image
+    src="/felt/bgr-blackjack-table.png"
+    alt="Base Gold Rush Live Blackjack Table"
+    fill
+    className="object-contain pointer-events-none select-none"
+    priority
+  />
 
           {/* Dealer cards (top center) */}
           <div className="pointer-events-none absolute left-1/2 top-[16%] flex -translate-x-1/2 flex-col items-center gap-1.5">
@@ -1010,7 +1004,7 @@ return (
 
           {/* GLOBAL action countdown for current seat */}
           {showActionTimerOnFelt && (
-            <div className="pointer-events-none absolute left-1/2 top-[52%] z-[60] -translate-x-1/2 flex flex-col items-center gap-1">
+            <div className="hidden md:flex pointer-events-none absolute left-1/2 bottom-[11%] -translate-x-1/2 flex-col items-center gap-1">
               <div
                 className={[
                   "rounded-full px-4 py-1 border text-center font-mono text-[9px] md:text-xs uppercase tracking-[0.18em]",

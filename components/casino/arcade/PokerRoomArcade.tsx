@@ -632,28 +632,51 @@ const heroHasAction =
   useEffect(() => {
     if (!betting) return;
 
-    // 1) Track per-hand totals per seat
-    if (Array.isArray(betting.players)) {
-      setHandTotals((prevTotals) => {
-        const nextTotals = { ...prevTotals };
-        let changed = false;
+   // Track how much each seat has put into the pot this hand (GG-style total)
+const [handTotals, setHandTotals] = useState<Record<string, number>>({});
+const perSeatLastCommittedRef = useRef<Record<string, number>>({});
 
-        betting.players.forEach((p) => {
-          const key = String(p.seatIndex);
-          const prevCommitted = perSeatLastCommittedRef.current[key] ?? 0;
-          const currentCommitted = p.committed ?? 0;
+// Whenever betting updates, accumulate deltas into handTotals
+useEffect(() => {
+  if (!betting) {
+    perSeatLastCommittedRef.current = {};
+    setHandTotals({});
+    return;
+  }
 
-          if (currentCommitted > prevCommitted) {
-            const delta = currentCommitted - prevCommitted;
-            perSeatLastCommittedRef.current[key] = currentCommitted;
-            nextTotals[key] = (nextTotals[key] ?? 0) + delta;
-            changed = true;
-          }
-        });
+  setHandTotals((prevTotals: Record<string, number>) => {
+    const nextTotals: Record<string, number> = { ...prevTotals };
+    const lastCommitted: Record<string, number> = {
+      ...perSeatLastCommittedRef.current,
+    };
 
-        return changed ? nextTotals : prevTotals;
-      });
+    for (const p of betting.players) {
+      const key = String(p.seatIndex);
+      const prevCommitted = lastCommitted[key] ?? 0;
+      const delta = (p.committed ?? 0) - prevCommitted;
+
+      // Only add positive deltas (new bets/calls)
+      if (delta > 0) {
+        nextTotals[key] = (nextTotals[key] ?? 0) + delta;
+      }
+
+      lastCommitted[key] = p.committed ?? 0;
     }
+
+    perSeatLastCommittedRef.current = lastCommitted;
+
+    // Only trigger a state update if something actually changed
+    const sameKeys =
+      Object.keys(nextTotals).length === Object.keys(prevTotals).length;
+    const sameValues =
+      sameKeys &&
+      Object.keys(nextTotals).every(
+        (k) => nextTotals[k] === prevTotals[k]
+      );
+
+    return sameValues ? prevTotals : nextTotals;
+  });
+}, [betting]);
 
     // 2) Chip sound when pot increases
     if (betting.pot > lastPotRef.current) {
