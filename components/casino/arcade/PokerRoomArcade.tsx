@@ -1472,8 +1472,7 @@ const [showInfoCard, setShowInfoCard] = useState(false);
               : "grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"
           }
         >
-          {/* TABLE */}
-{/* TABLE */}
+         
 {/* TABLE */}
 <div
   className={[
@@ -1498,10 +1497,11 @@ const [showInfoCard, setShowInfoCard] = useState(false);
 <div
   className={
     isFullscreen
-      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[70vh] md:h-[68vh] [perspective:1600px]"
-      : "relative mx-auto mt-2 w-full max-w-[980px] h-[420px] sm:h-[460px] md:aspect-[16/9] [perspective:1600px]"
+      ? "relative mx-auto mt-1 w-full max-w-[1100px] h-[68vh] md:h-[62vh] [perspective:1600px]"
+      : "relative mx-auto mt-2 w-full max-w-[980px] h-[60vh] [perspective:1600px]"
   }
 >
+
 
 
 
