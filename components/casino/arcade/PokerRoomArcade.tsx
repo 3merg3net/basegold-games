@@ -65,7 +65,12 @@ type BettingState = {
   smallBlind: number;
   maxCommitted: number;
   players: BettingPlayerState[];
+
+  // NEW: server-supplied blind positions
+  smallBlindSeatIndex?: number | null;
+  bigBlindSeatIndex?: number | null;
 };
+
 
 type ShowdownPlayer = {
   seatIndex: number;
@@ -576,19 +581,26 @@ const heroHasAction =
     if (!table) return;
 
     if (handIdRef.current == null || table.handId !== handIdRef.current) {
-      handIdRef.current = table.handId;
-      streetRef.current = null;
-      showdownHandRef.current = null;
-      lastBoardCountRef.current = table.board.length;
-      setRevealHeroHand(false); // reset show-cards each hand
+  handIdRef.current = table.handId;
+  streetRef.current = null;
+  showdownHandRef.current = null;
+  lastBoardCountRef.current = table.board.length;
+  setRevealHeroHand(false);
 
-      // reset per-hand bet totals when a new hand starts
-      perSeatLastCommittedRef.current = {};
-      setHandTotals({});
+  // New hand: clear per-hand bet totals
+  perSeatLastCommittedRef.current = {};
+  setHandTotals({});
 
-      pushLog(`New hand #${table.handId} in the PGLD room.`);
-      playDeal();
-    }
+  // If you had joined mid-hand before, clear that once the new hand begins
+  setJoinedMidHand(false);
+
+  // Clear any manually revealed hole cards from prior hands
+  setRevealedHoles({});
+
+  pushLog(`New hand #${table.handId} in the PGLD room.`);
+  playDeal();
+}
+
 
     const count = table.board.length;
     if (count > lastBoardCountRef.current) {
@@ -632,9 +644,11 @@ const heroHasAction =
   useEffect(() => {
   if (!showdown || !table) return;
   if (showdown.handId !== table.handId) return;
-  if (showdownHandRef.current === showdown.handId) return;
 
+  // Only process each showdown once
+  if (showdownHandRef.current === showdown.handId) return;
   showdownHandRef.current = showdown.handId;
+
   playWin();
   pushLog("Showdown: revealing hands and sweeping the pot.");
 
@@ -645,7 +659,6 @@ const heroHasAction =
     const additions: WinnerEntry[] = showdown.players
       .filter((p) => p.isWinner)
       .map((p) => {
-        // Try to grab a friendly name from seats
         const seatMeta = seats.find(
           (s) => s.seatIndex === p.seatIndex && s.playerId === p.playerId
         );
@@ -662,47 +675,32 @@ const heroHasAction =
     if (additions.length > 0) {
       setWinners((prev) => {
         const merged = [...additions, ...prev];
-        // keep only latest 10 winner entries
         return merged.slice(0, 10);
       });
     }
   }
 
-  // 🔥 AUTO-DEAL: host fires next hand ~30s after showdown
-  const AUTO_DEAL_DELAY_MS = 30000;
-
-  if (!isHostClient) {
-    // not the host, don't schedule auto-deal
-    return;
-  }
-
-  if (seatedCount < MIN_PLAYERS_TO_START) {
-    // helpful log so you can see why it didn't schedule
-    pushLog(
-      `Auto-deal paused: need at least ${MIN_PLAYERS_TO_START} players, currently ${seatedCount}.`
-    );
-    return;
-  }
-
-  pushLog(
-    `Auto-deal armed: next hand will start in ${AUTO_DEAL_DELAY_MS / 1000}s.`
-  );
-
-  const timerId = window.setTimeout(() => {
-    // small safety re-check: still host & enough players?
-    if (isHostClient && seatedCount >= MIN_PLAYERS_TO_START) {
-      sendMessage({ type: "start-hand" });
-      pushLog("Auto-deal: next hand starting in the PGLD room.");
-    } else {
-      pushLog("Auto-deal canceled: host changed or not enough players.");
+  // 🔥 AUTO-DEAL: host fires next hand 30s after showdown
+  if (isHostClient && seatedCount >= MIN_PLAYERS_TO_START) {
+    // Clear any previous pending auto-deal
+    if (autoDealTimeoutRef.current != null) {
+      clearTimeout(autoDealTimeoutRef.current);
+      autoDealTimeoutRef.current = null;
     }
-  }, AUTO_DEAL_DELAY_MS);
 
-  // cleanup if component unmounts or showdown changes
-  return () => {
-    window.clearTimeout(timerId);
-  };
+    pushLog("Auto-deal armed: next hand will start in 30 seconds.");
+
+    autoDealTimeoutRef.current = window.setTimeout(() => {
+      // Safety re-check in case table state changed
+      if (isHostClient && seatedCount >= MIN_PLAYERS_TO_START) {
+        sendMessage({ type: "start-hand" });
+        pushLog("Auto-deal: next hand starting in the PGLD room.");
+      }
+      autoDealTimeoutRef.current = null;
+    }, 30_000);
+  }
 }, [showdown, table, playWin, seats, isHostClient, seatedCount, sendMessage]);
+
 
 
   const boardCards = table?.board ?? [];
@@ -710,49 +708,7 @@ const heroHasAction =
   const buttonSeatIndex = betting?.buttonSeatIndex ?? null;
   const currentSeatIndex = betting?.currentSeatIndex ?? null;
 
-  const smallBlindSeatIndex = useMemo(() => {
-    if (!betting || betting.players.length === 0) return null;
-
-    const occupied = betting.players
-      .map((p) => p.seatIndex)
-      .sort((a, b) => a - b);
-
-    const btn = betting.buttonSeatIndex;
-    if (btn == null) return null;
-
-    if (occupied.length === 2) {
-      // Heads-up: button is SB
-      return btn;
-    }
-
-    const idxBtn = occupied.indexOf(btn);
-    if (idxBtn === -1) return null;
-
-    // Seat immediately after button = SB
-    return occupied[(idxBtn + 1) % occupied.length];
-  }, [betting]);
-
-  const bigBlindSeatIndex = useMemo(() => {
-    if (!betting || betting.players.length === 0) return null;
-
-    const occupied = betting.players
-      .map((p) => p.seatIndex)
-      .sort((a, b) => a - b);
-
-    const btn = betting.buttonSeatIndex;
-    if (btn == null) return null;
-
-    if (occupied.length === 2) {
-      // Heads-up: the *other* player is BB
-      return occupied.find((s) => s !== btn) ?? null;
-    }
-
-    const idxBtn = occupied.indexOf(btn);
-    if (idxBtn === -1) return null;
-
-    // Two seats after button = BB
-    return occupied[(idxBtn + 2) % occupied.length];
-  }, [betting]);
+  
 
   // Per-street committed (what's currently in front of each player)
   const committedBySeat: Record<number, number> = {};
@@ -1083,41 +1039,40 @@ function handleReloadDemoBankroll() {
   /* ───────────────── Manual deal safety ───────────────── */
 
   function handleManualDeal() {
-    if (!isHostClient) return;
-    const noActiveHand = !betting || betting.street === "done" || !table;
-    if (seatedCount < 2 || !noActiveHand) return;
-    pushLog("Host deals the next hand.");
-    sendMessage({ type: "start-hand" });
-  }
+  if (!isHostClient) return;
+
+  // Log locally so we know the click fired
+  pushLog("Host requests next hand.");
+
+  // Always let the coordinator decide if a new hand can start
+  sendMessage({ type: "start-hand" });
+}
+
 
   const canManualDeal =
-  isHostClient &&
-  seatedCount >= MIN_PLAYERS_TO_START &&
-  (!betting || betting.street === "done");
+  isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
+
 
 
 
   /* ───────────────── Winner seat set ───────────────── */
 
-  const winnerSeatIndexes = useMemo(() => {
-    const set = new Set<number>();
+  const winnerSeatKeys = useMemo(() => {
+  const set = new Set<string>();
 
-    // No showdown or no table yet → no winners to show
-    if (!showdown || !table) return set;
+  if (!showdown || !table) return set;
+  if (showdown.handId !== table.handId) return set;
+  if (!Array.isArray(showdown.players)) return set;
 
-    // Only show winners for the *current* hand on the felt
-    if (showdown.handId !== table.handId) return set;
+  showdown.players.forEach((p) => {
+    if (p.isWinner) {
+      set.add(`${p.seatIndex}:${p.playerId}`);
+    }
+  });
 
-    if (!Array.isArray(showdown.players)) return set;
+  return set;
+}, [showdown, table]);
 
-    showdown.players.forEach((p) => {
-      if (p.isWinner) {
-        set.add(p.seatIndex);
-      }
-    });
-
-    return set;
-  }, [showdown, table]);
 
   
 
@@ -1172,27 +1127,7 @@ useEffect(() => {
   const noActiveHand =
     !!table && (!betting || betting.street === "done");
 
-  // When a hand is finished (or no betting) and at least 2 players seated,
-  // schedule the next hand after 25 seconds
-  if (noActiveHand && seatedCount >= MIN_PLAYERS_TO_START) {
-    if (autoDealTimeoutRef.current == null) {
-      autoDealTimeoutRef.current = window.setTimeout(() => {
-        // Re-check before firing, in case a hand started in the meantime
-        const stillNoActiveHand =
-          !!table && (!betting || betting.street === "done");
-        if (stillNoActiveHand && seatedCount >= MIN_PLAYERS_TO_START) {
-          sendMessage({ type: "start-hand" });
-        }
-        autoDealTimeoutRef.current = null;
-      }, 25000);
-    }
-  } else {
-    // If a new hand starts or conditions are not met, clear any pending timeout
-    if (autoDealTimeoutRef.current != null) {
-      clearTimeout(autoDealTimeoutRef.current);
-      autoDealTimeoutRef.current = null;
-    }
-  }
+  
 
   // Cleanup on unmount
   return () => {
@@ -1669,7 +1604,14 @@ const [showInfoCard, setShowInfoCard] = useState(false);
           : `Seat ${seat.seatIndex + 1}`;
 
       const isHeroSeat = seat.playerId === playerId;
-      const isWinnerSeat = winnerSeatIndexes.has(seat.seatIndex);
+      const winnerKey = `${seat.seatIndex}:${seat.playerId ?? ""}`;
+const rawIsWinnerSeat = winnerSeatKeys.has(winnerKey);
+
+// ❌ Don’t show an old winner banner on the hero seat between hands
+const isWinnerSeat =
+  rawIsWinnerSeat && !(isHeroSeat && !handInProgress);
+
+
       const isButton =
         buttonSeatIndex !== null && buttonSeatIndex === seat.seatIndex;
 
@@ -1677,25 +1619,26 @@ const [showInfoCard, setShowInfoCard] = useState(false);
         (p) => p.seatIndex === seat.seatIndex
       );
 
-      const smallBlindSeatIndex =
-        betting && (betting as any).smallBlindSeatIndex != null
-          ? ((betting as any).smallBlindSeatIndex as number)
-          : null;
+      const sbSeatIndex =
+  betting && typeof betting.smallBlindSeatIndex === "number"
+    ? betting.smallBlindSeatIndex
+    : null;
 
-      const bigBlindSeatIndex =
-        betting && (betting as any).bigBlindSeatIndex != null
-          ? ((betting as any).bigBlindSeatIndex as number)
-          : null;
+const bbSeatIndex =
+  betting && typeof betting.bigBlindSeatIndex === "number"
+    ? betting.bigBlindSeatIndex
+    : null;
 
-      const isSmallBlindSeat =
-        smallBlindSeatIndex !== null &&
-        betting?.street === "preflop" &&
-        smallBlindSeatIndex === seat.seatIndex;
+const isSmallBlindSeat =
+  sbSeatIndex !== null &&
+  betting?.street === "preflop" &&
+  sbSeatIndex === seat.seatIndex;
 
-      const isBigBlindSeat =
-        bigBlindSeatIndex !== null &&
-        betting?.street === "preflop" &&
-        bigBlindSeatIndex === seat.seatIndex;
+const isBigBlindSeat =
+  bbSeatIndex !== null &&
+  betting?.street === "preflop" &&
+  bbSeatIndex === seat.seatIndex;
+
 
       const committed =
         seatBetting?.committed ?? committedBySeat[seat.seatIndex] ?? 0;
@@ -1734,40 +1677,54 @@ const [showInfoCard, setShowInfoCard] = useState(false);
 
       let visibleCards: string[] | null = null;
 
-      if (
-        isHeroSeat &&
-        heroHand &&
-        heroHand.length === 2 &&
-        isInHand
-      ) {
-        visibleCards = heroHand;
-      } else if (seat.playerId) {
-        const manual = revealedHoles[seat.playerId];
+// 🛑 Never show stale hero cards between hands (after stand / re-sit)
+if (!handInProgress && isHeroSeat) {
+  visibleCards = null;
+} else if (handInProgress) {
+  // ✅ Live hand: hero sees their cards, others are hidden until showdown
+  if (
+    isHeroSeat &&
+    isInHand &&
+    heroHand &&
+    heroHand.length === 2
+  ) {
+    visibleCards = heroHand;
+  }
+} else if (seat.playerId) {
+  // 🧾 Showdown / manual reveal ONLY for non-hero seats
+  const manual = revealedHoles[seat.playerId];
 
-        if (
-          betting?.street === "done" &&
-          manual &&
-          manual.length === 2
-        ) {
-          visibleCards = manual;
-        } else if (
-          betting?.street === "done" &&
-          showdown &&
-          table &&
-          showdown.handId === table.handId
-        ) {
-          const sdPlayer = showdown.players.find(
-            (p) => p.seatIndex === seat.seatIndex
-          );
-          if (
-            sdPlayer &&
-            Array.isArray(sdPlayer.holeCards) &&
-            sdPlayer.holeCards.length === 2
-          ) {
-            visibleCards = sdPlayer.holeCards;
-          }
-        }
-      }
+  if (
+    betting?.street === "done" &&
+    manual &&
+    manual.length === 2 &&
+    !isHeroSeat
+  ) {
+    visibleCards = manual;
+  } else if (
+    betting?.street === "done" &&
+    showdown &&
+    table &&
+    showdown.handId === table.handId &&
+    !isHeroSeat
+  ) {
+    const sdPlayer = showdown.players.find(
+      (p) =>
+        p.seatIndex === seat.seatIndex &&
+        p.playerId === seat.playerId
+    );
+    if (
+      sdPlayer &&
+      Array.isArray(sdPlayer.holeCards) &&
+      sdPlayer.holeCards.length === 2
+    ) {
+      visibleCards = sdPlayer.holeCards;
+    }
+  }
+}
+
+
+
 
       return (
         <div
@@ -1903,42 +1860,40 @@ const [showInfoCard, setShowInfoCard] = useState(false);
               {/* Cards */}
               <div className="mt-[4px] flex justify-center">
                 {visibleCards && visibleCards.length === 2 ? (
-                  <div className="relative flex -space-x-5 md:-space-x-6">
-                    {visibleCards.map((c, i) => (
-                      <div
-                        key={`${table?.handId ?? 0}-seat-${seat.seatIndex}-card-${i}-${c}`}
-                        className="relative"
-                        style={{
-                          transform: `translateY(4px) rotate(${
-                            i === 0 ? -10 : 10
-                          }deg)`,
-                          transformOrigin: "50% 80%",
-                        }}
-                      >
-                        <PokerCard
-                          card={c}
-                          highlight={isWinnerSeat}
-                          // full-size, same as board cards
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : isInHand ? (
-                  <div className="relative flex -space-x-5 md:-space-x-6">
-                    {[0, 1].map((i) => (
-                      <div
-                        key={i}
-                        className={`h-9 w-7 md:h-10 md:w-8 rounded-[4px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
-                          i === 1 ? "rotate-[10deg]" : "rotate-[-10deg]"
-                        } ${isOut ? "opacity-30" : "opacity-90"}`}
-                        style={{
-                          transformOrigin: "50% 80%",
-                          transform: "translateY(4px)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+  <div className="relative flex -space-x-5 md:-space-x-6">
+    {visibleCards.map((c, i) => (
+      <div
+        key={`${table?.handId ?? 0}-seat-${seat.seatIndex}-card-${i}-${c}`}
+        className="relative"
+        style={{
+          transform: `translateY(4px) rotate(${i === 0 ? -10 : 10}deg)`,
+          transformOrigin: "50% 80%",
+        }}
+      >
+        <PokerCard
+          card={c}
+          highlight={isWinnerSeat}
+        />
+      </div>
+    ))}
+  </div>
+) : isInHand && handInProgress ? (   // ✅ only show backs during an active hand
+  <div className="relative flex -space-x-5 md:-space-x-6">
+    {[0, 1].map((i) => (
+      <div
+        key={i}
+        className={`h-9 w-7 md:h-10 md:w-8 rounded-[4px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
+          i === 1 ? "rotate-[10deg]" : "rotate-[-10deg]"
+        } ${isOut ? "opacity-30" : "opacity-90"}`}
+        style={{
+          transformOrigin: "50% 80%",
+          transform: "translateY(4px)",
+        }}
+      />
+    ))}
+  </div>
+) : null}
+
               </div>
 
               {/* GG-style pill under cards */}
