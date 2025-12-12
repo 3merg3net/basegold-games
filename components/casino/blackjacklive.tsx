@@ -23,14 +23,30 @@ const MIN_DEMO_BET = 50;
  * 0 = far right, 6 = far left, arcing up toward table edge.
  */
 const BJ_SEAT_POSITIONS: CSSProperties[] = [
-  { left: "87%", top: "22%" }, // 0 right
-  { left: "83%", top: "42%" }, // 1
-  { left: "65%", top: "64%" }, // 2 bottom-right
-  { left: "45%", top: "70%" }, // 3 center
-  { left: "23%", top: "65%" }, // 4 bottom-left
-  { left: "6%", top: "42%" },  // 5
-  { left: "1%", top: "22%" },  // 6 left
+  { left: "80%", top: "20%" }, // 0 right
+  { left: "77%", top: "42%" }, // 1
+  { left: "67%", top: "53%" }, // 2 bottom-right
+  { left: "46%", top: "60%" }, // 3 center
+  { left: "26%", top: "52%" }, // 4 bottom-left
+  { left: "18%", top: "42%" },  // 5
+  { left: "14%", top: "20%" },  // 6 left
 ];
+
+/**
+ * Seat positions tuned for MOBILE (taller aspect, narrower width).
+ * 0 = far right, 6 = far left.
+ */
+const BJ_SEAT_POSITIONS_MOBILE: CSSProperties[] = [
+  { left: "84%", top: "26%" }, // 0 right
+  { left: "80%", top: "44%" }, // 1
+  { left: "62%", top: "66%" }, // 2 bottom-right
+  { left: "45%", top: "76%" }, // 3 bottom-center
+  { left: "28%", top: "66%" }, // 4 bottom-left
+  { left: "10%", top: "44%" }, // 5
+  { left: "4%",  top: "26%" }, // 6 left
+];
+
+
 
 /* ───────────── Card helpers ───────────── */
 
@@ -92,6 +108,8 @@ function computeBlackjackValue(cards: string[]) {
 
   return { total, soft };
 }
+
+
 
 function getResultBadge(
   result: BlackjackHandResult | undefined
@@ -175,32 +193,30 @@ function BJCard({ card, small = false }: BJCardProps) {
   }
 
   return (
-    <div
-      className={`${baseSize} rounded-lg bg-white flex flex-col justify-between px-1.5 py-1 border border-slate-400 relative shadow-[0_4px_10px_rgba(0,0,0,0.55)]`}
-    >
-      <div className="pointer-events-none absolute inset-[1px] rounded-[7px] border border-slate-200" />
-      <div className="relative flex items-start justify-between">
-        <span className="font-bold text-slate-900 leading-none">
-          {rankLabel}
-        </span>
-        <span className={`text-[11px] md:text-xs ${suitColor}`}>
-          {suitLabel}
-        </span>
-      </div>
-      <div className="relative flex flex-1 items-center justify-center">
-        <span
-          className={`leading-none ${suitColor} text-xl md:text-2xl`}
-        >
-          {suitLabel}
-        </span>
-      </div>
-      <div className="relative flex items-end justify-end">
-        <span className={`text-[11px] md:text-xs ${suitColor}`}>
-          {suitLabel}
-        </span>
-      </div>
+  <div
+    className={`${baseSize} relative rounded-lg bg-white border border-slate-200 shadow-[0_4px_10px_rgba(0,0,0,0.45)] flex flex-col justify-between px-1 py-0.5`}
+  >
+    <div className="flex items-start justify-between">
+      <span className="font-bold text-slate-900 leading-none">{rankLabel}</span>
+      <span
+        className={`${small ? "text-[10px]" : "text-[11px] md:text-xs"} ${suitColor} leading-none`}
+      >
+        {suitLabel}
+      </span>
     </div>
-  );
+
+    <div className="flex flex-1 items-center justify-center">
+      <span className={`leading-none ${suitColor} ${small ? "text-lg" : "text-xl md:text-2xl"}`}>
+        {suitLabel}
+      </span>
+    </div>
+
+    <div className="flex items-end justify-end">
+      <span className={`text-[11px] md:text-xs ${suitColor}`}>{suitLabel}</span>
+    </div>
+  </div>
+);
+
 }
 
 /* ───────────── Main component ───────────── */
@@ -209,6 +225,24 @@ export default function BlackjackLive() {
   useEffect(() => {
     console.log("[BJ UI] BlackjackLive mounted");
   }, []);
+
+   // Detect mobile viewport (reactive + safe)
+const [isMobile, setIsMobile] = useState(false);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const check = () => setIsMobile(window.innerWidth < 768);
+
+  check(); // initial
+  window.addEventListener("resize", check);
+
+  return () => window.removeEventListener("resize", check);
+}, []);
+
+
+ 
+
 
   // Stable per-device playerId
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -228,7 +262,10 @@ export default function BlackjackLive() {
     } catch {
       setPlayerId("bj-" + Math.random().toString(36).slice(2, 10));
     }
+    
   }, []);
+
+  
 
   const wsUrl = process.env.NEXT_PUBLIC_BLACKJACK_WS || "Local";
   const [betAmount, setBetAmount] = useState<number>(MIN_DEMO_BET);
@@ -401,7 +438,7 @@ export default function BlackjackLive() {
 
   /* ───────────── Action countdown (global per active hand) ───────────── */
 
-  const ACTION_WINDOW_SECONDS = 30;
+  const ACTION_WINDOW_SECONDS = 20;
   const [actionCountdown, setActionCountdown] = useState<number | null>(
     null
   );
@@ -604,8 +641,15 @@ export default function BlackjackLive() {
   /* ───────────── Desktop seat renderer (overlays on felt) ───────────── */
 
   function renderSeat(seat: BlackjackSeatState) {
-    const pos =
-      BJ_SEAT_POSITIONS[seat.seatIndex] ?? BJ_SEAT_POSITIONS[0];
+    const basePos = isMobile
+  ? BJ_SEAT_POSITIONS_MOBILE[seat.seatIndex]
+  : BJ_SEAT_POSITIONS[seat.seatIndex];
+
+const pos =
+  (isMobile ? BJ_SEAT_POSITIONS_MOBILE : BJ_SEAT_POSITIONS)[seat.seatIndex] ??
+  (isMobile ? BJ_SEAT_POSITIONS_MOBILE : BJ_SEAT_POSITIONS)[0];
+
+
 
     const isHero = heroSeatIndex === seat.seatIndex;
     const seatTaken = !!seat.playerId;
@@ -616,8 +660,20 @@ export default function BlackjackLive() {
     const tableInRound = phase !== "waiting-bets";
     if (!seatTaken && tableInRound) return null;
 
+
+
+    
     const primaryHand =
       seat.hands && seat.hands.length > 0 ? seat.hands[0] : null;
+    const rawHands = seat.hands ?? [];
+
+// ✅ Dedupe hands (fixes “double cards” when server accidentally sends dup hand objects)
+const handsToRender = rawHands.filter((h, idx, arr) => {
+  const key = `${h.bet}|${h.result}|${h.cards.join(",")}`;
+  return idx === arr.findIndex((x) => `${x.bet}|${x.result}|${x.cards.join(",")}` === key);
+});
+
+
     const value =
       primaryHand && primaryHand.cards.length > 0
         ? computeBlackjackValue(primaryHand.cards)
@@ -626,8 +682,33 @@ export default function BlackjackLive() {
       ? getResultBadge(primaryHand.result)
       : null;
 
+      if (primaryHand?.cards?.length) {
+  console.log("[BJ UI] seat", seat.seatIndex, "cards:", primaryHand.cards);
+}
+
+
+const rawCards = primaryHand?.cards ?? [];
+const dedupedCards =
+  rawCards.length === 4 &&
+  rawCards[0] === rawCards[2] &&
+  rawCards[1] === rawCards[3]
+    ? rawCards.slice(0, 2)
+    : rawCards;
+
+
     const isActive = activeSeatIndex === seat.seatIndex;
     const isMySeat = playerId && seat.playerId === playerId;
+
+    const showFullCards =
+  !isMobile || isHero || isActive;
+
+const showMiniCards =
+  isMobile && !showFullCards;
+
+
+    // On mobile, shrink non-active hands to reduce clutter
+const compactMobile = isMobile && !isActive;
+
 
     // Show sit only in waiting-bets phase
     const showSitButton =
@@ -644,11 +725,31 @@ export default function BlackjackLive() {
     const isLeftSideSeat = seat.seatIndex >= 3;
 
     const cardCount = primaryHand?.cards.length ?? 0;
-    const cardScale =
-      cardCount >= 5 ? 0.8 : cardCount >= 3 ? 0.9 : 1.0;
+let cardScale =
+  cardCount >= 5 ? 0.8 : cardCount >= 3 ? 0.9 : 1.0;
 
-    const mobileScale = isHero ? 1.06 : 0.9;
-    const mobileOpacity = isHero ? "opacity-100" : "opacity-80";
+// Mobile zoom logic:
+// - active seat: slightly larger
+// - others: smaller
+if (isMobile) {
+  if (isActive) {
+    cardScale *= 1.08;
+  } else {
+    cardScale *= 0.8;
+  }
+}
+
+
+    const mobileScale = isMobile
+  ? isActive
+    ? 1.08 // big when it's this seat's turn
+    : 0.8  // smaller for others
+  : isHero
+  ? 1.03
+  : 0.95;
+
+const mobileOpacity = compactMobile ? "opacity-65" : "opacity-100";
+
 
     const infoBlock = (align: "left" | "center") => {
   const playerInitial =
@@ -675,63 +776,179 @@ export default function BlackjackLive() {
         </div>
       )}
 
-      {/* Avatar + name (global) */}
-      <div className="flex items-center gap-1.5 max-w-[180px]">
-        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white/35 bg-black/70 text-[10px] font-semibold text-white/85">
-          {seatTaken ? playerInitial : "?"}
-        </div>
-        <div className="truncate text-[9px] text-white/70">
-          {seat.name || (seatTaken ? "Player" : "Empty")}
-        </div>
-      </div>
+     {/* Name only (avatar handled by the Sit/Avatar circle below) */}
+<div className="truncate text-[9px] text-white/70 max-w-[160px]">
+  {seat.name || (seatTaken ? "Player" : "Empty")}
+</div>
 
-      {/* Bet chips – global view of who’s in and for how much */}
-      {primaryHand && primaryHand.bet > 0 && (
-        <div className="mt-1 flex items-center justify-center">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/35 bg-black/80 px-2.5 py-[3px] shadow-[0_0_12px_rgba(0,0,0,0.9)]">
-            <div className="relative h-4 w-4 md:h-5 md:w-5">
+
+     {/* Bet chips – hide on compact mobile to reduce clutter */}
+{primaryHand && primaryHand.bet > 0 && !compactMobile && (
+  <div className="mt-1 flex items-center justify-center">
+    <div className="flex h-7 items-center justify-center rounded-full border-2 border-white/70 bg-[#FBBF24] px-2 shadow-[0_0_10px_rgba(250,204,21,0.6)]">
+      <span className="font-mono text-[10px] text-black">
+        {primaryHand.bet.toLocaleString()} GLD
+      </span>
+    </div>
+  </div>
+)}
+
+
+      {/* Total + turn badge */}
+{primaryHand && primaryHand.cards.length > 0 && value && (
+  <div className="flex flex-col gap-0.5 max-w-[180px]">
+    {!compactMobile ? (
+      <>
+        {/* Full-size pill for desktop and active seat on mobile */}
+        <div className="rounded-full bg-black/80 px-2 py-[1px] font-mono border border-white/25">
+          Total {value.total}
+          {value.soft ? " (soft)" : ""}
+        </div>
+
+        
+
+        {isActive && isMySeat && (
+          <div className="rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
+            Your turn
+          </div>
+        )}
+      </>
+    ) : (
+      // Compact pill for non-active seats on mobile
+      <div className="rounded-full bg-black/70 px-2 py-[1px] text-[9px] font-mono border border-white/25">
+        {value.total}
+        {value.soft && " soft"}
+      </div>
+    )}
+  </div>
+)}
+
+
+     
+         {/* Seat indicator:
+    - Empty + waiting-bets => Sit circle
+    - Your seat + can bet  => Bet circle
+    - Taken (others)       => Avatar/initial circle
+    - Your turn            => Hit/Stand row under your seat (optional) */}
+<div className="mt-1 flex flex-col items-center justify-center gap-1">
+  {/* MAIN CIRCLE */}
+  {!seatTaken && showSitButton ? (
+    // ✅ Sit circle when empty
+    <button
+      type="button"
+      onClick={() => handleSit(seat.seatIndex)}
+      className={[
+        "h-9 w-9 rounded-full flex items-center justify-center",
+        "bg-[#FFD700] text-black font-bold",
+        "shadow-[0_0_14px_rgba(250,204,21,0.55)]",
+        "active:scale-95",
+      ].join(" ")}
+    >
+      Sit
+    </button>
+  ) : seatTaken ? (
+    // ✅ If this is HERO seat and betting is allowed, show BET circle instead of avatar
+    isHero && canPlaceBet && (phase === "waiting-bets" || phase === "round-complete") ? (
+      <button
+        type="button"
+        onClick={handlePlaceBet}
+        className={[
+          "h-10 w-10 rounded-full flex flex-col items-center justify-center",
+          "bg-[#FFD700] text-black font-extrabold",
+          "shadow-[0_0_18px_rgba(250,204,21,0.65)]",
+          "active:scale-95",
+        ].join(" ")}
+        title="Place bet"
+      >
+        <span className="text-[10px] leading-none">BET</span>
+        <span className="text-[9px] leading-none font-mono">
+          {betAmount}
+        </span>
+      </button>
+    ) : (
+      // ✅ Avatar circle (seat taken but not betting state)
+      (() => {
+        const avatarUrl = (seat as any).avatarUrl as string | undefined;
+
+        if (avatarUrl) {
+          return (
+            <div
+              className={
+                "h-9 w-9 overflow-hidden rounded-full border shadow-[0_0_12px_rgba(0,0,0,0.75)] " +
+                (isHero ? "border-[#FFD700]" : "border-white/40")
+              }
+            >
               <Image
-                src="/chips/bgld-chip.png" // same as before
-                alt="GLD chips"
-                fill
-                className="object-contain"
+                src={avatarUrl}
+                alt={seat.name || "Player avatar"}
+                width={36}
+                height={36}
+                className="h-full w-full object-cover"
               />
             </div>
-            <span className="font-mono text-[9px] md:text-[10px] text-[#FFD700]">
-              {primaryHand.bet.toLocaleString()} GLD
-            </span>
-          </div>
-        </div>
-      )}
+          );
+        }
 
-      {/* Seat totals + turn badge (no result pill here anymore) */}
-      {primaryHand && primaryHand.cards.length > 0 && value && (
-        <div className="flex flex-col gap-0.5 max-w-[180px]">
-          <div className="rounded-full bg-black/80 px-2 py-[1px] font-mono border border-white/25">
-            Total {value.total}
-            {value.soft ? " (soft)" : ""}
-          </div>
-
-          {isActive && isMySeat && (
-            <div className="rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
-              Your turn
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sit button (leave handled in hero controls) */}
-      <div>
-        {showSitButton && (
-          <button
-            type="button"
-            onClick={() => handleSit(seat.seatIndex)}
-            className="rounded-full bg-[#FFD700] px-3 py-[3px] font-semibold text-black hover:bg-yellow-400"
+        return (
+          <div
+            className={
+              "flex h-9 w-9 items-center justify-center rounded-full border text-[12px] font-semibold shadow-[0_0_12px_rgba(0,0,0,0.75)] " +
+              (isHero
+                ? "border-[#FFD700] bg-black/90 text-[#FFD700]"
+                : "border-white/40 bg-black/80 text-white/85")
+            }
           >
-            Sit here
-          </button>
-        )}
-      </div>
+            {playerInitial}
+          </div>
+        );
+      })()
+    )
+  ) : null}
+
+  {/* OPTIONAL: ACTION BUTTONS UNDER YOUR SEAT (slims hero panel) */}
+  {isHeroTurn && isHero && (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => handleAction("hit")}
+        className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-black shadow-[0_0_10px_rgba(16,185,129,0.6)] active:scale-95"
+      >
+        Hit
+      </button>
+      <button
+        type="button"
+        onClick={() => handleAction("stand")}
+        className="rounded-md bg-slate-700 px-2 py-1 text-[10px] font-bold text-white border border-white/15 active:scale-95"
+      >
+        Stand
+      </button>
+
+      {canDouble && (
+        <button
+          type="button"
+          onClick={() => handleAction("double")}
+          className="rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-black active:scale-95"
+        >
+          Double
+        </button>
+      )}
+
+      {canSplit && (
+        <button
+          type="button"
+          onClick={() => handleAction("split")}
+          className="rounded-md bg-purple-500 px-2 py-1 text-[10px] font-bold text-black active:scale-95"
+        >
+          Split
+        </button>
+      )}
+    </div>
+  )}
+</div>
+
+
+
+
     </div>
   );
 };
@@ -758,45 +975,51 @@ export default function BlackjackLive() {
             )}
 
             <div
-              className="relative flex max-w-[130px] justify-center"
-              style={{
-                transform: `scale(${cardScale})`,
-                transformOrigin: "center center",
-              }}
-            >
-              {primaryHand &&
-                primaryHand.cards.map((c, i) => {
-                  const count = primaryHand.cards.length;
-                  const overlap = count >= 4;
-                  const style: CSSProperties =
-                    overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-                  return (
-                    <div
-                      key={`seat-${seat.seatIndex}-bottom-card-${i}`}
-                      style={style}
-                    >
-                      <BJCard card={c} small />
-                    </div>
-                  );
-                })}
-            </div>
+  className="relative flex max-w-[130px] flex-col items-center justify-center gap-1"
+  style={{
+    transform: `scale(${cardScale})`,
+    transformOrigin: "center center",
+  }}
+>
+  {handsToRender.map((hand, handIndex) => (
+    <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="flex">
+      {hand.cards.map((c, i) => {
+        const count = hand.cards.length;
+        const overlap = count >= 4;
+        const style: CSSProperties =
+          overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
 
-            {/* BIG player total pill under cards */}
-            {primaryHand && value && primaryHand.cards.length > 0 && (
-              <div className="mt-1 flex justify-center">
-                <div
-                  className={
-                    "rounded-full border px-3 py-[3px] text-[10px] md:text-xs font-mono shadow-[0_0_16px_rgba(250,204,21,0.7)] " +
-                    (isHero
-                      ? "bg-black/90 border-[#FFD700]/80 text-[#FFD700]"
-                      : "bg-black/80 border-white/40 text-white/90")
-                  }
-                >
-                  Total {value.total}
-                  {value.soft ? " (soft)" : ""}
-                </div>
-              </div>
-            )}
+        return (
+          <div
+            key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
+            style={style}
+          >
+            <BJCard card={c} small />
+          </div>
+        );
+      })}
+    </div>
+  ))}
+</div>
+
+
+            {/* Total pill only (cards are already rendered above via handsToRender) */}
+{primaryHand && primaryHand.cards.length > 0 && value && (
+  <div className="mt-1 flex justify-center">
+    <div
+      className={
+        "rounded-full border px-3 py-[2px] text-[10px] font-mono " +
+        (isHero
+          ? "bg-black/90 border-[#FFD700]/80 text-[#FFD700]"
+          : "bg-black/80 border-white/30 text-white/85")
+      }
+    >
+      Total {value.total}{value.soft ? " (soft)" : ""}
+    </div>
+  </div>
+)}
+
+
 
             <div className="relative">{infoBlock("center")}</div>
           </div>
@@ -829,27 +1052,31 @@ export default function BlackjackLive() {
             <div className="relative z-[1]">{infoBlock("left")}</div>
           )}
 
-          {/* Cards + BIG total pill in the middle */}
+        {/* Cards + BIG total pill in the middle */}
 <div className="relative z-[1] flex flex-col items-center justify-center">
   {primaryHand && primaryHand.cards.length > 0 && (
     <>
-      <div className="flex">
-        {primaryHand.cards.map((c, i) => {
-          const count = primaryHand.cards.length;
-          const overlap = count >= 4;
-          const style: CSSProperties =
-            overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+      <div className="flex flex-col items-center justify-center gap-1">
+  {handsToRender.map((hand, handIndex) => (
+    <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="flex">
+      {hand.cards.map((c, i) => {
+        const overlap = hand.cards.length >= 4;
+        const style: CSSProperties =
+          overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
 
-          return (
-            <div
-              key={`seat-${seat.seatIndex}-card-${i}`}
-              style={style}
-            >
-              <BJCard card={c} small />
-            </div>
-          );
-        })}
-      </div>
+        return (
+          <div
+            key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
+            style={style}
+          >
+            <BJCard card={c} small />
+          </div>
+        );
+      })}
+    </div>
+  ))}
+</div>
+
 
       {/* BIG player total pill under cards (side seats) */}
       {value && (
@@ -940,7 +1167,8 @@ export default function BlackjackLive() {
         </div>
 
         {/* Felt */}
-        <div className="relative mx-auto w-full max-w-[900px] aspect-[3/4] md:aspect-[16/9]">
+        <div className="relative mx-auto w-full max-w-[900px] aspect-[9/10] sm:aspect-[10/11] md:aspect-[16/9]">
+
           <Image
             src="/felt/bgr-blackjack-table.png"
             alt="Base Gold Rush Live Blackjack Table"
@@ -1034,8 +1262,15 @@ export default function BlackjackLive() {
             </div>
           )}
 
-          {showActionTimerOnFelt && (
-  <div className="pointer-events-none absolute left-1/2 bottom-[40%] -translate-x-1/2 flex flex-col items-center gap-1 z-[50]">
+         {showActionTimerOnFelt && (
+  <div
+  className={[
+    "pointer-events-none absolute left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-1",
+    isMobile ? "top-[52%]" : "top-[0%]",
+  ].join(" ")}
+>
+
+
     <div
       className={[
         "rounded-full px-4 py-1 border text-center font-mono text-[9px] md:text-xs uppercase tracking-[0.18em]",
