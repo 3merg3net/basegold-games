@@ -384,6 +384,8 @@ export default function PokerRoomArcade({
     return (last.seats || []) as SeatView[];
   }, [messages]);
 
+  
+
   const table = useMemo<TableState | null>(() => {
     const tableMessages = (messages as any[]).filter(
       (m) => m && m.type === "table-state"
@@ -847,6 +849,7 @@ const pot =
 
   prevSeatsRef.current = next;
 }, [seats, handInProgress]);
+
 
 
 
@@ -1320,7 +1323,7 @@ const winnersToShow: WinnerEntry[] = lastWinners;
 // Toggle behavior:
 // - true  => GG-style: each player sees THEMSELF bottom-center
 // - false => casino-style: seatIndex decides position, same on all screens
-const HERO_CENTER_VIEW = false;
+const HERO_CENTER_VIEW = true;
 
 
 // Whether the current sit flow started while a hand was in progress
@@ -1338,6 +1341,8 @@ const [showProfileCard, setShowProfileCard] = useState(false);
 const [showChipsCard, setShowChipsCard] = useState(false);
 const [showRoomCard, setShowRoomCard] = useState(false);
 const [showInfoCard, setShowInfoCard] = useState(false);
+
+
 
 
 
