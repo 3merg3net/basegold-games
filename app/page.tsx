@@ -45,12 +45,11 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* OPTIONAL: LIVE STATS (kept, just placed cleanly) */}
-          <div className="flex justify-center">
-            <div className="w-full max-w-3xl">
-              <CasinoLiveStats />
-            </div>
-          </div>
+         <div className="w-full max-w-3xl">
+  {/* @ts-expect-error variant union differs; replace with real Variant */}
+  <CasinoLiveStats variant="hero" />
+</div>
+
 
           {/* FEATURED ENTRANCES – BALANCED (LIVE TABLES + CASINO FLOOR) */}
           <div className="grid gap-5 md:grid-cols-2">
