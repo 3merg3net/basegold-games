@@ -48,7 +48,7 @@ export default function SiteHeader() {
               className="h-8 w-8 rounded-full object-contain"
             />
             <span className="text-sm font-extrabold tracking-[0.3em] text-[#FFD700]">
-              BGLD
+              BGRC
             </span>
           </Link>
 

@@ -188,3 +188,16 @@ body { font-feature-settings: "tnum"; }
   50%  { transform: scale(1.08); box-shadow: 0 0 34px rgba(250, 204, 21, 1); }
   100% { transform: scale(1);   box-shadow: 0 0 22px rgba(250, 204, 21, 0.85); }
 }
+
+
+@keyframes bjWinPop {
+  0%   { transform: translateX(-50%) translateY(0) scale(0.88); filter: brightness(0.95); }
+  45%  { transform: translateX(-50%) translateY(-2px) scale(1.18); filter: brightness(1.25); }
+  70%  { transform: translateX(-50%) translateY(0) scale(1.05); filter: brightness(1.10); }
+  100% { transform: translateX(-50%) translateY(0) scale(1.00); filter: brightness(1.00); }
+}
+
+@keyframes bjLoseSink {
+  0%   { transform: translateX(-50%) translateY(0) scale(1.00); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(2px) scale(0.92); opacity: 0.92; }
+}

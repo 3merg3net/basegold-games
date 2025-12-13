@@ -27,13 +27,13 @@ const MIN_DEMO_BET = 50;
  * 0 = far right, 6 = far left, arcing up toward table edge.
  */
 const BJ_SEAT_POSITIONS: CSSProperties[] = [
-  { left: "75%", top: "20%" }, // 0 right
-  { left: "72%", top: "39%" }, // 1
-  { left: "65%", top: "53%" }, // 2 bottom-right
-  { left: "47%", top: "60%" }, // 3 center
-  { left: "30%", top: "52%" }, // 4 bottom-left
-  { left: "22%", top: "40%" },  // 5
-  { left: "20%", top: "20%" },  // 6 left
+  { left: "74%", top: "28%" }, // 0 right
+  { left: "72%", top: "44%" }, // 1
+  { left: "65%", top: "51%" }, // 2 bottom-right
+  { left: "46%", top: "57%" }, // 3 center
+  { left: "29%", top: "51%" }, // 4 bottom-left
+  { left: "29%", top: "44%" },  // 5
+  { left: "27%", top: "28%" },  // 6 left
 ];
 
 /**
@@ -115,6 +115,8 @@ function computeBlackjackValue(cards: string[]) {
 
 
 
+
+
 function getResultBadge(
   result: BlackjackHandResult | undefined
 ): { label: string; className: string } | null {
@@ -149,6 +151,40 @@ function getResultBadge(
       return null;
   }
 }
+
+
+function ResultPill({ result }: { result: BlackjackHandResult | undefined }) {
+  const badge = getResultBadge(result);
+  if (!badge) return null;
+
+  const isWin = result === "win" || result === "blackjack";
+  const isLose = result === "lose";
+
+  return (
+    <div
+      className={[
+        // positioning + shape
+        "pointer-events-none absolute left-1/2 -top-6 -translate-x-1/2",
+        "rounded-full px-4 py-1.5 md:px-5 md:py-2",
+        "text-[12px] md:text-[13px] font-extrabold tracking-[0.12em] uppercase",
+        // base shadow
+        "shadow-[0_0_18px_rgba(0,0,0,0.65)]",
+        // vegas animation
+        isWin
+          ? "animate-[bjWinPop_700ms_ease-out_1] shadow-[0_0_28px_rgba(250,204,21,0.95)]"
+          : isLose
+          ? "animate-[bjLoseSink_600ms_ease-out_1]"
+          : "",
+        // color scheme from getResultBadge
+        badge.className,
+      ].join(" ")}
+    >
+      {badge.label}
+    </div>
+  );
+}
+
+
 
 function parseCard(card: string) {
   if (!card || card === "XX") {
@@ -221,6 +257,9 @@ function BJCard({ card, small = false }: BJCardProps) {
   </div>
 );
 
+
+
+
 }
 
 /* ───────────── Main component ───────────── */
@@ -247,6 +286,14 @@ export default function BlackjackLive() {
   const heroSeatRef = useRef<HTMLDivElement | null>(null);
   const heroPanelRef = useRef<HTMLDivElement | null>(null);
   const lastScrollKeyRef = useRef<string | null>(null);
+  
+  // ───────────── Dealer suspense (client-only reveal pacing) ─────────────
+const dealerNewCardIndex = useRef<number>(0);
+// a simple “tick” to force re-renders during timed reveal steps
+const [dealerNewCardTick, setDealerNewCardTick] = useState(0);
+
+
+  
 
 
   const isIOS =
@@ -350,6 +397,25 @@ useEffect(() => {
 
   const wsUrl = process.env.NEXT_PUBLIC_BLACKJACK_WS || "Local";
   const [betAmount, setBetAmount] = useState<number>(MIN_DEMO_BET);
+const [betInput, setBetInput] = useState<string>(String(MIN_DEMO_BET));
+
+const BET_STEP = 50; // keep this aligned with your min bet UX
+
+function bumpBet(delta: number) {
+  setBetAmount((prev) => {
+    const min = MIN_DEMO_BET;
+const max = 5000;
+
+
+    // Use the step for +/- clicks (Vegas feel)
+    const next = prev + delta;
+
+    // Clamp
+    return Math.max(min, Math.min(max, next));
+  });
+}
+
+
 
   // IMPORTANT: always call the hook; pass null opts to disable internally
   const hookOpts =
@@ -382,25 +448,42 @@ useEffect(() => {
   const [lastBet, setLastBet] = useState<number | null>(null);
 
   // Pull out dealer + active seat
-  const dealerCards = table?.dealer.cards ?? [];
-  const activeSeatIndex = table?.activeSeatIndex ?? null;
-  const activeHandIndex = table?.activeHandIndex ?? null;
+  // Dealer + active seat
+const dealerCardsRaw = table?.dealer.cards ?? [];
+const activeSeatIndex = table?.activeSeatIndex ?? null;
+const activeHandIndex = table?.activeHandIndex ?? null;
 
-  const dealerValue = useMemo(() => {
-    if (!table) return null;
-    const cards = table.dealer?.cards ?? [];
-    const hideHole = table.dealer?.hideHoleCard;
+// Dealer suspense (animate reveals during dealer-turn)
+const [dealerCardsAnimated, setDealerCardsAnimated] = useState<string[]>([]);
 
-    const visibleCards =
-      hideHole && (phase === "player-action" || phase === "dealing")
-        ? cards.filter((c) => c !== "XX")
-        : cards;
+const dealerCardsToRender =
+  phase === "dealer-turn" ? dealerCardsAnimated : dealerCardsRaw;
 
-    if (visibleCards.length === 0) return null;
 
-    const { total, soft } = computeBlackjackValue(visibleCards);
-    return { total, soft, hideHole };
-  }, [table, phase]);
+ // ✅ Dealer value should follow the *rendered* cards (suspense), not raw server cards
+const dealerValue = useMemo(() => {
+  if (!table) return null;
+
+  // use the suspense list (what UI is showing right now)
+  const cards = dealerCardsToRender ?? [];
+
+  // Hide total until dealer has at least 2 visible cards rendered
+  // (prevents “total appears before cards dealt”)
+  const visibleCount = cards.filter((c) => c && c !== "XX").length;
+  if (visibleCount < 2) return null;
+
+  const hideHole = table.dealer?.hideHoleCard;
+
+  const visibleCards =
+    hideHole && (phase === "player-action" || phase === "dealing")
+      ? cards.filter((c) => c !== "XX")
+      : cards;
+
+  if (visibleCards.length === 0) return null;
+
+  const { total, soft } = computeBlackjackValue(visibleCards);
+  return { total, soft, hideHole };
+}, [table, phase, dealerCardsToRender]);
 
   const heroSeat: BlackjackSeatState | null =
     table && heroSeatIndex !== null
@@ -427,14 +510,18 @@ useEffect(() => {
     heroSeatIndex !== null &&
     table?.activeSeatIndex === heroSeatIndex;
 
-    useEffect(() => {
+   useEffect(() => {
   if (!isMobile) return;
   if (!table) return;
   if (heroSeatIndex === null) return;
 
-  // Scroll targets depend on phase
-  const shouldSeatFocus = phase === "waiting-bets" || phase === "round-complete";
-  const shouldPanelFocus = phase === "player-action" && isHeroTurn;
+  // only focus the FELT (never scroll to hero panel)
+  const shouldFocusSeat =
+    phase === "waiting-bets" ||
+    phase === "round-complete" ||
+    (phase === "player-action" && isHeroTurn);
+
+  if (!shouldFocusSeat) return;
 
   const key = `${table.roundId}|${phase}|${heroSeatIndex}|${isHeroTurn ? "hero" : "no"}`;
 
@@ -442,38 +529,17 @@ useEffect(() => {
   if (lastScrollKeyRef.current === key) return;
   lastScrollKeyRef.current = key;
 
-  const run = () => {
-    if (shouldSeatFocus) {
-      heroSeatRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "center",
-      });
-      return;
-    }
+  const t = window.setTimeout(() => {
+    heroSeatRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "center",
+    });
+  }, 220);
 
-    if (shouldPanelFocus) {
-      // first: make sure felt/seat is reasonably centered
-      heroSeatRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "center",
-      });
-
-      // then: ensure action panel is visible
-      window.setTimeout(() => {
-        heroPanelRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "end",
-        });
-      }, 240);
-    }
-  };
-
-  // Let layout settle a tick before scrolling
-  const t = window.setTimeout(run, 220);
   return () => window.clearTimeout(t);
 }, [isMobile, table?.roundId, phase, heroSeatIndex, isHeroTurn, table]);
+
 
 
   const canDouble =
@@ -658,15 +724,31 @@ const isActionTimerCritical =
     sendSeat("leave", seatIndex);
   }
 
+  function clampBet(n: number) {
+  const minBet = table?.minBet ?? MIN_DEMO_BET;
+  const maxBet = table?.maxBet ?? 5000;
+  if (!Number.isFinite(n)) return minBet;
+  return Math.max(minBet, Math.min(maxBet, Math.floor(n)));
+}
+
+function commitBetInput() {
+  const parsed = Number(betInput);
+  const clamped = clampBet(parsed);
+  setBetAmount(clamped);
+  setBetInput(String(clamped));
+  return clamped;
+}
+
+
   function handlePlaceBet() {
-    if (heroSeatIndex === null) return;
+  if (heroSeatIndex === null) return;
 
-    const minBet = table?.minBet ?? 50;
-    const amount = betAmount > 0 ? betAmount : minBet;
+  const amount = commitBetInput();
 
-    placeBet(heroSeatIndex, amount);
-    setLastBet(amount);
-  }
+  placeBet(heroSeatIndex, amount);
+  setLastBet(amount);
+}
+
 
   function handleAction(action: "hit" | "stand" | "double" | "split") {
     if (!table || heroSeatIndex === null) return;
@@ -767,105 +849,126 @@ function renderSeat(seat: BlackjackSeatState) {
   const mobileOpacity = compactMobile ? "opacity-65" : "opacity-100";
 
   const infoBlock = (align: "left" | "center") => {
-    return (
-      <div
-        className={
-          "flex flex-col gap-1 text-[9px] text-white/75 " +
-          (align === "center"
-            ? "items-center text-center"
-            : "items-start text-left")
-        }
-      >
-        {/* Result pill */}
-        {resultBadge && (
-          <div
-            className={
-              "mb-0.5 rounded-full px-2 py-[1px] font-bold shadow " +
-              resultBadge.className
-            }
-          >
-            {resultBadge.label}
-          </div>
-        )}
+  const betMin = table?.minBet ?? MIN_DEMO_BET;
+  const betMax = table?.maxBet ?? 5000;
 
-        {/* Name */}
+  return (
+    <div
+      className={
+        "flex flex-col gap-1 text-[9px] text-white/75 " +
+        (align === "center"
+          ? "items-center text-center"
+          : "items-start text-left")
+      }
+    >
+      {/* Name (hide for hero to reduce clutter) */}
+      {!isHero && (
         <div className="truncate text-[9px] text-white/70 max-w-[160px]">
           {seat.name || (seatTaken ? "Player" : "Empty")}
         </div>
+      )}
 
-        {/* Bet chips – hide on compact mobile */}
-        {primaryHand && primaryHand.bet > 0 && !compactMobile && (
-          <div className="mt-1 flex items-center justify-center">
-            <div className="flex h-7 items-center justify-center rounded-full border-2 border-white/70 bg-[#FBBF24] px-2 shadow-[0_0_10px_rgba(250,204,21,0.6)]">
-              <span className="font-mono text-[10px] text-black">
-                {primaryHand.bet.toLocaleString()} GLD
-              </span>
-            </div>
-          </div>
+      {/* Seat circle cluster — SINGLE SOURCE OF TRUTH */}
+      <div className="mt-1 flex flex-col items-center justify-center gap-1">
+        {/* Sit */}
+        {!seatTaken && showSitButton && (
+          <button
+            type="button"
+            onClick={() => handleSit(seat.seatIndex)}
+            className="h-9 w-9 rounded-full bg-[#FFD700] text-black font-bold shadow-[0_0_14px_rgba(250,204,21,0.55)] active:scale-95"
+          >
+            Sit
+          </button>
         )}
 
-        {/* Total + turn badge */}
-        {primaryHand && primaryHand.cards.length > 0 && value && (
-          <div className="flex flex-col gap-0.5 max-w-[180px]">
-            {!compactMobile ? (
-              <>
-                <div className="rounded-full bg-black/80 px-2 py-[1px] font-mono border border-white/25">
-                  Total {value.total}
-                  {value.soft ? " (soft)" : ""}
-                </div>
-
-                {isActive && isMySeat && (
-                  <div className="rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
-                    Your turn
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="rounded-full bg-black/70 px-2 py-[1px] text-[9px] font-mono border border-white/25">
-                {value.total}
-                {value.soft && " soft"}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Seat circle cluster */}
-        <div className="mt-1 flex flex-col items-center justify-center gap-1">
-          {!seatTaken && showSitButton && (
+        {/* Bet adjust + place (pre-hand) — SINGLE rendering */}
+        {seatTaken && showBetButton && (
+          <div className="flex items-center gap-1">
+            {/* minus */}
             <button
-              type="button"
-              onClick={() => handleSit(seat.seatIndex)}
-              className={[
-                "h-9 w-9 rounded-full flex items-center justify-center",
-                "bg-[#FFD700] text-black font-bold",
-                "shadow-[0_0_14px_rgba(250,204,21,0.55)]",
-                "active:scale-95",
-              ].join(" ")}
-            >
-              Sit
-            </button>
-          )}
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    bumpBet(-BET_STEP);
+  }}
+  className={[
+    "h-7 w-7 rounded-full",
+    "border-2 border-red-400/80",
+    "bg-black/70 text-red-300",
+    "font-bold shadow",
+    "hover:border-red-300 hover:text-red-200",
+    "active:scale-95",
+  ].join(" ")}
+  aria-label="Decrease bet"
+>
+  –
+</button>
 
-          {seatTaken && showBetButton && (
+
+            {/* main bet circle */}
             <button
               type="button"
               onClick={handlePlaceBet}
-              className={[
-                "h-10 w-10 rounded-full flex flex-col items-center justify-center",
-                "bg-[#FFD700] text-black font-extrabold",
-                "shadow-[0_0_18px_rgba(250,204,21,0.65)]",
-                "active:scale-95",
-              ].join(" ")}
+              className="h-10 w-10 rounded-full bg-[#FFD700] text-black font-extrabold shadow-[0_0_18px_rgba(250,204,21,0.65)] flex flex-col items-center justify-center active:scale-95"
               title="Place bet"
             >
               <span className="text-[10px] leading-none">BET</span>
               <span className="text-[9px] leading-none font-mono">
-                {betAmount}
+                {betAmount.toLocaleString()}
               </span>
             </button>
+
+            {/* plus */}
+            <button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    bumpBet(+BET_STEP);
+  }}
+  className={[
+    "h-7 w-7 rounded-full",
+    "border-2 border-emerald-400/80",
+    "bg-black/70 text-emerald-300",
+    "font-bold shadow",
+    "hover:border-emerald-300 hover:text-emerald-200",
+    "active:scale-95",
+  ].join(" ")}
+  aria-label="Increase bet"
+>
+  +
+</button>
+
+          </div>
+        )}
+
+        {/* Bet chip(s) once hand exists — ONE CHIP PER HAND (split => 2 chips) */}
+        {seatTaken &&
+          !showBetButton &&
+          !showActionButtons &&
+          primaryHand &&
+          primaryHand.bet > 0 && (
+            <div className="flex items-center gap-1">
+              {(handsToRender.length > 1 ? handsToRender : [primaryHand]).map(
+                (h, idx) => (
+                  <div
+                    key={`chip-${seat.seatIndex}-${idx}`}
+                    className="h-9 w-9 rounded-full bg-[#FFD700] border-2 border-white/70 text-black font-extrabold shadow-[0_0_16px_rgba(250,204,21,0.65)] flex items-center justify-center"
+                    title={`Bet ${h.bet}`}
+                  >
+                    <span className="text-[12px] font-mono">
+                      {h.bet.toLocaleString()}
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
           )}
 
-          {seatTaken && !showBetButton && !showActionButtons && (
+        {/* Fallback avatar / initial (only when nothing else is showing) */}
+        {seatTaken &&
+          !showBetButton &&
+          !showActionButtons &&
+          !(primaryHand && primaryHand.bet > 0) && (
             (() => {
               const avatarUrl = (seat as any).avatarUrl as string | undefined;
 
@@ -873,7 +976,7 @@ function renderSeat(seat: BlackjackSeatState) {
                 return (
                   <div
                     className={[
-                      "h-9 w-9 overflow-hidden rounded-full border",
+                      "h-9 w-9 rounded-full overflow-hidden border",
                       "shadow-[0_0_12px_rgba(0,0,0,0.75)]",
                       isHero ? "border-[#FFD700]" : "border-white/40",
                     ].join(" ")}
@@ -892,7 +995,7 @@ function renderSeat(seat: BlackjackSeatState) {
               return (
                 <div
                   className={[
-                    "flex h-9 w-9 items-center justify-center rounded-full border",
+                    "h-9 w-9 rounded-full flex items-center justify-center border",
                     "text-[12px] font-semibold shadow-[0_0_12px_rgba(0,0,0,0.75)]",
                     isHero
                       ? "border-[#FFD700] bg-black/90 text-[#FFD700]"
@@ -905,127 +1008,128 @@ function renderSeat(seat: BlackjackSeatState) {
             })()
           )}
 
-          {seatTaken && showActionButtons && (
-            <div className="flex items-center gap-1">
+        {/* Action buttons */}
+        {seatTaken && showActionButtons && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleAction("hit")}
+              className="h-9 rounded-full bg-emerald-500 px-3 text-[11px] font-bold text-black active:scale-95"
+            >
+              Hit
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction("stand")}
+              className="h-9 rounded-full bg-slate-800 px-3 text-[11px] font-bold text-white active:scale-95"
+            >
+              Stand
+            </button>
+            {canDouble && (
               <button
                 type="button"
-                onClick={() => handleAction("hit")}
-                className="h-9 rounded-full bg-emerald-500 px-3 text-[11px] font-bold text-black active:scale-95"
+                onClick={() => handleAction("double")}
+                className="h-9 rounded-full bg-amber-500 px-3 text-[11px] font-bold text-black active:scale-95"
               >
-                Hit
+                Dbl
               </button>
+            )}
+            {canSplit && (
               <button
                 type="button"
-                onClick={() => handleAction("stand")}
-                className="h-9 rounded-full bg-slate-800 px-3 text-[11px] font-bold text-white active:scale-95"
+                onClick={() => handleAction("split")}
+                className="h-9 rounded-full bg-purple-500 px-3 text-[11px] font-bold text-black active:scale-95"
               >
-                Stand
+                Split
               </button>
-
-              {canDouble && (
-                <button
-                  type="button"
-                  onClick={() => handleAction("double")}
-                  className="h-9 rounded-full bg-amber-500 px-3 text-[11px] font-bold text-black active:scale-95"
-                >
-                  Dbl
-                </button>
-              )}
-
-              {canSplit && (
-                <button
-                  type="button"
-                  onClick={() => handleAction("split")}
-                  className="h-9 rounded-full bg-purple-500 px-3 text-[11px] font-bold text-black active:scale-95"
-                >
-                  Split
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Shared wrapper (hero gets ref for scrolling)
-  const seatWrapperProps = isHero ? { ref: heroSeatRef } : {};
-
-  // Bottom seats (center row)
-  if (layout === "bottom") {
-    return (
-      <div
-        key={seat.seatIndex}
-        {...seatWrapperProps}
-        className="absolute"
-        style={pos}
-      >
-        <div
-          className={
-            "relative transition-transform duration-300 ease-out " +
-            `md:scale-100 ${mobileOpacity}`
-          }
-          style={{
-            transform: isMobile ? `scale(${mobileScale})` : undefined,
-            transformOrigin: "center center",
-          }}
-        >
-          {isActive && (
-            <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
-          )}
-
-          {/* Cards */}
-          <div
-            className="relative flex max-w-[130px] flex-col items-center justify-center gap-1"
-            style={{
-              transform: `scale(${cardScale})`,
-              transformOrigin: "center center",
-            }}
-          >
-            {handsToRender.map((hand, handIndex) => (
-              <div
-                key={`seat-${seat.seatIndex}-hand-${handIndex}`}
-                className="flex"
-              >
-                {hand.cards.map((c, i) => {
-                  const overlap = hand.cards.length >= 4;
-                  const style: CSSProperties =
-                    overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-                  return (
-                    <div
-                      key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
-                      style={style}
-                    >
-                      <BJCard card={c} small />
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+            )}
           </div>
-
-          {/* Total pill */}
-          {primaryHand && primaryHand.cards.length > 0 && value && (
-            <div className="mt-1 flex justify-center">
-              <div
-                className={
-                  "rounded-full border px-3 py-[2px] text-[10px] font-mono " +
-                  (isHero
-                    ? "bg-black/90 border-[#FFD700]/80 text-[#FFD700]"
-                    : "bg-black/80 border-white/30 text-white/85")
-                }
-              >
-                Total {value.total}
-                {value.soft ? " (soft)" : ""}
-              </div>
-            </div>
-          )}
-
-          <div className="relative">{infoBlock("center")}</div>
-        </div>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
+};
+
+
+// Shared wrapper
+const seatWrapperProps = isHero ? { ref: heroSeatRef } : {};
+
+// Bottom seats — NOW MATCH SIDE SEATS
+if (layout === "bottom") {
+  return (
+    <div key={seat.seatIndex} {...seatWrapperProps} className="absolute" style={pos}>
+      <div
+        className={`relative flex flex-col items-center justify-center gap-1 transition-transform duration-300 ease-out md:scale-100 ${mobileOpacity}`}
+        style={{
+          transform: isMobile ? `scale(${mobileScale})` : undefined,
+        }}
+      >
+        {isActive && (
+          <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
+        )}
+
+
+        {/* Turn badge only (Total lives under the cards now) */}
+{isActive && isMySeat && (
+  <div className="mt-1 rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
+    Your turn
+  </div>
+)}
+
+
+        {/* Cards + total (IDENTICAL LOGIC TO SIDE SEATS) */}
+        <div className="relative z-[1] flex flex-col items-center justify-center">
+          {primaryHand && primaryHand.cards.length > 0 && (
+            <>
+              <div className="flex flex-col items-center justify-center gap-1">
+               {handsToRender.map((hand, handIndex) => (
+  <div
+    key={`seat-${seat.seatIndex}-hand-${handIndex}`}
+    className="relative flex"
+  >
+    <ResultPill result={hand.result} />
+
+    {hand.cards.map((c, i) => {
+      const overlap = hand.cards.length >= 4;
+      const style: CSSProperties =
+        overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+      return (
+        <div
+          key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
+          style={style}
+        >
+          <BJCard card={c} small />
+        </div>
+      );
+    })}
+  </div>
+))}
+
+              </div>
+
+              {value && (
+                <div className="mt-1 flex justify-center">
+                  <div className={`rounded-full border px-4 py-[4px] text-[11px] md:text-xs font-mono shadow-[0_0_16px_rgba(250,204,21,0.7)] ${
+                    isHero
+                      ? "bg-black/90 border-[#FFD700]/80 text-[#FFEFA3]"
+                      : "bg-black/80 border-white/40 text-white/90"
+                  }`}>
+                    Total {value.total}{value.soft ? " (soft)" : ""}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="relative z-[1]">{infoBlock("center")}</div>
+      </div>
+    </div>
+  );
+}
+
+// Side seats remain unchanged below
+
 
   // Side seats
   return (
@@ -1036,42 +1140,65 @@ function renderSeat(seat: BlackjackSeatState) {
       style={pos}
     >
       <div
-        className={
-          "relative flex items-center gap-2 transition-transform duration-300 ease-out " +
-          `md:scale-100 ${mobileOpacity}`
-        }
-        style={{
-          transform: isMobile ? `scale(${mobileScale})` : undefined,
-          transformOrigin: "center center",
-        }}
-      >
+  className={
+    "relative transition-transform duration-300 ease-out " +
+    `md:scale-100 ${mobileOpacity}`
+  }
+  style={{
+    transform: isMobile ? `scale(${mobileScale})` : undefined,
+    transformOrigin: "center center",
+  }}
+>
+
         {isActive && (
           <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
         )}
 
-        {isLeftSideSeat && <div className="relative z-[1]">{infoBlock("left")}</div>}
+        {/* ✅ Overlay infoBlock so it never pushes the cards */}
+
+
+{/* ✅ Overlay infoBlock OUTSIDE the table so it never pushes cards */}
+{isLeftSideSeat ? (
+  // left side seats (5/6): put info to the LEFT (outside)
+  <div className="absolute right-full top-1/2 z-[2] -translate-y-1/2 pr-2">
+    {infoBlock("left")}
+  </div>
+) : (
+  // right side seats (0/1): put info to the RIGHT (outside)
+  <div className="absolute left-full top-1/2 z-[2] -translate-y-1/2 pl-2">
+    {infoBlock("left")}
+  </div>
+)}
+
+
 
         <div className="relative z-[1] flex flex-col items-center justify-center">
           {primaryHand && primaryHand.cards.length > 0 && (
             <>
               <div className="flex flex-col items-center justify-center gap-1">
-                {handsToRender.map((hand, handIndex) => (
-                  <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="flex">
-                    {hand.cards.map((c, i) => {
-                      const overlap = hand.cards.length >= 4;
-                      const style: CSSProperties =
-                        overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-                      return (
-                        <div
-                          key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
-                          style={style}
-                        >
-                          <BJCard card={c} small />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+               {handsToRender.map((hand, handIndex) => (
+  <div
+    key={`seat-${seat.seatIndex}-hand-${handIndex}`}
+    className="relative flex"
+  >
+    <ResultPill result={hand.result} />
+
+    {hand.cards.map((c, i) => {
+      const overlap = hand.cards.length >= 4;
+      const style: CSSProperties =
+        overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+      return (
+        <div
+          key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
+          style={style}
+        >
+          <BJCard card={c} small />
+        </div>
+      );
+    })}
+  </div>
+))}
+
               </div>
 
               {value && (
@@ -1093,7 +1220,7 @@ function renderSeat(seat: BlackjackSeatState) {
           )}
         </div>
 
-        {!isLeftSideSeat && <div className="relative z-[1]">{infoBlock("left")}</div>}
+        
       </div>
     </div>
   );
@@ -1162,7 +1289,24 @@ function renderSeat(seat: BlackjackSeatState) {
   : "p-3 md:p-6"
 
   ].join(" ")}
+
+  
 >
+  <style jsx>{`
+  @keyframes dealerIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px) scale(0.96);
+      filter: blur(0.6px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0px) scale(1);
+      filter: blur(0px);
+    }
+  }
+`}</style>
+
   {/* Glow */}
   <div className="pointer-events-none absolute inset-0 opacity-40">
     <div className="absolute -top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-sky-500/20 blur-3xl" />
@@ -1209,15 +1353,41 @@ function renderSeat(seat: BlackjackSeatState) {
   {/* Cards */}
   <div className="flex items-center justify-center">
     <div className="flex">
-      {dealerCards.map((c: string, i: number) => {
-        const overlap = dealerCards.length >= 4;
+      {dealerCardsToRender.map((c: string, i: number) => {
+  const overlap = dealerCardsToRender.length >= 4;
+
         const style: CSSProperties =
           overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-        return (
-          <div key={`dealer-card-${i}`} style={style}>
-            <BJCard card={c} />
-          </div>
-        );
+       return (
+  <div
+    key={`dealer-card-${i}-${dealerNewCardTick}`}
+    style={style}
+    className={[
+      "transition-all duration-500 ease-out",
+     i === dealerNewCardIndex.current ? "opacity-100 translate-y-0 scale-100" : "opacity-100 translate-y-0 scale-100",
+
+    ].join(" ")}
+  >
+    {/* “enter” effect only for newest card */}
+    <div
+      className={
+       i === dealerNewCardIndex.current
+  ? "animate-[dealerIn_0.55s_ease-out_forwards]"
+  : ""
+
+      }
+      style={
+       i === dealerNewCardIndex.current
+  ? ({ "--dealerFromY": "10px" } as any)
+  : undefined
+
+      }
+    >
+      <BJCard card={c} />
+    </div>
+  </div>
+);
+;
       })}
     </div>
   </div>
@@ -1355,34 +1525,13 @@ function renderSeat(seat: BlackjackSeatState) {
       {heroSeat && (
   <div
     ref={heroPanelRef}
-    className="mt-2 flex flex-col gap-2 rounded-2xl border border-white/15 bg-black/40 p-3 md:hidden"
+    className="mt-2 flex flex-col gap-2 rounded-2xl border border-white/15 bg-black/40 p-2 md:hidden"
 
   >
 
-          {/* Header */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
-              Your Hand (Seat {heroSeatIndex! + 1})
-            </div>
-            {isHeroTurn && (
-              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-[10px] font-semibold text-emerald-300 border border-emerald-400/60">
-                Your turn
-              </span>
-            )}
-          </div>
+         
 
-          {/* Hero cards */}
-          {heroHand && (
-            <div className="mt-1 flex justify-center">
-              <div className="flex gap-1.5">
-                {heroHand.cards.map((c, i) => (
-                  <div key={`mobile-hero-card-${i}`}>
-                    <BJCard card={c} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          
 
           {/* Slim stats row */}
           {heroHand && heroValue && (
@@ -1489,17 +1638,16 @@ function renderSeat(seat: BlackjackSeatState) {
                 </div>
                 <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    min={MIN_DEMO_BET}
-                    max={5000}
-                    value={betAmount}
-                    onChange={(e) =>
-                      setBetAmount(
-                        Number(e.target.value) || MIN_DEMO_BET
-                      )
-                    }
-                    className="w-24 rounded-lg border border-white/25 bg-black/70 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
-                  />
+  type="number"
+  inputMode="numeric"
+  min={table?.minBet ?? MIN_DEMO_BET}
+  max={table?.maxBet ?? 5000}
+  value={betInput}
+  onChange={(e) => setBetInput(e.target.value)}
+  onBlur={() => commitBetInput()}
+  className="w-24 rounded-lg border border-white/25 bg-black/70 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
+/>
+
                   <span className="font-mono text-[#FFD700]">
                     GLD
                   </span>
@@ -1578,17 +1726,16 @@ function renderSeat(seat: BlackjackSeatState) {
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  min={MIN_DEMO_BET}
-                  max={5000}
-                  value={betAmount}
-                  onChange={(e) =>
-                    setBetAmount(
-                      Number(e.target.value) || MIN_DEMO_BET
-                    )
-                  }
-                  className="w-24 rounded-lg border border-white/25 bg-black/70 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
-                />
+  type="number"
+  inputMode="numeric"
+  min={table?.minBet ?? MIN_DEMO_BET}
+  max={table?.maxBet ?? 5000}
+  value={betInput}
+  onChange={(e) => setBetInput(e.target.value)}
+  onBlur={() => commitBetInput()}
+  className="w-24 rounded-lg border border-white/25 bg-black/70 px-2 py-1 text-[11px] outline-none focus:border-[#FFD700]"
+/>
+
                 <span className="font-mono text-[#FFD700]">
                   GLD
                 </span>
