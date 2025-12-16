@@ -261,26 +261,50 @@ function parseCard(card: string) {
 
 
 
-// GG-style arc: hero bottom-center, others fanned around
-const SEAT_GEOMETRY: CSSProperties[] = [
-  // logical 0 = hero, bottom center
+const SEAT_GEOMETRY_PC: React.CSSProperties[] = [
+  // HERO
   { bottom: "7%", left: "50%", transform: "translate(-50%, 0)" },
 
-  // logical 1–3: up the left rail
-  { bottom: "10%", left: "24%", transform: "translate(-50%, 0)" },
-  { bottom: "32%", left: "12%", transform: "translate(-50%, 0)" },
-  { top: "24%",   left: "20%", transform: "translate(-50%, -50%)" },
+  // Bottom arc
+  { bottom: "7%", left: "24%", transform: "translate(-50%, 0)" },
+  { bottom: "7%", left: "38%", transform: "translate(-50%, 0)" },
+  { bottom: "7%", left: "62%", transform: "translate(-50%, 0)" },
 
-  // logical 4–6: up the right rail
-  { top: "24%",   right: "20%", transform: "translate(50%, -50%)" },
-  { bottom: "32%", right: "12%", transform: "translate(50%, 0)" },
-  { bottom: "18%", right: "24%", transform: "translate(50%, 0)" },
+  // Top row
+  { top: "12%", left: "26%", transform: "translate(-50%, -50%)" },
+  { top: "8%",  left: "50%", transform: "translate(-50%, -50%)" },
+  { top: "12%", left: "74%", transform: "translate(-50%, -50%)" },
 
-  // logical 7–8: inner seats near hero left/right
-  { bottom: "9%", left: "32%", transform: "translate(-50%, 0)" },
-  { bottom: "9%", right: "32%", transform: "translate(50%, 0)" },
+  // Sides (slightly higher)
+  { top: "40%", left: "6%",  transform: "translate(-50%, -50%)" },
+  { top: "40%", right: "6%", transform: "translate(50%, -50%)" },
 ];
 
+
+const SEAT_GEOMETRY_MOBILE: React.CSSProperties[] = [
+  // HERO
+  { bottom: "7%", left: "50%", transform: "translate(-50%, 0)" },
+
+  // Bottom row
+  { bottom: "9%", left: "26%", transform: "translate(-50%, 0)" },
+  { bottom: "9%", left: "74%", transform: "translate(-50%, 0)" },
+
+  // Left arc
+  { bottom: "26%", left: "6%", transform: "translate(-50%, 0)" },
+  { bottom: "42%", left: "4%", transform: "translate(-50%, 0)" },
+  { bottom: "58%", left: "8%", transform: "translate(-50%, 0)" },
+
+  // Right arc
+  { bottom: "26%", right: "6%", transform: "translate(50%, 0)" },
+  { bottom: "42%", right: "4%", transform: "translate(50%, 0)" },
+  { bottom: "58%", right: "8%", transform: "translate(50%, 0)" },
+];
+
+// Slot fill order (index into ACTIVE_GEOMETRY)
+// 0 must be hero bottom-center.
+// Then we alternate left/right outward so players don't stack one side.
+const SLOT_ORDER_PC = [0, 1, 2, 7, 8, 3, 6, 4, 5];
+const SLOT_ORDER_MOBILE = [0, 1, 2, 3, 5, 4, 6, 7, 8];
 
 
 
@@ -1333,9 +1357,86 @@ const [joinModeMidHand, setJoinModeMidHand] = useState(false);
 const [newPlayerSeats, setNewPlayerSeats] = useState<Record<number, number>>({});
 const prevSeatsRef = useRef<Map<number, string | null>>(new Map());
 
+const [isMobile, setIsMobile] = useState(false);
 
-const maxSeats = SEAT_GEOMETRY.length;
-const heroSeatIndexForLayout = heroSeat ? heroSeat.seatIndex : 0;
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const mq: MediaQueryList = window.matchMedia("(max-width: 767px)");
+
+  const apply = () => setIsMobile(mq.matches);
+  apply(); // initial
+
+  // Modern browsers
+  if (typeof mq.addEventListener === "function") {
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }
+
+  // Safari fallback
+  (mq as any).addListener(apply);
+  return () => (mq as any).removeListener(apply);
+}, []);
+
+
+const ACTIVE_GEOMETRY = isMobile ? SEAT_GEOMETRY_MOBILE : SEAT_GEOMETRY_PC;
+const ACTIVE_SLOT_ORDER = isMobile ? SLOT_ORDER_MOBILE : SLOT_ORDER_PC;
+
+
+const maxSeats = ACTIVE_GEOMETRY.length;
+
+// Only enable hero-centered layout once heroSeat is known
+const heroSeatIndexForLayout = heroSeat?.seatIndex ?? null;
+const useHeroCenter = HERO_CENTER_VIEW && heroSeatIndexForLayout !== null;
+
+// ✅ Stable “occupied ordering” so Edge/Chrome/Safari place players the same
+// Helper: stable seatKey
+const seatKeyOf = (s: { seatIndex: number; playerId: string | null }) =>
+  `${s.seatIndex}:${s.playerId ?? ""}`;
+
+// Fan-out occupied order centered on hero (not clockwise)
+const occupiedSeats = useMemo(() => {
+  const occ = seats.filter((s) => s.playerId);
+
+  // If we can't hero-center yet, keep deterministic order
+  if (!useHeroCenter || heroSeatIndexForLayout == null) {
+    return [...occ].sort((a, b) => a.seatIndex - b.seatIndex);
+  }
+
+  const N = 9; // your table is 9-max
+
+  return [...occ].sort((a, b) => {
+    const da = (a.seatIndex - heroSeatIndexForLayout + N) % N;
+    const db = (b.seatIndex - heroSeatIndexForLayout + N) % N;
+
+    const absA = Math.min(da, N - da);
+    const absB = Math.min(db, N - db);
+
+    // hero first
+    if (absA === 0 && absB !== 0) return -1;
+    if (absB === 0 && absA !== 0) return 1;
+
+    // closest seats first
+    if (absA !== absB) return absA - absB;
+
+    // tie-break: RIGHT side first (clockwise side)
+    const sideA = da === 0 ? 0 : da <= N / 2 ? 1 : -1;
+    const sideB = db === 0 ? 0 : db <= N / 2 ? 1 : -1;
+    return sideB - sideA;
+  });
+}, [seats, useHeroCenter, heroSeatIndexForLayout]);
+
+// Map seatKey -> occupied index (0..)
+const occupiedIndexByKey = useMemo(() => {
+  const m = new Map<string, number>();
+  occupiedSeats.forEach((s, i) => m.set(seatKeyOf(s), i));
+  return m;
+}, [occupiedSeats]);
+
+
+
+
+
 
 const [showProfileCard, setShowProfileCard] = useState(false);
 const [showChipsCard, setShowChipsCard] = useState(false);
@@ -1596,10 +1697,13 @@ const [showInfoCard, setShowInfoCard] = useState(false);
                       )}
                   </div>
 
+                  
+
                  {/* SEATS ON BUMPER – table-centric layout */}
-<div className="absolute inset-[1.5%] text-[10px] text-white/80 md:text-[11px]">
+<div className="absolute inset-[.25%] text-[10px] text-white/80 md:text-[11px]">
   {seats
     .filter((s) => s.playerId)
+    
     .map((seat) => {
       const label =
         seat.playerId && seat.name
@@ -1668,16 +1772,21 @@ const isBigBlindSeat =
       const isNewPlayer =
         !!newPlayerSeats[seat.seatIndex] && handInProgress;
 
-      const logicalIndex =
-        HERO_CENTER_VIEW && heroSeat
-          ? (seat.seatIndex - heroSeatIndexForLayout + maxSeats) % maxSeats
-          : seat.seatIndex % maxSeats;
+      const seatKey = `${seat.seatIndex}:${seat.playerId ?? ""}`;
+const occIndex = occupiedIndexByKey.get(seatKey);
 
-      const stylePos: React.CSSProperties =
-        SEAT_GEOMETRY[logicalIndex] ??
-        SEAT_GEOMETRY[SEAT_GEOMETRY.length - 1];
+const logicalIndex =
+  useHeroCenter && typeof occIndex === "number"
+    ? (occIndex % maxSeats)
+    : seat.seatIndex % maxSeats;
 
-      const totalForHand =
+
+const stylePos: React.CSSProperties =
+  ACTIVE_GEOMETRY[logicalIndex] ??
+  ACTIVE_GEOMETRY[ACTIVE_GEOMETRY.length - 1];
+
+
+const totalForHand =
         seatBetting?.committed ?? committedBySeat[seat.seatIndex] ?? 0;
 
       let visibleCards: string[] | null = null;
@@ -1771,30 +1880,31 @@ if (!handInProgress && isHeroSeat) {
           {/* Avatar + overlays */}
           <div className="relative flex flex-col items-center">
             {/* Winner / Fold banners */}
-            {isWinnerSeat && (
-              <div className="pointer-events-none absolute -top-9 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center winner-anim">
-                <div className="winner-emoji-pop mb-1 text-[32px] md:text-[40px] drop-shadow-[0_0_10px_rgba(0,0,0,0.9)]">
-                  🏆
-                </div>
-                <div
-                  className="
-                    px-3 py-0.5
-                    rounded-full 
-                    bg-gradient-to-r from-[#F59E0B]/90 via-[#FCD34D]/95 to-[#F59E0B]/90
-                    border border-[#7C2D12]/60 
-                    shadow-[0_2px_6px_rgba(0,0,0,0.7)]
-                    text-[9px] md:text-[10px]
-                    font-bold 
-                    text-black
-                    tracking-wide
-                    uppercase
-                    leading-none
-                  "
-                >
-                  Winner
-                </div>
-              </div>
-            )}
+{isWinnerSeat && (
+  <div className="pointer-events-none absolute -top-17 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center winner-anim">
+    <div className="winner-emoji-pop mb-1 text-[28px] md:text-[36px] drop-shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+      🏆
+    </div>
+    <div
+      className="
+        px-3 py-0.5
+        rounded-full 
+        bg-gradient-to-r from-[#F59E0B]/90 via-[#FCD34D]/95 to-[#F59E0B]/90
+        border border-[#7C2D12]/60 
+        shadow-[0_2px_6px_rgba(0,0,0,0.7)]
+        text-[9px] md:text-[10px]
+        font-bold 
+        text-black
+        tracking-wide
+        uppercase
+        leading-none
+      "
+    >
+      Winner
+    </div>
+  </div>
+)}
+
 
             {!isWinnerSeat &&
               seatBetting?.hasFolded &&
@@ -1823,7 +1933,7 @@ if (!handInProgress && isHeroSeat) {
 
               <div
                 className={[
-                  "relative z-0 flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full overflow-hidden bg-slate-900",
+                  "relative z-0 flex h-16 w-16 md:h-20 md:w-20 items-center justify-center rounded-full overflow-hidden bg-slate-900",
                   isCurrentTurn && !isHeroSeat
                     ? "animate-soft-glow border border-[#FACC15] shadow-[0_0_16px_rgba(250,204,21,0.8)]"
                     : "border border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.9)]",
@@ -1845,8 +1955,8 @@ if (!handInProgress && isHeroSeat) {
                   <Image
                     src="/felt/bgrc-logo.png"
                     alt="PGLD"
-                    width={40}
-                    height={40}
+                    width={80}
+                    height={80}
                     className="object-contain opacity-90"
                   />
                 )}
@@ -1861,9 +1971,10 @@ if (!handInProgress && isHeroSeat) {
             )}
 
             {/* Overlay: cards + pill */}
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between">
+<div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-between">
+
               {/* Cards */}
-              <div className="mt-[4px] flex justify-center">
+              <div className="mt-[6px] flex justify-center">
                 {visibleCards && visibleCards.length === 2 ? (
   <div className="relative flex -space-x-5 md:-space-x-6">
     {visibleCards.map((c, i) => (
@@ -1871,7 +1982,7 @@ if (!handInProgress && isHeroSeat) {
         key={`${table?.handId ?? 0}-seat-${seat.seatIndex}-card-${i}-${c}`}
         className="relative"
         style={{
-          transform: `translateY(4px) rotate(${i === 0 ? -10 : 10}deg)`,
+          transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
           transformOrigin: "50% 80%",
         }}
       >
@@ -1892,7 +2003,7 @@ if (!handInProgress && isHeroSeat) {
         } ${isOut ? "opacity-30" : "opacity-90"}`}
         style={{
           transformOrigin: "50% 80%",
-          transform: "translateY(4px)",
+          transform: "translateY(0px)",
         }}
       />
     ))}
@@ -1903,18 +2014,18 @@ if (!handInProgress && isHeroSeat) {
 
               {/* GG-style pill under cards */}
               <div className="mb-[4px] flex w-full justify-center">
-                <div className="pointer-events-auto flex min-w-[86px] max-w-[112px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2.5 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+                <div className="pointer-events-auto flex min-w-[112px] max-w-[150px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2.5 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
                   {totalForHand > 0 && (
-                    <div className="text-[8px] font-mono text-amber-200 leading-tight">
+                    <div className="text-[11px] font-mono text-amber-200 leading-tight">
                       {formatChips(totalForHand)} in pot
                     </div>
                   )}
 
-                  <div className="rounded-full bg-black/70 px-2.5 py-[1px] text-[9px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+                  <div className="rounded-full bg-black/70 px-2.5 py-[1px] text-[15px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
                     {formatChips(stackAmount)} PGLD
                   </div>
 
-                  <div className="mt-[1px] max-w-[104px] truncate text-[8px] text-white/80 leading-tight">
+                  <div className="mt-[1px] max-w-[104px] truncate text-[11px] text-white/80 leading-tight">
                     {label}
                   </div>
                 </div>
@@ -1943,15 +2054,15 @@ if (!handInProgress && isHeroSeat) {
             <div
               className={[
                 "mt-3 mb-4 flex w-full justify-center",
-                isFullscreen ? "max-w-[980px] mx-auto" : "",
+                isFullscreen ? "max-w-[1100px] mx-auto" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
               <div
                 className={[
-                  "w-full max-w-[360px] rounded-2xl border border-white/20 bg-black/85 px-3 py-2",
-                  "text-[10px] text-white/80 font-semibold shadow-[0_0_20px_rgba(0,0,0,0.8)]",
+                  "w-full max-w-[660px] rounded-2xl border border-white/20 bg-black/85 px-4 py-2 md:px-5 md:py-2",
+"text-[12px] text-white/85 font-semibold shadow-[0_0_20px_rgba(0,0,0,0.8)]",
                   "transition-all duration-300 ease-out transform hero-bar-slide",
                   heroHasAction && isHeroTurn
                     ? "translate-y-0 opacity-100 scale-100"
@@ -1963,10 +2074,11 @@ if (!handInProgress && isHeroSeat) {
                 {/* TOP ROW: hero label + stack/bankroll + sit out + timer */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1 truncate">
-                    <div className="truncate text-white text-[11px] font-bold leading-tight">
+                    <div className="truncate text-white text-[14px] font-extrabold leading-tight"
+>
                       {describeHero()}
                     </div>
-                    <div className="mt-[1px] flex flex-wrap items-center gap-1 text-[9px] text-white/70">
+                    <div className="mt-[1px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
                       {heroBetting && (
                         <span className="rounded-full bg-black/60 px-2 py-[1px] border border-white/25">
                           Stack{" "}
@@ -1975,7 +2087,7 @@ if (!handInProgress && isHeroSeat) {
                           </span>
                         </span>
                       )}
-                      <span className="rounded-full bg-black/60 px-2 py-[1px] border border-white/25">
+                      <span className="rounded-full bg-black/60 px-3 py-[3px] border border-white/25">
                         BR{" "}
                         <span className="font-mono text-[#FFD700]">
                           {chips.toLocaleString()} PGLD
@@ -1994,7 +2106,7 @@ if (!handInProgress && isHeroSeat) {
                     {isHeroTurn && actionSeconds !== null && (
                       <span
                         className={[
-                          "inline-flex items-center rounded-full px-3 py-1 font-mono text-[11px] font-extrabold tracking-wide",
+                          "inline-flex items-center rounded-full px-3.5 py-1.5 font-mono text-[12px] font-extrabold tracking-wide",
                           "timer-neon",
                           actionPhase === "extra"
                             ? "border border-red-500/70 text-red-300 bg-red-600/30"
@@ -2023,7 +2135,7 @@ if (!handInProgress && isHeroSeat) {
 
                 {/* STATUS LINE + SIT OUT TOGGLE */}
                 <div className="mt-1 flex items-center justify-between gap-2">
-                  <span className="flex-1 text-[9px] text-white/70">
+                  <span className="flex-1 text-[11px] text-white/70">
                     {!betting || betting.street === "done" ? (
                       showdown &&
                       table &&
@@ -2049,7 +2161,7 @@ if (!handInProgress && isHeroSeat) {
                     type="button"
                     onClick={() => setIsSittingOut((v) => !v)}
                     disabled={!heroSeat}
-                    className="rounded-full border border-white/30 px-2 py-[2px] text-[9px] hover:border-[#FFD700] disabled:opacity-40"
+                    className="rounded-full border border-white/30 px-3 py-1 text-[10px] hover:border-[#FFD700] disabled:opacity-40"
                   >
                     {isSittingOut ? "Sit in" : "Sit out"}
                   </button>
@@ -2103,7 +2215,7 @@ if (!handInProgress && isHeroSeat) {
                     <button
                       onClick={handleSitOrStand}
                       disabled={!ready || (!!heroSeat && handInProgress)}
-                      className="rounded-lg bg-emerald-500 px-3 py-1 text-[10px] font-bold text-black hover:bg-emerald-400 disabled:opacity-40"
+                      className="rounded-xl bg-emerald-500 px-3 py-1 text-[12px] font-bold text-black hover:bg-emerald-400 disabled:opacity-40"
                     >
                       {heroSeat ? "Stand up" : "Sit at table"}
                     </button>
@@ -2111,7 +2223,7 @@ if (!handInProgress && isHeroSeat) {
                     {canManualDeal && isHostClient && (
                       <button
                         onClick={handleManualDeal}
-                        className="rounded-lg bg-[#FFD700] px-3 py-1 text-[10px] font-bold text-black hover:bg-yellow-400"
+                        className="rounded-xl bg-[#FFD700] px-3 py-1 text-[12px] font-bold text-black hover:bg-yellow-400"
                       >
                         {table ? "Start next hand" : "Start game"}
                       </button>
@@ -2124,20 +2236,20 @@ if (!handInProgress && isHeroSeat) {
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={handleFold}
-                          className="min-w-[70px] flex-1 rounded-lg bg-red-500 px-3 py-1 text-[11px] font-bold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.6)]"
+                          className="min-w-[96px] flex-1 rounded-xl bg-red-500 px-4 py-2 text-[13px] font-bold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.6)]"
                         >
                           Fold
                         </button>
                         <button
                           onClick={handlePrimaryAction}
-                          className="min-w-[70px] flex-1 rounded-lg bg-slate-800 px-3 py-1 text-[11px] font-bold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.35)]"
+                          className="min-w-[96px] flex-1 rounded-xl bg-slate-800 px-4 py-2 text-[13px] font-bold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.35)]"
                         >
                           {primaryActionLabel}
                         </button>
                         <button
                           onClick={handleBet}
                           disabled={!betting || !heroBetting}
-                          className="min-w-[70px] flex-1 rounded-lg bg-emerald-500 px-3 py-1 text-[11px] font-bold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.45)] disabled:opacity-40"
+                          className="min-w-[96px] flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-[13px] font-bold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.45)] disabled:opacity-40"
                         >
                           {(() => {
                             if (!betting || !heroBetting) return "Bet";
@@ -2167,7 +2279,7 @@ if (!handInProgress && isHeroSeat) {
                       {/* Raise controls */}
                       {betting && (
                         <div className="mt-1 space-y-1.5">
-                          <div className="flex items-center justify-between text-[9px] text-white/60">
+                          <div className="flex items-center justify-between text-[11px] text-white/60">
                             <span>Raise amount</span>
                             <span className="font-mono text-[#FFD700]">
                               {manualBet.trim() !== ""
@@ -2196,7 +2308,7 @@ if (!handInProgress && isHeroSeat) {
                             className="w-full accent-[#FFD700]"
                           />
 
-                          <div className="flex flex-wrap items-center gap-2 text-[9px]">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
                             <button
                               type="button"
                               onClick={() =>
@@ -2253,7 +2365,7 @@ if (!handInProgress && isHeroSeat) {
                                 onChange={(e) =>
                                   setManualBet(e.target.value)
                                 }
-                                className="w-20 rounded-full border border-white/25 bg-black/70 px-2 py-[2px] text-[9px] outline-none focus:border-[#FFD700]"
+                                className="w-24 rounded-full border border-white/25 bg-black/70 px-3 py-1 text-[11px]x] outline-none focus:border-[#FFD700]"
                               />
                               <button
                                 type="button"

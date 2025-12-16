@@ -41,13 +41,13 @@ const BJ_SEAT_POSITIONS: CSSProperties[] = [
  * 0 = far right, 6 = far left.
  */
 const BJ_SEAT_POSITIONS_MOBILE: CSSProperties[] = [
-  { left: "80%", top: "24%" }, // 0 right
-  { left: "80%", top: "38%" }, // 1
-  { left: "67%", top: "45%" }, // 2 bottom-right
-  { left: "45%", top: "48%" }, // 3 bottom-center
-  { left: "22%", top: "46%" }, // 4 bottom-left
-  { left: "8%", top: "39%" }, // 5
-  { left: "6%",  top: "24%" }, // 6 left
+  { left: "80%", top: "40%" }, // 0 right
+  { left: "78%", top: "45%" }, // 1
+  { left: "67%", top: "40%" }, // 2 bottom-right
+  { left: "38%", top: "48%" }, // 3 bottom-center
+  { left: "18%", top: "44%" }, // 4 bottom-left
+  { left: "20%", top: "45%" }, // 5
+  { left: "19%",  top:"34%" }, // 6 left
 ];
 
 
@@ -846,7 +846,22 @@ function renderSeat(seat: BlackjackSeatState) {
   }
 
   const mobileScale = isMobile ? (isActive ? 1.12 : 0.82) : isHero ? 1.03 : 1.0;
-  const mobileOpacity = compactMobile ? "opacity-65" : "opacity-100";
+  // Mobile seat dimming rules:
+// - hero is never dimmed
+// - only dim non-active seats during player-action
+// - never dim during betting / dealing / round end
+const mobileOpacity = (() => {
+  if (!isMobile) return ""; // desktop untouched
+
+  if (isHero) return "opacity-100"; // hero NEVER dims
+
+  if (phase === "player-action") {
+    return isActive ? "opacity-100" : "opacity-75";
+  }
+
+  return "opacity-100"; // betting, dealing, round-complete
+})();
+
 
   const infoBlock = (align: "left" | "center") => {
   const betMin = table?.minBet ?? MIN_DEMO_BET;
@@ -868,184 +883,198 @@ function renderSeat(seat: BlackjackSeatState) {
         </div>
       )}
 
-      {/* Seat circle cluster — SINGLE SOURCE OF TRUTH */}
-      <div className="mt-1 flex flex-col items-center justify-center gap-1">
-        {/* Sit */}
-        {!seatTaken && showSitButton && (
-          <button
-            type="button"
-            onClick={() => handleSit(seat.seatIndex)}
-            className="h-9 w-9 rounded-full bg-[#FFD700] text-black font-bold shadow-[0_0_14px_rgba(250,204,21,0.55)] active:scale-95"
+     {/* Seat circle cluster — center NEVER changes */}
+<div className="mt-1 flex flex-col items-center justify-center gap-1">
+  {/* Center anchor = EXACTLY the size of the felt circle target */}
+  <div className="relative h-10 w-10 flex items-center justify-center">
+    {/* SIT (center) */}
+    {!seatTaken && showSitButton && (
+      <button
+        type="button"
+        onClick={() => handleSit(seat.seatIndex)}
+        className="h-10 w-10 rounded-full bg-[#FFD700] text-black font-bold shadow-[0_0_14px_rgba(250,204,21,0.55)] active:scale-95"
+      >
+        Sit
+      </button>
+    )}
+
+    {/* BET (center) + +/- (absolute, do NOT affect layout) */}
+    {seatTaken && showBetButton && (
+      <>
+        {/* minus */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            bumpBet(-BET_STEP);
+          }}
+          className={[
+            "absolute top-1/2 -translate-y-1/2",
+            "-left-8", // floats left, DOES NOT change center
+            "h-7 w-7 rounded-full",
+            "border-2 border-red-400/80",
+            "bg-black/70 text-red-300",
+            "font-bold shadow",
+            "hover:border-red-300 hover:text-red-200",
+            "active:scale-95",
+          ].join(" ")}
+          aria-label="Decrease bet"
+        >
+          –
+        </button>
+
+        {/* main bet circle (always centered on the felt circle) */}
+        <button
+          type="button"
+          onClick={handlePlaceBet}
+          className="h-10 w-10 rounded-full bg-[#FFD700] text-black font-extrabold shadow-[0_0_18px_rgba(250,204,21,0.65)] flex flex-col items-center justify-center active:scale-95"
+          title="Place bet"
+        >
+          <span className="text-[10px] leading-none">BET</span>
+          <span className="text-[9px] leading-none font-mono">
+            {betAmount.toLocaleString()}
+          </span>
+        </button>
+
+        {/* plus */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            bumpBet(+BET_STEP);
+          }}
+          className={[
+            "absolute top-1/2 -translate-y-1/2",
+            "-right-8", // floats right, DOES NOT change center
+            "h-7 w-7 rounded-full",
+            "border-2 border-emerald-400/80",
+            "bg-black/70 text-emerald-300",
+            "font-bold shadow",
+            "hover:border-emerald-300 hover:text-emerald-200",
+            "active:scale-95",
+          ].join(" ")}
+          aria-label="Increase bet"
+        >
+          +
+        </button>
+      </>
+    )}
+
+    {/* BET CHIP(s) once hand exists — still centered, split chips are absolute offsets */}
+    {seatTaken &&
+      !showBetButton &&
+      !showActionButtons &&
+      primaryHand &&
+      primaryHand.bet > 0 && (
+        <>
+          {/* always render chip for primary hand in center */}
+          <div
+            className="h-10 w-10 rounded-full bg-[#FFD700] border-2 border-white/70 text-black font-extrabold shadow-[0_0_16px_rgba(250,204,21,0.65)] flex items-center justify-center"
+            title={`Bet ${primaryHand.bet}`}
           >
-            Sit
-          </button>
-        )}
-
-        {/* Bet adjust + place (pre-hand) — SINGLE rendering */}
-        {seatTaken && showBetButton && (
-          <div className="flex items-center gap-1">
-            {/* minus */}
-            <button
-  type="button"
-  onClick={(e) => {
-    e.stopPropagation();
-    bumpBet(-BET_STEP);
-  }}
-  className={[
-    "h-7 w-7 rounded-full",
-    "border-2 border-red-400/80",
-    "bg-black/70 text-red-300",
-    "font-bold shadow",
-    "hover:border-red-300 hover:text-red-200",
-    "active:scale-95",
-  ].join(" ")}
-  aria-label="Decrease bet"
->
-  –
-</button>
-
-
-            {/* main bet circle */}
-            <button
-              type="button"
-              onClick={handlePlaceBet}
-              className="h-10 w-10 rounded-full bg-[#FFD700] text-black font-extrabold shadow-[0_0_18px_rgba(250,204,21,0.65)] flex flex-col items-center justify-center active:scale-95"
-              title="Place bet"
-            >
-              <span className="text-[10px] leading-none">BET</span>
-              <span className="text-[9px] leading-none font-mono">
-                {betAmount.toLocaleString()}
-              </span>
-            </button>
-
-            {/* plus */}
-            <button
-  type="button"
-  onClick={(e) => {
-    e.stopPropagation();
-    bumpBet(+BET_STEP);
-  }}
-  className={[
-    "h-7 w-7 rounded-full",
-    "border-2 border-emerald-400/80",
-    "bg-black/70 text-emerald-300",
-    "font-bold shadow",
-    "hover:border-emerald-300 hover:text-emerald-200",
-    "active:scale-95",
-  ].join(" ")}
-  aria-label="Increase bet"
->
-  +
-</button>
-
+            <span className="text-[12px] font-mono">
+              {primaryHand.bet.toLocaleString()}
+            </span>
           </div>
-        )}
 
-        {/* Bet chip(s) once hand exists — ONE CHIP PER HAND (split => 2 chips) */}
-        {seatTaken &&
-          !showBetButton &&
-          !showActionButtons &&
-          primaryHand &&
-          primaryHand.bet > 0 && (
-            <div className="flex items-center gap-1">
-              {(handsToRender.length > 1 ? handsToRender : [primaryHand]).map(
-                (h, idx) => (
-                  <div
-                    key={`chip-${seat.seatIndex}-${idx}`}
-                    className="h-9 w-9 rounded-full bg-[#FFD700] border-2 border-white/70 text-black font-extrabold shadow-[0_0_16px_rgba(250,204,21,0.65)] flex items-center justify-center"
-                    title={`Bet ${h.bet}`}
-                  >
-                    <span className="text-[12px] font-mono">
-                      {h.bet.toLocaleString()}
-                    </span>
-                  </div>
-                )
-              )}
+          {/* if split, show 2nd chip offset, but DO NOT change layout width */}
+          {handsToRender.length > 1 && handsToRender[1]?.bet > 0 && (
+            <div
+              className="absolute top-1/2 -translate-y-1/2 -right-8 h-9 w-9 rounded-full bg-[#FFD700] border-2 border-white/70 text-black font-extrabold shadow-[0_0_16px_rgba(250,204,21,0.65)] flex items-center justify-center"
+              title={`Bet ${handsToRender[1].bet}`}
+            >
+              <span className="text-[11px] font-mono">
+                {handsToRender[1].bet.toLocaleString()}
+              </span>
             </div>
           )}
+        </>
+      )}
 
-        {/* Fallback avatar / initial (only when nothing else is showing) */}
-        {seatTaken &&
-          !showBetButton &&
-          !showActionButtons &&
-          !(primaryHand && primaryHand.bet > 0) && (
-            (() => {
-              const avatarUrl = (seat as any).avatarUrl as string | undefined;
+    {/* Fallback avatar / initial (centered, same 40×40 footprint) */}
+    {seatTaken &&
+      !showBetButton &&
+      !showActionButtons &&
+      !(primaryHand && primaryHand.bet > 0) && (
+        (() => {
+          const avatarUrl = (seat as any).avatarUrl as string | undefined;
 
-              if (avatarUrl) {
-                return (
-                  <div
-                    className={[
-                      "h-9 w-9 rounded-full overflow-hidden border",
-                      "shadow-[0_0_12px_rgba(0,0,0,0.75)]",
-                      isHero ? "border-[#FFD700]" : "border-white/40",
-                    ].join(" ")}
-                  >
-                    <Image
-                      src={avatarUrl}
-                      alt={seat.name || "Player avatar"}
-                      width={36}
-                      height={36}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  className={[
-                    "h-9 w-9 rounded-full flex items-center justify-center border",
-                    "text-[12px] font-semibold shadow-[0_0_12px_rgba(0,0,0,0.75)]",
-                    isHero
-                      ? "border-[#FFD700] bg-black/90 text-[#FFD700]"
-                      : "border-white/40 bg-black/80 text-white/85",
-                  ].join(" ")}
-                >
-                  {seatInitial}
-                </div>
-              );
-            })()
-          )}
-
-        {/* Action buttons */}
-        {seatTaken && showActionButtons && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => handleAction("hit")}
-              className="h-9 rounded-full bg-emerald-500 px-3 text-[11px] font-bold text-black active:scale-95"
-            >
-              Hit
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAction("stand")}
-              className="h-9 rounded-full bg-slate-800 px-3 text-[11px] font-bold text-white active:scale-95"
-            >
-              Stand
-            </button>
-            {canDouble && (
-              <button
-                type="button"
-                onClick={() => handleAction("double")}
-                className="h-9 rounded-full bg-amber-500 px-3 text-[11px] font-bold text-black active:scale-95"
+          if (avatarUrl) {
+            return (
+              <div
+                className={[
+                  "h-10 w-10 rounded-full overflow-hidden border",
+                  "shadow-[0_0_12px_rgba(0,0,0,0.75)]",
+                  isHero ? "border-[#FFD700]" : "border-white/40",
+                ].join(" ")}
               >
-                Dbl
-              </button>
-            )}
-            {canSplit && (
-              <button
-                type="button"
-                onClick={() => handleAction("split")}
-                className="h-9 rounded-full bg-purple-500 px-3 text-[11px] font-bold text-black active:scale-95"
-              >
-                Split
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+                <Image
+                  src={avatarUrl}
+                  alt={seat.name || "Player avatar"}
+                  width={40}
+                  height={40}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            );
+          }
+
+          return (
+            <div
+              className={[
+                "h-10 w-10 rounded-full flex items-center justify-center border",
+                "text-[12px] font-semibold shadow-[0_0_12px_rgba(0,0,0,0.75)]",
+                isHero
+                  ? "border-[#FFD700] bg-black/90 text-[#FFD700]"
+                  : "border-white/40 bg-black/80 text-white/85",
+              ].join(" ")}
+            >
+              {seatInitial}
+            </div>
+          );
+        })()
+      )}
+  </div>
+
+  {/* Action buttons (below; they can expand without moving the center anchor above) */}
+  {seatTaken && showActionButtons && (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => handleAction("hit")}
+        className="h-9 rounded-full bg-emerald-500 px-3 text-[11px] font-bold text-black active:scale-95"
+      >
+        Hit
+      </button>
+      <button
+        type="button"
+        onClick={() => handleAction("stand")}
+        className="h-9 rounded-full bg-slate-800 px-3 text-[11px] font-bold text-white active:scale-95"
+      >
+        Stand
+      </button>
+      {canDouble && (
+        <button
+          type="button"
+          onClick={() => handleAction("double")}
+          className="h-9 rounded-full bg-amber-500 px-3 text-[11px] font-bold text-black active:scale-95"
+        >
+          Dbl
+        </button>
+      )}
+      {canSplit && (
+        <button
+          type="button"
+          onClick={() => handleAction("split")}
+          className="h-9 rounded-full bg-purple-500 px-3 text-[11px] font-bold text-black active:scale-95"
+        >
+          Split
+        </button>
+      )}
+    </div>
+  )}
+</div>
+
     </div>
   );
 };
@@ -1057,9 +1086,14 @@ const seatWrapperProps = isHero ? { ref: heroSeatRef } : {};
 // Bottom seats — NOW MATCH SIDE SEATS
 if (layout === "bottom") {
   return (
-    <div key={seat.seatIndex} {...seatWrapperProps} className="absolute" style={pos}>
+    <div
+      key={seat.seatIndex}
+      {...seatWrapperProps}
+      className="absolute"
+      style={pos}
+    >
       <div
-        className={`relative flex flex-col items-center justify-center gap-1 transition-transform duration-300 ease-out md:scale-100 ${mobileOpacity}`}
+        className={`relative flex flex-col items-center justify-center gap-1 transition-transform transition-opacity duration-300 ease-out md:scale-100 ${mobileOpacity}`}
         style={{
           transform: isMobile ? `scale(${mobileScale})` : undefined,
         }}
@@ -1068,53 +1102,53 @@ if (layout === "bottom") {
           <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
         )}
 
-
         {/* Turn badge only (Total lives under the cards now) */}
-{isActive && isMySeat && (
-  <div className="mt-1 rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
-    Your turn
-  </div>
-)}
-
+        {isActive && isMySeat && (
+          <div className="mt-1 rounded-full bg-emerald-500/90 px-2 py-[1px] text-[9px] font-bold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.7)]">
+            Your turn
+          </div>
+        )}
 
         {/* Cards + total (IDENTICAL LOGIC TO SIDE SEATS) */}
         <div className="relative z-[1] flex flex-col items-center justify-center">
           {primaryHand && primaryHand.cards.length > 0 && (
             <>
               <div className="flex flex-col items-center justify-center gap-1">
-               {handsToRender.map((hand, handIndex) => (
-  <div
-    key={`seat-${seat.seatIndex}-hand-${handIndex}`}
-    className="relative flex"
-  >
-    <ResultPill result={hand.result} />
+                {handsToRender.map((hand, handIndex) => (
+                  <div
+                    key={`seat-${seat.seatIndex}-hand-${handIndex}`}
+                    className="relative flex"
+                  >
+                    <ResultPill result={hand.result} />
 
-    {hand.cards.map((c, i) => {
-      const overlap = hand.cards.length >= 4;
-      const style: CSSProperties =
-        overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-      return (
-        <div
-          key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
-          style={style}
-        >
-          <BJCard card={c} small />
-        </div>
-      );
-    })}
-  </div>
-))}
-
+                    {hand.cards.map((c, i) => {
+                      const overlap = hand.cards.length >= 4;
+                      const style: CSSProperties =
+                        overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+                      return (
+                        <div
+                          key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
+                          style={style}
+                        >
+                          <BJCard card={c} small />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
 
               {value && (
                 <div className="mt-1 flex justify-center">
-                  <div className={`rounded-full border px-4 py-[4px] text-[11px] md:text-xs font-mono shadow-[0_0_16px_rgba(250,204,21,0.7)] ${
-                    isHero
-                      ? "bg-black/90 border-[#FFD700]/80 text-[#FFEFA3]"
-                      : "bg-black/80 border-white/40 text-white/90"
-                  }`}>
-                    Total {value.total}{value.soft ? " (soft)" : ""}
+                  <div
+                    className={`rounded-full border px-4 py-[4px] text-[11px] md:text-xs font-mono shadow-[0_0_16px_rgba(250,204,21,0.7)] ${
+                      isHero
+                        ? "bg-black/90 border-[#FFD700]/80 text-[#FFEFA3]"
+                        : "bg-black/80 border-white/40 text-white/90"
+                    }`}
+                  >
+                    Total {value.total}
+                    {value.soft ? " (soft)" : ""}
                   </div>
                 </div>
               )}
@@ -1128,6 +1162,7 @@ if (layout === "bottom") {
   );
 }
 
+
 // Side seats remain unchanged below
 
 
@@ -1140,15 +1175,14 @@ if (layout === "bottom") {
       style={pos}
     >
       <div
-  className={
-    "relative transition-transform duration-300 ease-out " +
-    `md:scale-100 ${mobileOpacity}`
-  }
+  className={`relative transition-transform transition-opacity duration-300 ease-out md:scale-100 ${mobileOpacity}`}
   style={{
     transform: isMobile ? `scale(${mobileScale})` : undefined,
     transformOrigin: "center center",
   }}
 >
+
+
 
         {isActive && (
           <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
@@ -1349,7 +1383,9 @@ if (layout === "bottom") {
       />
 
           {/* Dealer (top center) — cards + label + total all together */}
-<div className="pointer-events-none absolute left-1/2 top-[20%] md:top-[16%] -translate-x-1/2 z-[55] flex flex-col items-center gap-1.5">
+{/* Dealer (top center) — mobile pinned, desktop unchanged */}
+<div className="pointer-events-none absolute left-1/2 top-[26%] md:top-[18%] -translate-x-1/2 z-[40] flex flex-col items-center gap-1.5">
+
   {/* Cards */}
   <div className="flex items-center justify-center">
     <div className="flex">
