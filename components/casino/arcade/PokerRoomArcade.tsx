@@ -603,40 +603,57 @@ const heroHasAction =
     return () => clearInterval(id);
   }, []);
 
-   /* ───────────────── Table / showdown tracking ───────────────── */
-  const [showLeaders, setShowLeaders] = useState(false);
-  const [revealHeroHand, setRevealHeroHand] = useState(false);
+  /* ───────────────── Table / showdown tracking ───────────────── */
+const [showLeaders, setShowLeaders] = useState(false);
+const [revealHeroHand, setRevealHeroHand] = useState(false);
 
-  // Track table / hand transitions + deal sounds
-  useEffect(() => {
-    if (!table) return;
+/** NEW: local nonce so tableIdle/start buttons can reappear reliably */
+const [resetNonce, setResetNonce] = useState(0);
 
-    if (handIdRef.current == null || table.handId !== handIdRef.current) {
-  handIdRef.current = table.handId;
-  streetRef.current = null;
-  showdownHandRef.current = null;
-  lastBoardCountRef.current = table.board.length;
-  setRevealHeroHand(false);
+/** 1) Track table / hand transitions + deal sounds */
+useEffect(() => {
+  if (!table) return;
 
- 
+  // New hand
+  if (handIdRef.current == null || table.handId !== handIdRef.current) {
+    handIdRef.current = table.handId;
+    streetRef.current = null;
+    showdownHandRef.current = null;
+    lastBoardCountRef.current = table.board.length;
 
-  // If you had joined mid-hand before, clear that once the new hand begins
+    setRevealHeroHand(false);
+    setJoinedMidHand(false);
+    setRevealedHoles({});
+
+    pushLog(`New hand #${table.handId} in the PGLD room.`);
+    playDeal();
+    return; // important so we don't also run "board count" logic on first render of new hand
+  }
+
+  // Board increment sound
+  const count = table.board.length;
+  if (count > lastBoardCountRef.current) playDeal();
+  lastBoardCountRef.current = count;
+}, [table, playDeal, pushLog]);
+
+/** 2) Handle table-reset message (MUST be its own effect, NOT nested) */
+useEffect(() => {
+  const sawReset = (messages as any[]).some((m) => m && m.type === "table-reset");
+  if (!sawReset) return;
+
   setJoinedMidHand(false);
-
-  // Clear any manually revealed hole cards from prior hands
   setRevealedHoles({});
+  setRevealHeroHand(false);
+  showdownHandRef.current = null;
+  streetRef.current = null;
+  handIdRef.current = null;
+  lastPotRef.current = 0;
 
-  pushLog(`New hand #${table.handId} in the PGLD room.`);
-  playDeal();
-}
+  // allows UI memo/derived state to refresh (start game reappears)
+  setResetNonce((n) => n + 1);
 
-
-    const count = table.board.length;
-    if (count > lastBoardCountRef.current) {
-      playDeal();
-    }
-    lastBoardCountRef.current = count;
-  }, [table, playDeal]);
+  pushLog("Table was reset by host.");
+}, [messages, pushLog]);
 
   // Pot change sound + street logging
   useEffect(() => {
@@ -709,25 +726,7 @@ const heroHasAction =
     }
   }
 
-  // 🔥 AUTO-DEAL: host fires next hand 30s after showdown
-  if (isHostClient && seatedCount >= MIN_PLAYERS_TO_START) {
-    // Clear any previous pending auto-deal
-    if (autoDealTimeoutRef.current != null) {
-      clearTimeout(autoDealTimeoutRef.current);
-      autoDealTimeoutRef.current = null;
-    }
-
-    pushLog("Auto-deal armed: next hand will start in 30 seconds.");
-
-    autoDealTimeoutRef.current = window.setTimeout(() => {
-      // Safety re-check in case table state changed
-      if (isHostClient && seatedCount >= MIN_PLAYERS_TO_START) {
-        sendMessage({ type: "start-hand" });
-        pushLog("Auto-deal: next hand starting in the PGLD room.");
-      }
-      autoDealTimeoutRef.current = null;
-    }, 10_000);
-  }
+  
 }, [showdown, table, playWin, seats, isHostClient, seatedCount, sendMessage]);
 
 const gameStarted = !!table; 
@@ -1137,8 +1136,19 @@ function handleRefillStack(amount: number) {
 
 
 
-  const canManualDeal =
-  isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
+  const [showHostPanel, setShowHostPanel] = useState(false);
+
+// Optional: server-side pause flag later. For now it can just stop client UI.
+// Better: add msg types "pause-auto-deal" / "resume-auto-deal" server-side.
+function handleHostResetTable() {
+  if (!isHostClient) return;
+  sendMessage({ type: "reset-table" });
+  pushLog("Host reset the table.");
+}
+
+// If you already have handleManualDeal, we’ll use it from host panel:
+const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
+
 
   const tableIdle =
   seatedCount >= MIN_PLAYERS_TO_START &&
@@ -1451,6 +1461,19 @@ const useHeroCenter = HERO_CENTER_VIEW && heroSeatIndexForLayout !== null;
 
 
 
+const heroHasShownCards =
+  !!playerId && !!revealedHoles?.[playerId] && revealedHoles[playerId].length === 2;
+
+const canShowCardsNow =
+  !!heroSeat &&
+  !!betting &&
+  betting.street === "done" &&
+  !!showdown &&
+  !!table &&
+  showdown.handId === table.handId &&
+  !!heroHand &&
+  heroHand.length === 2 &&
+  !heroHasShownCards;
 
 
 
@@ -1521,73 +1544,83 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
             {/* Header – ONLY in non-fullscreen */}
 {!isFullscreen && (
   <>
-    <div className="relative mb-3 flex items-start justify-between gap-3">
-      {/* Left: minimal identity */}
+    {/* GAME HEADER (mobile-tight) */}
+<div className="mb-2 md:mb-3">
+  <div
+    className={[
+      "rounded-2xl border border-white/15 bg-black/55 backdrop-blur",
+      "px-3 py-2 md:px-5 md:py-3",
+      "shadow-[0_0_18px_rgba(0,0,0,0.65)]",
+    ].join(" ")}
+  >
+    {/* Row 1: title + right controls */}
+    <div className="flex items-start justify-between gap-2">
+      {/* LEFT: title block (clamps + doesn’t force height) */}
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[0.3em] text-white/40">
-          Base Gold Rush • Hold&apos;em
+        <div className="text-[11px] md:text-xs uppercase tracking-[0.22em] text-white/55 leading-tight">
+          Base Gold Rush • Hold’em
         </div>
 
-        {/* Optional: show room label from config if you want */}
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm md:text-base font-semibold text-white/85">
-            {roomId}
-          </span>
+        <div className="mt-0.5 flex items-center gap-2 min-w-0">
+          <div className="truncate text-[12px] md:text-base font-extrabold text-white/90">
+  {roomId}
+</div>
 
-          <button
-            type="button"
-            onClick={() => {
-              try {
-                navigator.clipboard?.writeText(roomId);
-              } catch {}
-            }}
-            className="rounded-full border border-white/15 bg-black/50 px-2 py-[2px] text-[10px] text-white/60 hover:border-[#FFD700]/60 hover:text-white/80"
-          >
-            Copy ID
-          </button>
 
-          <span className="rounded-full border border-white/10 bg-black/40 px-2 py-[2px] text-[10px] text-white/55">
-            {seatedCount} / 9 seated
+          {/* LIVE pill */}
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-2 py-[1px] text-[10px] md:text-[11px] font-bold text-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+            LIVE
           </span>
         </div>
       </div>
 
-      {/* Right: status + compact controls */}
-      <div className="flex flex-col items-end gap-2">
-        <div className="flex items-center gap-2">
-          {/* LIVE */}
-          {ready ? (
-            <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300">
-              <span className="mr-1 h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE
-            </span>
-          ) : (
-            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300">
-              <span className="mr-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-              Connecting…
-            </span>
-          )}
+     <div className="shrink-0 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={handleCopyInvite}
+    className="rounded-xl border border-white/15 bg-black/50 px-2 py-[5px] text-[10px] md:text-[11px] font-bold text-white/80 hover:bg-black/70"
+  >
+    Copy ID
+  </button>
 
-          {/* Panels pill */}
-          <button
-            type="button"
-            onClick={() => setOpenPanels((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/70 px-3 py-1 text-[11px] font-semibold text-white/70 hover:border-[#FFD700]/60 hover:text-white/85"
-          >
-            Profile/Chips <span className="text-white/50">{openPanels ? "▾" : "▸"}</span>
-          </button>
+  <button
+    type="button"
+    onClick={() => setIsFullscreen((v) => !v)}
+    className="rounded-xl border border-[#FFD700]/25 bg-black/50 px-2 py-[5px] text-[10px] md:text-[11px] font-bold text-[#FFD700]/90 hover:bg-black/70"
+  >
+    Fullscreen
+  </button>
+</div>
 
-          {/* Fullscreen */}
-          <button
-            type="button"
-            onClick={() => setIsFullscreen((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/70 px-3 py-1 text-[11px] font-semibold text-white/70 hover:border-[#FFD700]/60 hover:text-white/85"
-          >
-            Fullscreen
-          </button>
-        </div>
-      </div>
     </div>
+
+   {/* Row 2: Pills (mobile-safe, no overlap) */}
+<div className="mt-2 flex flex-wrap items-center gap-2">
+  <span className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
+    {seatedCount}/9 seated
+  </span>
+
+  <button
+    type="button"
+    onClick={() => setOpenPanels((v) => !v)}
+    className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/80 hover:bg-black/70"
+  >
+    {openPanels ? "Hide panels" : "Panels"}
+  </button>
+
+  <span className="inline-flex items-center rounded-full border border-[#FFD700]/25 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
+    BR
+    <span className="ml-2 font-mono font-extrabold text-[#FFD700]">
+      {chips.toLocaleString()}
+    </span>
+    <span className="ml-1 text-white/55">PGLD</span>
+  </span>
+</div>
+
+  </div>
+</div>
+
 
     {/* Panels drawer (RIGHT-ALIGNED, not inside the header row) */}
     {openPanels && (
@@ -2072,16 +2105,17 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
 
                 {/* Pill */}
                 <div className="mb-[4px] flex w-full justify-center">
-                  <div className="pointer-events-auto flex min-w-[112px] max-w-[150px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2.5 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
-                    <div className="rounded-full bg-black/70 px-2.5 py-[1px] text-[14px] md:text-[15px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-                      {formatChips(stackAmount)} PGLD
-                    </div>
+  <div className="pointer-events-auto flex w-[104px] md:w-auto md:min-w-[112px] md:max-w-[150px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+    <div className="rounded-full bg-black/70 px-2 py-[1px] text-[12px] md:text-[15px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+      {formatChips(stackAmount)} PGLD
+    </div>
 
-                    <div className="mt-[1px] max-w-[118px] truncate text-[11px] md:text-[12px] text-white/85 leading-tight">
-                      {label}
-                    </div>
-                  </div>
-                </div>
+    <div className="mt-[1px] max-w-[96px] md:max-w-[118px] truncate text-[10px] md:text-[12px] text-white/85 leading-tight">
+      {label}
+    </div>
+  </div>
+</div>
+
               </div>
             )}.
 
@@ -2108,364 +2142,404 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
               </div>
             </div>
 
-            {/* HERO ACTION BAR – compact, centered, animated */}
-            <div
+
+            
+
+           {/* HERO ACTION BAR – compact, centered, mobile-safe (clean + tight) */}
+<div
+  className={[
+    "mt-3 mb-4 flex w-full justify-center",
+    isFullscreen ? "max-w-[1100px] mx-auto" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")}
+>
+  <div
+    className={[
+      // add antialiased + slightly softer border/shadow for crisp UI
+      "antialiased w-full max-w-[660px] rounded-2xl border border-white/15 bg-black/85 px-4 py-2 md:px-5 md:py-2",
+      "text-[12px] text-white/85 font-semibold shadow-[0_0_18px_rgba(0,0,0,0.75)]",
+      "transition-all duration-300 ease-out transform hero-bar-slide",
+      heroHasAction && isHeroTurn
+        ? "translate-y-0 opacity-100 scale-100"
+        : "translate-y-1 opacity-95 scale-[0.99] md:translate-y-0",
+    ]
+      .filter(Boolean)
+      .join(" ")}
+  >
+    {/* TOP ROW: hero label + stack/bankroll + refill + timer */}
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1 truncate">
+        <div className="truncate text-white text-[14px] font-semibold leading-tight">
+          {describeHero()}
+        </div>
+
+        <div className="mt-[2px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
+          {heroBetting && (
+            <span className="rounded-full bg-black/50 px-2 py-[1px] border border-white/15">
+              Stack{" "}
+              <span className="font-mono text-[#FFD700]">
+                {heroBetting.stack} PGLD
+              </span>
+            </span>
+          )}
+
+          <span className="rounded-full bg-black/50 px-2.5 py-[1px] border border-white/15">
+            BR{" "}
+            <span className="font-mono text-[#FFD700]">
+              {chips.toLocaleString()} PGLD
+            </span>
+          </span>
+
+          {isSittingOut && (
+            <span className="rounded-full bg-amber-500/10 px-2 py-[1px] border border-amber-400/50 text-amber-200">
+              Sitting out
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Right cluster: refill + timers + host toggle (constrained so it doesn't bloat mobile) */}
+      <div className="flex flex-col items-end gap-1.5 max-w-[190px]">
+        <div className="flex items-center gap-2">
+          {/* Refill stack from bankroll (between hands) */}
+          <button
+            type="button"
+            onClick={() => handleRefillStack(500)}
+            disabled={!heroSeat || handInProgress}
+            className="rounded-full border border-emerald-400/50 bg-black/60 px-3 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-black/75 disabled:opacity-40"
+          >
+            Refill +500
+          </button>
+
+          {/* Host panel toggle (host only) */}
+          {isHostClient && (
+            <button
+              type="button"
+              onClick={() => setShowHostPanel((v: boolean) => !v)}
+              className="rounded-full border border-amber-300/40 bg-black/60 px-3 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/75"
+            >
+              Host {showHostPanel ? "▾" : "▸"}
+            </button>
+          )}
+        </div>
+
+        {/* Timer + time bank */}
+        <div className="flex items-center gap-2">
+          {isHeroTurn && actionSeconds !== null && (
+            <span
               className={[
-                "mt-3 mb-4 flex w-full justify-center",
-                isFullscreen ? "max-w-[1100px] mx-auto" : "",
+                "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
+                "timer-neon",
+                actionPhase === "extra"
+                  ? "border border-red-500/60 text-red-200 bg-red-600/25"
+                  : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
-              <div
-                className={[
-                  "w-full max-w-[660px] rounded-2xl border border-white/20 bg-black/85 px-4 py-2 md:px-5 md:py-2",
-"text-[12px] text-white/85 font-semibold shadow-[0_0_20px_rgba(0,0,0,0.8)]",
-                  "transition-all duration-300 ease-out transform hero-bar-slide",
-                  heroHasAction && isHeroTurn
-                    ? "translate-y-0 opacity-100 scale-100"
-                    : "translate-y-1 opacity-95 scale-[0.99] md:translate-y-0",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
+              {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={handleUseTimeBank}
+            disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
+            className="rounded-full border border-sky-400/45 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-sky-200 hover:bg-black/75 disabled:opacity-40"
+          >
+            {timeBankUsed ? "Used" : `+${TIME_BANK_SECONDS}s`}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* STATUS LINE + SIT OUT TOGGLE */}
+    <div className="mt-2 flex items-center justify-between gap-2">
+      <span className="flex-1 text-[11px] text-white/65">
+        {!betting || betting.street === "done" ? (
+          showdown && table && showdown.handId === table.handId ? (
+            "Hand complete. Showdown on the felt."
+          ) : (
+            "Waiting for next hand…"
+          )
+        ) : !heroSeat || !heroBetting ? (
+          "Sit to join the action."
+        ) : !heroIsInHand ? (
+          "Seated. Wait for next hand."
+        ) : isSittingOut ? (
+          "You are sitting out."
+        ) : !isHeroTurn ? (
+          "Waiting for other players…"
+        ) : (
+          "Your turn."
+        )}
+      </span>
+
+      <button
+        type="button"
+        onClick={() => setIsSittingOut((v: boolean) => !v)}
+        disabled={!heroSeat}
+        className="rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[10px] font-semibold text-white/80 hover:border-[#FFD700]/60 disabled:opacity-40"
+      >
+        {isSittingOut ? "Sit in" : "Sit out"}
+      </button>
+    </div>
+
+    {/* BET SIZING STRIP (replaces the rotated slider block; sits in the dead space above progress bar) */}
+    {isHeroTurn && betting && heroBetting && (
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {/* Left: label + value pill */}
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+            Raise
+          </span>
+          <span className="rounded-full border border-white/15 bg-black/55 px-2 py-[2px] text-[11px] font-mono text-[#FFD700]">
+            {manualBet.trim() !== ""
+              ? manualBet
+              : raiseSize > 0
+              ? raiseSize
+              : betting.bigBlind * 2}{" "}
+            PGLD
+          </span>
+        </div>
+
+        {/* Center: slider (never clips; minimal height) */}
+        <div className="flex-1">
+          <input
+            type="range"
+            min={betting.bigBlind * 2}
+            max={Math.max(
+              betting.bigBlind * 8,
+              betting.pot || betting.bigBlind * 4
+            )}
+            step={betting.bigBlind}
+            value={raiseSize || betting.bigBlind * 2}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setRaiseSize(v);
+              setManualBet("");
+            }}
+            className="w-full accent-[#FFD700]"
+          />
+        </div>
+
+        {/* Right: manual compact */}
+        <div className="shrink-0 flex items-center gap-1.5">
+          <input
+            type="number"
+            min={betting.bigBlind * 2}
+            value={manualBet}
+            onChange={(e) => setManualBet(e.target.value)}
+            placeholder="Manual"
+            className="w-20 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[11px] text-white/85 outline-none focus:border-[#FFD700]"
+          />
+          <button
+            type="button"
+            onClick={() => setManualBet("")}
+            className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRaiseSize(betting.bigBlind * 2);
+              setManualBet("");
+            }}
+            className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
+          >
+            Min
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* HERO HAND HELPER */}
+    {heroHandHelper &&
+      betting &&
+      betting.street !== "preflop" &&
+      table &&
+      table.board.length >= 3 && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-[14px] md:text-[15px]">
+          <span
+            className={[
+              "font-semibold",
+              heroHandHelper.category >= 6
+                ? "text-emerald-300"
+                : heroHandHelper.category >= 4
+                ? "text-sky-300"
+                : heroHandHelper.category >= 2
+                ? "text-amber-200"
+                : "text-white/70",
+            ].join(" ")}
+          >
+            {heroHandHelper.label}
+          </span>
+        </div>
+      )}
+
+    {/* SLIM PROGRESS BAR – ONLY when it's hero's turn */}
+    {isHeroTurn && (
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={
+            actionPhase === "extra"
+              ? "h-full rounded-full bg-gradient-to-r from-red-400 via-red-500 to-red-700 timer-bar"
+              : "h-full rounded-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500 timer-bar"
+          }
+          style={{ width: `${actionPct}%` }}
+        />
+      </div>
+    )}
+
+
+        {/* TABLE CONTROLS */}
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <button
+        onClick={handleSitOrStand}
+        disabled={!ready || (!!heroSeat && handInProgress)}
+        className="rounded-xl bg-emerald-500 px-3 py-2 text-[12px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+      >
+        {heroSeat ? "Stand up" : "Sit at table"}
+      </button>
+
+      {/* Show cards (ONLY when valid: post-showdown for current hand) */}
+      {(() => {
+        const canShowCards =
+          !!heroSeat &&
+          !!heroHand &&
+          heroHand.length === 2 &&
+          !!betting &&
+          betting.street === "done" &&
+          !!showdown &&
+          !!table &&
+          showdown.handId === table.handId;
+
+        if (!canShowCards) return null;
+
+        return (
+          <button
+            type="button"
+            onClick={() => sendMessage({ type: "show-cards" })}
+            className="rounded-xl border border-[#FFD700]/45 bg-black/55 px-3 py-2 text-[12px] font-semibold text-[#FFD700] hover:bg-black/70"
+          >
+            Show cards
+          </button>
+        );
+      })()}
+    </div>
+
+    {/* MAIN ACTIONS – ONLY when it's hero's turn */}
+    {isHeroTurn && betting && heroBetting && (
+      <div className="mt-2">
+        {/* Primary row: main buttons (most prominent) */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handlePrimaryAction}
+            className="rounded-xl bg-slate-800 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.25)]"
+          >
+            {primaryActionLabel}
+          </button>
+
+          <button
+            onClick={handleBet}
+            disabled={!betting || !heroBetting}
+            className="rounded-xl bg-emerald-500 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.35)] disabled:opacity-40"
+          >
+            {(() => {
+              if (!betting || !heroBetting) return "Bet";
+              const callNeeded = Math.max(
+                0,
+                betting.maxCommitted - heroBetting.committed
+              );
+              const minRaise = betting.bigBlind * 2;
+              const rawRaise =
+                manualBet.trim().length > 0
+                  ? Number(manualBet)
+                  : raiseSize > 0
+                  ? raiseSize
+                  : minRaise;
+
+              const raiseDelta = Math.max(
+                minRaise,
+                Number.isFinite(rawRaise) && rawRaise > 0
+                  ? Math.floor(rawRaise)
+                  : minRaise
+              );
+
+              const total = callNeeded + raiseDelta;
+              return `Bet ${total}`;
+            })()}{" "}
+            <span className="opacity-70">PGLD</span>
+          </button>
+        </div>
+
+        {/* Secondary row: smaller / less dominant */}
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            onClick={handleFold}
+            className="rounded-lg bg-red-500/75 px-3 py-2 text-[12px] font-semibold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.35)]"
+          >
+            Fold
+          </button>
+
+          <button
+            type="button"
+            onClick={handleAllIn}
+            disabled={!heroBetting}
+            className="rounded-lg bg-slate-900/80 px-3 py-2 text-[12px] font-semibold text-red-200 border border-red-400/40 hover:bg-slate-800 disabled:opacity-40"
+          >
+            All-in
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* HOST TOOLS (thin footer bar; host only; uses empty space, doesn't bloat) */}
+    {isHostClient && (
+      <div className="mt-2 rounded-xl border border-white/10 bg-black/50 px-2 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHostPanel((v: boolean) => !v)}
+            className="rounded-lg border border-amber-300/35 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/70"
+          >
+            Host tools {showHostPanel ? "▾" : "▸"}
+          </button>
+
+          {showHostPanel && (
+            <div className="flex flex-wrap items-center gap-2">
+              {seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
+                <button
+                  type="button"
+                  onClick={handleManualDeal}
+                  className="rounded-lg bg-[#FFD700] px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-yellow-400"
+                >
+                  Start game
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => sendMessage({ type: "reset-table" })}
+                className="rounded-lg border border-red-400/45 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-red-200 hover:bg-black/70"
               >
-                {/* TOP ROW: hero label + stack/bankroll + sit out + timer */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1 truncate">
-                    <div className="truncate text-white text-[14px] font-extrabold leading-tight"
->
-                      {describeHero()}
-                    </div>
-                    <div className="mt-[1px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
-                      {heroBetting && (
-                        <span className="rounded-full bg-black/60 px-2 py-[1px] border border-white/25">
-                          Stack{" "}
-                          <span className="font-mono text-[#FFD700]">
-                            {heroBetting.stack} PGLD
-                          </span>
-                        </span>
-                      )}
-                      <span className="rounded-full bg-black/60 px-3 py-[3px] border border-white/25">
-                        BR{" "}
-                        <span className="font-mono text-[#FFD700]">
-                          {chips.toLocaleString()} PGLD
-                        </span>
-                       
-                      </span>
-                      {isSittingOut && (
-                        <span className="rounded-full bg-amber-500/10 px-2 py-[1px] border border-amber-400/60 text-amber-300">
-                          Sitting out
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                   {/* NEW: Refill stack from bankroll (between hands) */}
-        <button
-          type="button"
-          onClick={() => handleRefillStack(500)} // pick a default or open a small input later
-          disabled={!heroSeat || handInProgress}
-          className="rounded-full border border-emerald-400/60 bg-black/70 px-3 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-[#111827] disabled:opacity-40"
-        >
-          Refill stack +500
-        </button>
+                Reset
+              </button>
 
-        
-
-                  {/* Timer + time bank */}
-                  <div className="flex flex-col items-end gap-1">
-                    {isHeroTurn && actionSeconds !== null && (
-                      <span
-                        className={[
-                          "inline-flex items-center rounded-full px-3.5 py-1.5 font-mono text-[12px] font-extrabold tracking-wide",
-                          "timer-neon",
-                          actionPhase === "extra"
-                            ? "border border-red-500/70 text-red-300 bg-red-600/30"
-                            : "border border-[#FFD700]/80 text-[#FFD700] bg-[#2a2a2a]/60",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        {actionPhase === "extra" ? "LAST" : "ACT"}{" "}
-                        {actionSeconds}s
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handleUseTimeBank}
-                      disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
-                      className="rounded-full border border-sky-400/60 bg-black/70 px-2.5 py-0.5 text-[9px] text-sky-300 disabled:opacity-40"
-                    >
-                      {timeBankUsed
-                        ? "Time bank used"
-                        : `Time bank +${TIME_BANK_SECONDS}s`}
-                    </button>
-                  </div>
-                </div>
-
-                {/* STATUS LINE + SIT OUT TOGGLE */}
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <span className="flex-1 text-[11px] text-white/70">
-                    {!betting || betting.street === "done" ? (
-                      showdown &&
-                      table &&
-                      showdown.handId === table.handId ? (
-                        "Hand complete. Showdown on the felt."
-                      ) : (
-                        "Waiting for next hand…"
-                      )
-                    ) : !heroSeat || !heroBetting ? (
-                      "Sit to join the action."
-                    ) : !heroIsInHand ? (
-                      "Seated. Wait for next hand."
-                    ) : isSittingOut ? (
-                      "You are sitting out."
-                    ) : !isHeroTurn ? (
-                      "Waiting for other players…"
-                    ) : (
-                      "Your turn."
-                    )}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsSittingOut((v) => !v)}
-                    disabled={!heroSeat}
-                    className="rounded-full border border-white/30 px-3 py-1 text-[10px] hover:border-[#FFD700] disabled:opacity-40"
-                  >
-                    {isSittingOut ? "Sit in" : "Sit out"}
-                  </button>
-                </div>
-
-                {/* HERO HAND HELPER */}
-                {heroHandHelper &&
-                  betting &&
-                  betting.street !== "preflop" &&
-                  table &&
-                  table.board.length >= 3 && (
-                    <div className="mt-1 flex items-center justify-between gap-2 text-[16px]">
-                      <span
-                        className={[
-                          "font-semibold",
-                          heroHandHelper.category >= 6
-                            ? "text-emerald-300"
-                            : heroHandHelper.category >= 4
-                            ? "text-sky-300"
-                            : heroHandHelper.category >= 2
-                            ? "text-amber-200"
-                            : "text-white/70",
-                        ].join(" ")}
-                      >
-                        {heroHandHelper.label}
-                      </span>
-                      
-                    </div>
-                  )}
-
-                {/* SLIM PROGRESS BAR – ONLY when it's hero's turn */}
-                {isHeroTurn && (
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className={
-                        actionPhase === "extra"
-                          ? "h-full rounded-full bg-gradient-to-r from-red-400 via-red-500 to-red-700 timer-bar"
-                          : "h-full rounded-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500 timer-bar"
-                      }
-                      style={{ width: `${actionPct}%` }}
-                    />
-                  </div>
-                )}
-
-                {/* TABLE CONTROLS + ACTION BUTTONS */}
-                <div className="mt-2 space-y-1.5">
-                  {/* Always-visible controls */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={handleSitOrStand}
-                      disabled={!ready || (!!heroSeat && handInProgress)}
-                      className="rounded-xl bg-emerald-500 px-3 py-1 text-[12px] font-bold text-black hover:bg-emerald-400 disabled:opacity-40"
-                    >
-                      {heroSeat ? "Stand up" : "Sit at table"}
-                    </button>
-
-                    {/* HOST START GAME – only before the first hand exists */}
-{isHostClient && seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
-  <button
-    onClick={handleManualDeal}
-    className="rounded-xl bg-[#FFD700] px-3 py-1 text-[12px] font-bold text-black hover:bg-yellow-400"
-  >
-    Start game
-  </button>
-)}
-
-
-                  </div>
-
-                  {/* Main action buttons – ONLY when it's hero's turn */}
-                  {isHeroTurn && (
-                    <>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={handleFold}
-                          className="min-w-[96px] flex-1 rounded-xl bg-red-500 px-4 py-2 text-[13px] font-bold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.6)]"
-                        >
-                          Fold
-                        </button>
-                        <button
-                          onClick={handlePrimaryAction}
-                          className="min-w-[96px] flex-1 rounded-xl bg-slate-800 px-4 py-2 text-[13px] font-bold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.35)]"
-                        >
-                          {primaryActionLabel}
-                        </button>
-                        <button
-                          onClick={handleBet}
-                          disabled={!betting || !heroBetting}
-                          className="min-w-[96px] flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-[13px] font-bold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.45)] disabled:opacity-40"
-                        >
-                          {(() => {
-                            if (!betting || !heroBetting) return "Bet";
-                            const callNeeded = Math.max(
-                              0,
-                              betting.maxCommitted - heroBetting.committed
-                            );
-                            const minRaise = betting.bigBlind * 2;
-                            const rawRaise =
-                              manualBet.trim().length > 0
-                                ? Number(manualBet)
-                                : raiseSize > 0
-                                ? raiseSize
-                                : minRaise;
-                            const raiseDelta = Math.max(
-                              minRaise,
-                              Number.isFinite(rawRaise) && rawRaise > 0
-                                ? Math.floor(rawRaise)
-                                : minRaise
-                            );
-                            const total = callNeeded + raiseDelta;
-                            return `Bet ${total} PGLD`;
-                          })()}
-                        </button>
-
-                        {heroSeat && heroHand?.length === 2 && (
-  <button
-    type="button"
-    onClick={() => sendMessage({ type: "show-cards" })}
-    disabled={!betting || betting.street !== "done"} // only after showdown
-    className="rounded-xl border border-[#FFD700]/50 bg-black/60 px-3 py-2 text-xs font-extrabold text-[#FFD700] hover:bg-black/80 disabled:opacity-40"
-  >
-    Show cards
-  </button>
-)}
-
-                      </div>
-
-                      {/* Raise controls */}
-                      {betting && (
-                        <div className="mt-1 space-y-1.5">
-                          <div className="flex items-center justify-between text-[11px] text-white/60">
-                            <span>Raise amount</span>
-                            <span className="font-mono text-[#FFD700]">
-                              {manualBet.trim() !== ""
-                                ? manualBet
-                                : raiseSize > 0
-                                ? raiseSize
-                                : betting.bigBlind * 2}{" "}
-                              PGLD
-                            </span>
-                          </div>
-
-                          <input
-                            type="range"
-                            min={betting.bigBlind * 2}
-                            max={Math.max(
-                              betting.bigBlind * 8,
-                              betting.pot || betting.bigBlind * 4
-                            )}
-                            step={betting.bigBlind}
-                            value={raiseSize || betting.bigBlind * 2}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              setRaiseSize(v);
-                              setManualBet("");
-                            }}
-                            className="w-full accent-[#FFD700]"
-                          />
-
-                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRaiseSize(betting.bigBlind * 2)
-                              }
-                              className="rounded-full border border-white/30 px-2 py-[2px] hover:border-[#FFD700]"
-                            >
-                              2x BB
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRaiseSize(betting.bigBlind * 3)
-                              }
-                              className="rounded-full border border-white/30 px-2 py-[2px] hover:border-[#FFD700]"
-                            >
-                              3x BB
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRaiseSize(betting.bigBlind * 4)
-                              }
-                              className="rounded-full border border-white/30 px-2 py-[2px] hover:border-[#FFD700]"
-                            >
-                              4x BB
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRaiseSize(
-                                  betting.pot || betting.bigBlind * 6
-                                )
-                              }
-                              className="rounded-full border border-white/30 px-2 py-[2px] hover:border-[#FFD700]"
-                            >
-                              Pot
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleAllIn}
-                              disabled={!heroBetting}
-                              className="rounded-full border border-red-400/70 px-3 py-[7px] text-red-300 hover:border-red-300 disabled:opacity-40"
-                            >
-                              All-in
-                            </button>
-
-                            <div className="flex items-center gap-1">
-                              <span className="text-white/50">Manual</span>
-                              <input
-                                type="number"
-                                min={betting.bigBlind * 2}
-                                value={manualBet}
-                                onChange={(e) =>
-                                  setManualBet(e.target.value)
-                                }
-                                className="w-24 rounded-full border border-white/25 bg-black/70 px-3 py-1 text-[11px]x] outline-none focus:border-[#FFD700]"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setManualBet("")}
-                                className="rounded-full border border-white/30 px-2 py-[2px] text-[9px] hover:border-[#FFD700]"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+              <span className="text-[10px] text-white/45">
+                Host-only controls
+              </span>
             </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</div>
+
+
 
            
 

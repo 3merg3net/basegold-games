@@ -10,10 +10,11 @@ type NavItem = { href: string; label: string }
 // Top-level sections
 const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
 
-// Floors – poker first, casino second
+// Floors – poker first, blackjack second, casino third
 const sectionItems: NavItem[] = [
-  { href: '/live-tables', label: 'Live Tables' },
-  { href: '/arcade', label: 'Casino Floor' },
+  { href: '/poker', label: 'Poker' },
+  { href: '/blackjack-live', label: 'Blackjack' },
+  { href: '/arcade', label: 'Casino' },
 ]
 
 /**
@@ -35,22 +36,14 @@ function NavLink(props: {
 
   if (isPokerRoomDetail) {
     return (
-      <a
-        href={href}
-        className={className}
-        onClick={onClick}
-      >
+      <a href={href} className={className} onClick={onClick}>
         {children}
       </a>
     )
   }
 
   return (
-    <Link
-      href={href}
-      className={className}
-      onClick={onClick}
-    >
+    <Link href={href} className={className} onClick={onClick}>
       {children}
     </Link>
   )
@@ -68,9 +61,7 @@ export default function NavBar() {
     const onClick = (e: MouseEvent | globalThis.MouseEvent) => {
       const target = e.target as Node
       const insideMobile = mobileBoxRef.current?.contains(target)
-      if (!insideMobile) {
-        setOpen(false)
-      }
+      if (!insideMobile) setOpen(false)
     }
 
     const onEsc = (e: KeyboardEvent) => {
@@ -100,16 +91,13 @@ export default function NavBar() {
           ? window.location.origin
           : 'https://basereserve.gold'
 
-      const url = `${base}/poker-demo`
+      // send people straight to poker lobby now
+      const url = `${base}/poker`
       const text =
-        'Join me at the Base Gold Rush Hold’em Poker Room – live rails, free early-access chips, and Vegas vibes on Base. 🃏'
+        'Join me at Base Gold Rush Poker — live tables, free early-access chips, and Vegas vibes on Base. 🃏'
 
       if (typeof navigator !== 'undefined' && (navigator as any).share) {
-        await (navigator as any).share({
-          title: 'Base Gold Rush Poker',
-          text,
-          url,
-        })
+        await (navigator as any).share({ title: 'Base Gold Rush Poker', text, url })
       } else if (
         typeof navigator !== 'undefined' &&
         (navigator as any).clipboard &&
@@ -132,10 +120,7 @@ export default function NavBar() {
   const closeCashier = () => setCashierOpen(false)
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // If you click outside the inner card, close the modal
-    if (e.target === e.currentTarget) {
-      closeCashier()
-    }
+    if (e.target === e.currentTarget) closeCashier()
   }
 
   return (
@@ -145,7 +130,7 @@ export default function NavBar() {
         {/* Left: Home + floors */}
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex items-center gap-2">
-            {staticItems.map(it => (
+            {staticItems.map((it) => (
               <NavLink
                 key={it.href}
                 href={it.href}
@@ -163,9 +148,9 @@ export default function NavBar() {
 
           {/* Casino floors segmented control */}
           <div className="inline-flex items-center rounded-full bg-black/60 border border-white/15 px-1 py-0.5 shadow-[0_0_18px_rgba(0,0,0,0.7)]">
-            {sectionItems.map(it => {
+            {sectionItems.map((it) => {
               const active = isActive(it.href)
-              const isPoker = it.href === '/live-tables'
+              const isPoker = it.href === '/poker'
               return (
                 <NavLink
                   key={it.href}
@@ -225,7 +210,7 @@ export default function NavBar() {
       {/* Mobile nav */}
       <div ref={mobileBoxRef} className="md:hidden ml-auto relative">
         <button
-          onClick={() => setOpen(v => !v)}
+          onClick={() => setOpen((v) => !v)}
           aria-label="Menu"
           className="p-2 text-white"
         >
@@ -243,7 +228,7 @@ export default function NavBar() {
               <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Main
               </div>
-              {staticItems.map(it => {
+              {staticItems.map((it) => {
                 const active = isActive(it.href)
                 return (
                   <NavLink
@@ -266,9 +251,9 @@ export default function NavBar() {
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Floors
               </div>
-              {sectionItems.map(it => {
+              {sectionItems.map((it) => {
                 const active = isActive(it.href)
-                const isPoker = it.href === '/live-tables'
+                const isPoker = it.href === '/poker'
                 return (
                   <NavLink
                     key={it.href}
@@ -317,9 +302,7 @@ export default function NavBar() {
                 }}
                 className="m-3 mt-1 w-[calc(100%-1.5rem)] rounded-lg border border-emerald-400/60 px-3 py-2 text-sm font-semibold text-emerald-200 bg-black hover:bg-emerald-500/10"
               >
-                {inviteCopied
-                  ? 'Invite link copied'
-                  : 'Invite friends to poker room'}
+                {inviteCopied ? 'Invite link copied' : 'Invite friends to poker'}
               </button>
 
               {/* Cashier */}
@@ -340,7 +323,7 @@ export default function NavBar() {
         )}
       </div>
 
-      {/* CASHIER MODAL */}
+      {/* CASHIER MODAL (unchanged) */}
       {cashierOpen && (
         <div
           className="fixed inset-0 z-[99] flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -348,7 +331,7 @@ export default function NavBar() {
         >
           <div
             className="relative w-full max-w-lg rounded-2xl border border-[#facc15]/40 bg-[#020617] shadow-[0_0_60px_rgba(0,0,0,0.9)] overflow-hidden"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="relative h-40 w-full">
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />

@@ -3,34 +3,28 @@ import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 import Providers from '@/components/wallet/Providers'
 import SiteHeader from '@/components/wallet/SiteHeader'
-import SiteFooter from '@/components/wallet/SiteFooter'
+// ❌ remove SiteFooter import
 import RootClient from '@/components/wallet/RootClient'
 import { WalletBarProvider } from '@/components/wallet/WalletBarProvider'
 import AgeGateOverlay from '@/components/legal/AgeGateOverlay'
-
 import RiskBanner from '@/components/legal/RiskBanner'
 import { PlayerProfileProvider } from "@/lib/player/PlayerProfileProvider";
 import { CasinoChipsProvider } from '@/lib/useCasinoChips'
 import ArcadeRootClient from '@/components/casino/layout/ArcadeRootClient'
 
-
 export const metadata: Metadata = {
-  metadataBase: new URL("https://casino.basereserve.gold"), // <-- update to final domain
-
+  metadataBase: new URL("https://casino.basereserve.gold"),
   title: {
     default: "Base Gold Rush — On-Chain Casino & Vegas Arcade",
     template: "%s | Base Gold Rush",
   },
-
   description:
     "A Vegas-style on-chain casino arcade built on Base. Play blackjack, roulette, slots, poker, dice & more using BGRC chips in the Arcade soon on-chain.",
-
   icons: {
     icon: "/images/goldrush-icon.png",
     shortcut: "/images/goldrush-icon.png",
     apple: "/images/goldrush-icon.png",
   },
-
   openGraph: {
     title: "Base Gold Rush — On-Chain Casino",
     description:
@@ -48,17 +42,15 @@ export const metadata: Metadata = {
       },
     ],
   },
-
   twitter: {
     card: "summary_large_image",
     title: "Base Gold Rush",
     description:
       "Vegas-style on-chain casino built on Base. Blackjack, slots, roulette, poker, dice, and more.",
     images: ["/images/og-base-gold-rush.png"],
-    creator: "@basegoldrush", // optional, change anytime
+    creator: "@basegoldrush",
   },
 }
-
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -67,25 +59,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <WalletBarProvider>
             <div className="flex min-h-screen flex-col">
+              {/* ✅ keep header everywhere (wallet always available) */}
               <SiteHeader />
-              
 
               <main className="flex-1">
-  <RootClient>
-    <PlayerProfileProvider>
-      <CasinoChipsProvider>
-        <ArcadeRootClient>
-          {children}
-        </ArcadeRootClient>
-      </CasinoChipsProvider>
-    </PlayerProfileProvider>
-  </RootClient>
-</main>
+                <RootClient>
+                  <PlayerProfileProvider>
+                    <CasinoChipsProvider>
+                      <ArcadeRootClient>{children}</ArcadeRootClient>
+                    </CasinoChipsProvider>
+                  </PlayerProfileProvider>
+                </RootClient>
+              </main>
 
-
+              {/* ✅ keep these if you want them everywhere */}
               <RiskBanner />
-              <SiteFooter />
               <AgeGateOverlay />
+
+              {/* ❌ footer removed globally */}
             </div>
           </WalletBarProvider>
         </Providers>

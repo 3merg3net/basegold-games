@@ -2,11 +2,22 @@
 import Link from "next/link";
 import Image from "next/image";
 import CasinoLiveStats from "@/components/casino/layout/CasinoLiveStats";
+import SiteFooter from '@/components/wallet/SiteFooter'
+
+
+const CASINO_GAMES = [
+  { title: "Casino Lobby", subtitle: "Full floor", href: "/arcade", icon: "/icons/game-slots.png" },
+  { title: "Blackjack", subtitle: "Live tables", href: "/blackjack-live", icon: "/icons/game-blackjack1.png" },
+  { title: "Roulette", subtitle: "Coming soon", href: "/arcade", icon: "/icons/game-roulette1.png" },
+  { title: "Slots", subtitle: "Progressives", href: "/arcade", icon: "/icons/game-slots.png" },
+  // Keep only icons/routes that actually exist in /public
+  // { title: "Keno", subtitle: "Fast draws", href: "/keno", icon: "/icons/game-keno.png" },
+];
 
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#050509] to-black text-white">
-      {/* HERO – CLEAN CASINO LOBBY */}
+      {/* HERO – POKER FIRST */}
       <section className="relative overflow-hidden border-b border-white/10">
         {/* Background wash */}
         <div className="absolute inset-0 -z-10">
@@ -23,203 +34,232 @@ export default function HomePage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.2),transparent_55%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.16),transparent_60%)]" />
 
         <div className="relative z-10 mx-auto max-w-6xl px-4 py-8 md:py-10 space-y-7">
-          {/* TITLE BLOCK – SHORT & BULLISH */}
-          <div className="max-w-xl mx-auto text-center space-y-3">
+          {/* TITLE BLOCK */}
+          <div className="max-w-2xl mx-auto text-center space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD700]/70 bg-black/80 px-4 py-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.24em] text-[#FFD700]/90 shadow-[0_0_20px_rgba(255,215,0,0.45)]">
               Base Gold Rush • On-Chain Casino
             </div>
 
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-              Live Tables &amp; Casino Games on{" "}
-              <span className="text-[#FFD700]">Base</span>.
+              <span className="text-[#FFD700]">Poker</span> is Live.
+              <span className="text-white/85"> The Floor is Loading.</span>
             </h1>
 
             <p className="text-[12px] sm:text-sm text-white/75 leading-relaxed">
-              A Vegas-style property where every seat, stack, and spin runs
-              through chain-tracked chips.
+              Sit in with PGLD poker chips. Blackjack and the casino lobby plug into the same rails.
             </p>
 
             <p className="text-[10px] sm:text-xs text-white/55">
-              PGLD powers the poker pits. GLD runs the casino floor. One stack,
-              one chain.
+              PGLD powers the poker pits. GLD runs the casino floor. One stack, one chain.
             </p>
+
+            {/* PRIMARY CTAs – reduce clicks */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+              <Link
+                href="/poker"
+                className="w-full sm:w-auto rounded-full bg-[#FFD700] px-6 py-2.5 text-sm font-semibold text-black shadow-[0_20px_55px_rgba(250,204,21,0.9)] hover:bg-yellow-400 transition text-center"
+              >
+                Enter Poker Lobby →
+              </Link>
+
+              <Link
+                href="/blackjack-live"
+                className="w-full sm:w-auto rounded-full border border-emerald-300/35 bg-black/70 px-6 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10 hover:border-emerald-300/60 transition text-center"
+              >
+                Play Blackjack →
+              </Link>
+
+              <Link
+                href="/arcade"
+                className="w-full sm:w-auto rounded-full border border-white/20 bg-black/60 px-6 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/10 hover:border-white/30 transition text-center"
+              >
+                Casino Lobby →
+              </Link>
+            </div>
           </div>
 
-         <div className="w-full max-w-3xl">
-  {/* @ts-expect-error variant union differs; replace with real Variant */}
-  <CasinoLiveStats variant="hero" />
-</div>
+          {/* LIVE STATS – use real Variant */}
+          <div className="flex justify-center">
+            <div className="w-full max-w-3xl">
+              <CasinoLiveStats variant="live" />
+            </div>
+          </div>
 
-
-          {/* FEATURED ENTRANCES – BALANCED (LIVE TABLES + CASINO FLOOR) */}
-          <div className="grid gap-5 md:grid-cols-2">
-            {/* LIVE TABLES – FEATURE CARD */}
+          {/* FEATURED: Poker (primary) + Blackjack (secondary) */}
+          <div className="grid gap-5 md:grid-cols-3">
+            {/* POKER PRIMARY */}
             <Link
-              href="/live-tables"
-              className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/18 bg-black/90 shadow-[0_20px_60px_rgba(0,0,0,0.95)]"
+              href="/poker"
+              className="group md:col-span-2 relative flex flex-col overflow-hidden rounded-3xl border border-[#FFD700]/40 bg-black/90 shadow-[0_20px_60px_rgba(0,0,0,0.95)]"
             >
-              {/* Image */}
-              <div className="relative w-full h-64 sm:h-72 md:h-[22rem]">
+              <div className="relative w-full h-72 sm:h-80 md:h-[24rem]">
                 <Image
                   src="/images/poker-hero-wide1.png"
-                  alt="Live Tables at Base Gold Rush"
+                  alt="Base Gold Rush Poker Lobby"
                   fill
-                  sizes="(max-width:768px) 100vw, 50vw"
-                  className="object-cover object-top"
+                  sizes="(max-width:768px) 100vw, 66vw"
+                  className="object-cover object-top group-hover:scale-[1.02] transition-transform duration-500"
                   priority
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/35 to-black/85" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/30 to-black/90" />
 
-                {/* Corner pill */}
-                <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#FFD700]/45 bg-black/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#FFD700]/85">
-                  Live Gaming Tables
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#FFD700]/45 bg-black/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#FFD700]/90">
+                  Poker Room
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    LIVE
+                  </span>
                 </div>
               </div>
 
-              {/* Content */}
-              <div className="flex flex-col gap-3 px-5 py-5 bg-black/90">
-                <div className="space-y-1">
-                  <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">
-                    Enter the{" "}
-                    <span className="text-[#FFD700]">Live Table Lobby</span>.
-                  </h2>
-                  <p className="text-xs sm:text-sm text-white/80">
-                    Poker is live now. Blackjack tables are next — same multiplayer
-                    spine, synced seats, and casino pacing.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[11px] sm:text-xs text-white/70">
-                  <div className="rounded-2xl border border-white/12 bg-black/70 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                      Poker
-                    </div>
-                    <div className="font-semibold text-white/85">Live</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/12 bg-black/70 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                      Blackjack
-                    </div>
-                    <div className="font-semibold text-amber-200/90">
-                      Coming Soon
-                    </div>
-                  </div>
-                </div>
-
+              <div className="flex flex-col gap-2 px-5 py-5 bg-black/90">
+                <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">
+                  Sit down. Buy in. <span className="text-[#FFD700]">Play Hold’em.</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-white/80">
+                  Texas Hold’em cash tables with synced seats, blinds, boards, and action timers.
+                </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-white/60">
-                  <span>Pick a table and take a seat.</span>
+                  <span>Fastest path to action.</span>
                   <span className="font-semibold text-[#FFD700]/90 group-hover:translate-x-0.5 transition-transform">
-                    Enter live tables →
+                    Enter poker →
                   </span>
                 </div>
               </div>
             </Link>
 
-            {/* CASINO FLOOR – FEATURE CARD */}
+            {/* BLACKJACK SECONDARY */}
             <Link
-              href="/arcade" // swap to "/casino" if that’s your new lobby path
+              href="/blackjack-live"
               className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/18 bg-black/90 shadow-[0_20px_60px_rgba(0,0,0,0.95)]"
             >
-              {/* Image */}
-              <div className="relative w-full h-64 sm:h-72 md:h-[22rem] bg-black">
+              <div className="relative w-full h-72 sm:h-80 md:h-[24rem] bg-black">
                 <Image
-                  src="/images/casino-floor-wide.png"
-                  alt="Base Gold Rush casino floor"
+                  src="/images/blackjack-live-hero.png"
+                  alt="Base Gold Rush Blackjack"
                   fill
-                  sizes="(max-width:768px) 100vw, 50vw"
-                  className="object-cover object-center"
+                  sizes="(max-width:768px) 100vw, 34vw"
+                  className="object-cover object-center group-hover:scale-[1.02] transition-transform duration-500"
                 />
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/85" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-black/90" />
 
-                {/* Corner pill */}
                 <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-black/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-emerald-200/90">
-                  Casino Floor
+                  Blackjack
                 </div>
               </div>
 
-              {/* Content */}
-              <div className="flex flex-col gap-3 px-5 py-5 bg-black/90">
-                <div className="space-y-1">
-                  <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">
-                    Walk the{" "}
-                    <span className="text-emerald-200">Main Casino Floor</span>.
-                  </h2>
-                  <p className="text-xs sm:text-sm text-white/80">
-                    House games, fast-play action, and the full Base Gold Rush vibe —
-                    designed like a premium casino lobby.
-                  </p>
-                </div>
-
-                {/* Small icon cluster (kept from your card) */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="relative h-10 w-10 rounded-xl border border-white/15 bg-black/90 overflow-hidden">
-                      <Image
-                        src="/icons/game-roulette1.png"
-                        alt="Roulette"
-                        fill
-                        className="object-contain p-1.5"
-                      />
-                    </div>
-                    <div className="relative h-10 w-10 rounded-xl border border-white/15 bg-black/90 overflow-hidden">
-                      <Image
-                        src="/icons/game-blackjack1.png"
-                        alt="Blackjack"
-                        fill
-                        className="object-contain p-1.5"
-                      />
-                    </div>
-                    <div className="relative h-10 w-10 rounded-xl border border-white/15 bg-black/90 overflow-hidden">
-                      <Image
-                        src="/icons/game-slots.png"
-                        alt="Slots"
-                        fill
-                        className="object-contain p-1.5"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="text-right text-[11px] sm:text-xs text-white/65">
-                    <div className="font-semibold text-white/85">
-                      Roulette, Blackjack, Slots
-                    </div>
-                    <div className="text-white/50">
-                      Craps &amp; Baccarat loading
-                    </div>
-                  </div>
-                </div>
-
+              <div className="flex flex-col gap-2 px-5 py-5 bg-black/90">
+                <h3 className="text-lg sm:text-xl font-extrabold leading-tight">
+                  Play <span className="text-emerald-200">21</span>.
+                </h3>
+                <p className="text-[11px] sm:text-xs text-white/75">
+                  Vegas-style blackjack tables wired into the same chip rails.
+                </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-white/60">
-                  <span>Tap to enter the casino lobby.</span>
+                  <span>Jump straight in.</span>
                   <span className="font-semibold text-emerald-200 group-hover:translate-x-0.5 transition-transform">
-                    Enter casino →
+                    Play blackjack →
                   </span>
                 </div>
               </div>
             </Link>
           </div>
+          {/* MARQUEE CASINO RAIL */}
+          <section className="pt-2">
+            <div className="flex items-end justify-between gap-3 mb-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.22em] text-white/50">
+                  Casino Floor
+                </div>
+                <h3 className="text-lg md:text-xl font-bold">
+                  More games on the floor
+                </h3>
+              </div>
 
-          {/* Small neutral guidance line (kept concept, less poker-biased) */}
+              <Link
+                href="/arcade"
+                className="text-[11px] text-emerald-200/90 hover:text-emerald-200"
+              >
+                Enter casino lobby →
+              </Link>
+            </div>
+
+            <div className="relative bgr-marquee-wrap rounded-2xl">
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-black to-transparent z-10" />
+              <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
+
+              {/* Track (duplicated list for seamless loop) */}
+              <div className="bgr-marquee-track gap-3 pr-3 py-1">
+                {[...CASINO_GAMES, ...CASINO_GAMES].map((g, idx) => (
+                 <Link
+  key={`${g.title}-${idx}`}
+  href={g.href}
+  className="
+    min-w-[220px] sm:min-w-[260px]
+    rounded-2xl
+    border border-white/15
+    bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.18),_transparent_55%),linear-gradient(to_bottom,#020617,#000)]
+    hover:border-[#FFD700]/50
+    transition
+    shadow-[0_18px_50px_rgba(0,0,0,0.85)]
+    group
+  "
+>
+  {/* ICON HERO */}
+  <div className="relative h-36 sm:h-40 flex items-center justify-center">
+    <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/80" />
+
+    <div className="relative h-24 w-24 sm:h-28 sm:w-28">
+      <Image
+        src={g.icon}
+        alt={g.title}
+        fill
+        className="
+          object-contain
+          drop-shadow-[0_0_18px_rgba(255,215,0,0.45)]
+          transition-transform
+          duration-300
+          group-hover:scale-110
+        "
+      />
+    </div>
+  </div>
+
+  {/* TEXT BLOCK */}
+  <div className="px-4 pb-4 pt-2">
+    <div className="font-semibold text-white/95 text-sm truncate">
+      {g.title}
+    </div>
+    <div className="text-[11px] text-white/55 truncate">
+      {g.subtitle}
+    </div>
+
+    <div className="mt-2 flex items-center justify-between text-[11px]">
+      <span className="text-white/45">Enter</span>
+      <span className="text-emerald-200/90 group-hover:translate-x-0.5 transition-transform">
+        →
+      </span>
+    </div>
+  </div>
+</Link>
+
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-2 text-[10px] text-white/45">
+              Tip: hover to pause (desktop). For accessibility, animation stops with reduced-motion.
+            </div>
+          </section>
+
+
           <div className="mx-auto max-w-3xl text-center text-[11px] sm:text-xs text-white/65">
-            Start at the tables or hit the casino floor — everything routes through the same chip rails on Base.
+            Poker is the fastest path to action. The casino rail shows what’s next.
           </div>
         </div>
       </section>
 
-      {/* REBALANCED SECTION HEADER (kept your section, made neutral) */}
-      <section className="mx-auto max-w-6xl px-4 pt-6 pb-4 md:pt-8 md:pb-6 space-y-4">
-        <div className="flex flex-col gap-2 text-center sm:text-left sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-lg md:text-xl font-bold">
-            One property. Two rails.
-          </h3>
-          <p className="text-[11px] md:text-xs text-white/65">
-            Live poker pits + casino floor games — all tied to the same wallet and chip spine.
-          </p>
-        </div>
-      </section>
-
-      {/* GLD / PGLD STRIP (UNCHANGED) */}
+      {/* GLD / PGLD STRIP (kept) */}
       <section className="mx-auto max-w-6xl px-4 pb-6 md:pb-8 text-[11px] md:text-sm text-white/75 space-y-3">
         <div className="rounded-2xl border border-white/12 bg-black/85 p-4 md:p-5 shadow-[0_18px_50px_rgba(0,0,0,0.85)] space-y-2">
           <div className="text-xs md:text-sm font-semibold text-[#FFD700] mb-1">
@@ -241,7 +281,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* SPINNING CHIP ELEMENT NEAR BOTTOM (UNCHANGED) */}
+      {/* SPINNING CHIP ELEMENT (kept) */}
       <section className="mx-auto max-w-6xl px-4 pb-8 md:pb-10">
         <div className="relative mx-auto w-[260px] sm:w-[320px]">
           <div className="relative h-[220px] sm:h-[260px] rounded-3xl overflow-hidden border border-[#FFD700]/35 bg-black shadow-[0_30px_90px_rgba(0,0,0,0.95)]">
@@ -275,14 +315,13 @@ export default function HomePage() {
               </span>
             </div>
             <div className="mt-2 text-[11px] sm:text-xs">
-              One chip that bridges poker pits and casino floor — all settled on
-              Base.
+              One chip that bridges poker pits and casino floor — all settled on Base.
             </div>
           </div>
         </div>
       </section>
 
-      {/* RESPONSIBLE GAMING STRIP (UNCHANGED) */}
+      {/* RESPONSIBLE GAMING STRIP (kept) */}
       <section className="border-t border-white/10 bg-black/90">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-[11px] text-white/55 md:flex-row md:items-center md:justify-between">
           <div>
@@ -290,8 +329,7 @@ export default function HomePage() {
               Play like you&apos;re in a real casino.
             </div>
             <div>
-              Set limits, take breaks, and treat every spin, hand, and roll as
-              entertainment first.
+              Set limits, take breaks, and treat every spin, hand, and roll as entertainment first.
             </div>
           </div>
           <div className="text-right md:text-left">
@@ -300,6 +338,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      <SiteFooter />
     </main>
   );
 }

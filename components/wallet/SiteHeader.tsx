@@ -8,11 +8,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useNetwork } from 'wagmi';
 import FaucetButton from '@/components/wallet/FaucetButton';
 
-// ⬇️ make NavBar a client-only island
-const NavBar = dynamic(
-  () => import('@/components/general/NavBar'),
-  { ssr: false }
-);
+const NavBar = dynamic(() => import('@/components/general/NavBar'), { ssr: false });
 
 export default function SiteHeader() {
   const { chain } = useNetwork();
@@ -52,13 +48,13 @@ export default function SiteHeader() {
             </span>
           </Link>
 
-          {/* ⬇️ NavBar rendered client-side only (no SSR, no hydration issues) */}
+          {/* Desktop nav */}
           <div className="hidden md:block">
             <NavBar />
           </div>
         </div>
 
-        {/* Right: network + wallet + header buttons */}
+        {/* Right: network + wallet + mobile menu */}
         <div className="flex items-center gap-2 text-xs">
           <span className="hidden sm:inline-flex items-center rounded-full border border-white/20 bg-black/70 px-2 py-1 text-[10px] text-white/70">
             <span className="mr-1 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -66,14 +62,13 @@ export default function SiteHeader() {
           </span>
 
           <FaucetButton />
-
           <ConnectButton chainStatus="icon" showBalance={false} />
-        </div>
-      </div>
 
-      {/* Mobile nav bar */}
-      <div className="border-t border-white/10 bg-black/90 md:hidden">
-        <NavBar />
+          {/* Mobile menu button lives here now (no extra bar below header) */}
+          <div className="md:hidden">
+            <NavBar />
+          </div>
+        </div>
       </div>
     </header>
   );
