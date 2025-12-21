@@ -1,18 +1,25 @@
 // lib/demoChips.ts
 export type DemoBalances = {
-  bgrc: number;
+  gld: number;
+  pgld: number;
 };
 
-const KEY = "bgrc_demo_balances_v1";
+// v2 key because structure changed (bgrc -> gld+pgld)
+const KEY = "bgr_demo_balances_v2";
 
 export function getDemoBalances(): DemoBalances {
-  if (typeof window === "undefined") return { bgrc: 0 };
+  if (typeof window === "undefined") return { gld: 0, pgld: 0 };
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (!raw) return { bgrc: 0 };
-    return JSON.parse(raw);
+    if (!raw) return { gld: 0, pgld: 0 };
+    const parsed = JSON.parse(raw);
+
+    return {
+      gld: Number(parsed?.gld ?? 0),
+      pgld: Number(parsed?.pgld ?? 0),
+    };
   } catch {
-    return { bgrc: 0 };
+    return { gld: 0, pgld: 0 };
   }
 }
 

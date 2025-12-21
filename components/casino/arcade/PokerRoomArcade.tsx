@@ -1,28 +1,19 @@
 // components/casino/arcade/PokerRoomArcade.tsx
 "use client";
 
-import {
+import React, {
+  FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  FormEvent,
-  CSSProperties,
 } from "react";
-import React from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { usePokerRoom } from "@/lib/pokerClient/usePokerRoom";
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
-import { getHandHelper, HandHelper } from '@/lib/poker/handHelper';
+import { getHandHelper, HandHelper } from "@/lib/poker/handHelper";
 import PokerCard from "@/components/poker/PokerCard";
-
-
-
-
-
-
-
 
 /* ───────────────── Types ───────────────── */
 
@@ -67,11 +58,10 @@ type BettingState = {
   maxCommitted: number;
   players: BettingPlayerState[];
 
-  // NEW: server-supplied blind positions
+  // server-supplied blind positions
   smallBlindSeatIndex?: number | null;
   bigBlindSeatIndex?: number | null;
 };
-
 
 type ShowdownPlayer = {
   seatIndex: number;
@@ -97,16 +87,6 @@ type DealerLogEntry = {
 type PokerRoomArcadeProps = {
   roomId?: string;
 };
-
-type PokerCardProps = {
-  card: string;
-  highlight?: boolean;
-  size?: "normal" | "small";
-  delayIndex?: number;
-  tilt?: number;
-  isBack?: boolean;
-};
-
 
 type WinnerEntry = {
   handId: number;
@@ -136,7 +116,7 @@ const CHIP_DENOMS = [500, 100, 25, 5, 1] as const;
 function breakdownChips(amount: number): number[] {
   const chips: number[] = [];
   let remaining = Math.max(0, Math.floor(amount));
-  const maxChips = 6; // keep stack short
+  const maxChips = 6;
 
   for (const d of CHIP_DENOMS) {
     while (remaining >= d && chips.length < maxChips) {
@@ -146,10 +126,7 @@ function breakdownChips(amount: number): number[] {
     if (chips.length >= maxChips) break;
   }
 
-  if (chips.length === 0 && amount > 0) {
-    chips.push(1);
-  }
-
+  if (chips.length === 0 && amount > 0) chips.push(1);
   return chips;
 }
 
@@ -185,13 +162,9 @@ function ChipStack({ amount, size = 32 }: { amount: number; size?: number }) {
   );
 }
 
-
-
-
 export function formatChips(amount: number): string {
   if (!Number.isFinite(amount) || amount <= 0) return "0";
 
-  // Show 1.2k, 15.4k, 1.3M, etc – but never collapse into a fixed label
   if (amount >= 1_000_000) {
     const v = amount / 1_000_000;
     return `${v.toFixed(v >= 10 ? 1 : 2).replace(/\.0+$/, "")}M`;
@@ -204,115 +177,62 @@ export function formatChips(amount: number): string {
   return Math.floor(amount).toString();
 }
 
+// --- PGLD → USD display helpers ---
+// For now this is a single configurable rate. Later you can hydrate it from
+// your cashier endpoint, supabase, or an oracle-backed API route.
+const PGLD_USD =
+  Number(process.env.NEXT_PUBLIC_PGLD_USD ?? "") || 0.01; // default: $0.01 / PGLD
 
+function formatUsdFromPgld(pgld: number, rate = PGLD_USD) {
+  if (!Number.isFinite(pgld) || pgld <= 0 || !Number.isFinite(rate) || rate <= 0) return "$0.00";
+  const usd = pgld * rate;
 
-
-/* ───────────────── Card rendering ───────────────── */
-
-const RANK_LABELS: Record<string, string> = {
-  A: "A",
-  K: "K",
-  Q: "Q",
-  J: "J",
-  T: "10",
-  "9": "9",
-  "8": "8",
-  "7": "7",
-  "6": "6",
-  "5": "5",
-  "4": "4",
-  "3": "3",
-  "2": "2",
-};
-
-const SUIT_LABELS: Record<string, string> = {
-  s: "♠",
-  h: "♥",
-  d: "♦",
-  c: "♣",
-};
-
-const SUIT_COLORS: Record<string, string> = {
-  s: "text-slate-900",
-  c: "text-slate-900",
-  h: "text-red-500",
-  d: "text-red-500",
-};
-
-function parseCard(card: string) {
-  if (!card || card.length < 2) {
-    return {
-      rank: card,
-      suit: "",
-      rankLabel: card,
-      suitLabel: "",
-      suitColor: "text-white",
-    };
-  }
-  const rank = card[0].toUpperCase();
-  const suitRaw = card[1].toLowerCase();
-  const rankLabel = RANK_LABELS[rank] ?? rank;
-  const suitLabel = SUIT_LABELS[suitRaw] ?? "";
-  const suitColor = SUIT_COLORS[suitRaw] ?? "text-white";
-  return { rank, suit: suitRaw, rankLabel, suitLabel, suitColor };
+  // Keep it readable: small amounts show cents, big amounts show commas.
+  if (usd < 1) return `$${usd.toFixed(2)}`;
+  if (usd < 10_000) return `$${usd.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  return `$${Math.round(usd).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
+function PgldWithUsd({ amount }: { amount: number }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="font-mono text-[#FFD700]">{formatChips(amount)}</span>
+      <span className="text-white/55">PGLD</span>
+      <span className="text-white/35">•</span>
+      <span className="font-mono text-emerald-200/90">{formatUsdFromPgld(amount)}</span>
+    </span>
+  );
+}
 
-
-
-
-
-
-
-// EVEN SPACING RING (3 bottom, 3 left, 3 right, no top seats)
+/* ───────────────── Seat geometry ───────────────── */
 
 const SEAT_GEOMETRY_PC: React.CSSProperties[] = [
-  // Bottom row (tighter + symmetric)
-  { bottom: "6%", left: "50%", transform: "translate(-50%, 0)" }, // 0 HERO
-  { bottom: "6%", left: "31%", transform: "translate(-50%, 0)" }, // 1 bottom-left
-  { bottom: "6%", left: "67%", transform: "translate(-50%, 0)" }, // 2 bottom-right
+  { bottom: "6%", left: "50%", transform: "translate(-50%, 0)" }, // 0
+  { bottom: "6%", left: "31%", transform: "translate(-50%, 0)" }, // 1
+  { bottom: "6%", left: "67%", transform: "translate(-50%, 0)" }, // 2
 
-  // Left side (uniform Y steps)
-  { top: "80%", left: "16%", transform: "translate(-50%, -50%)" }, // 3 left-low
-  { top: "49%", left: "7%",  transform: "translate(-50%, -50%)" }, // 4 left-mid
-  { top: "20%", left: "16%", transform: "translate(-50%, -50%)" }, // 5 left-high
+  { top: "80%", left: "16%", transform: "translate(-50%, -50%)" }, // 3
+  { top: "49%", left: "7%", transform: "translate(-50%, -50%)" }, // 4
+  { top: "20%", left: "16%", transform: "translate(-50%, -50%)" }, // 5
 
-  // Right side (mirror of left)
-  { top: "80%", right: "16%", transform: "translate(50%, -50%)" }, // 6 right-low
-  { top: "49%", right: "7%",  transform: "translate(50%, -50%)" }, // 7 right-mid
-  { top: "20%", right: "16%", transform: "translate(50%, -50%)" }, // 8 right-high
+  { top: "80%", right: "16%", transform: "translate(50%, -50%)" }, // 6
+  { top: "49%", right: "7%", transform: "translate(50%, -50%)" }, // 7
+  { top: "20%", right: "16%", transform: "translate(50%, -50%)" }, // 8
 ];
 
 const SEAT_GEOMETRY_MOBILE: React.CSSProperties[] = [
-  // Bottom row (slightly wider for thumbs)
-  { bottom: "6%", left: "50%", transform: "translate(-50%, 0)" }, // 0 HERO
-  { bottom: "12%", left: "20%", transform: "translate(-50%, 0)" }, // 1 bottom-left
-  { bottom: "12%", left: "81%", transform: "translate(-50%, 0)" }, // 2 bottom-right
+  { bottom: "6%", left: "50%", transform: "translate(-50%, 0)" }, // 0
+  { bottom: "12%", left: "20%", transform: "translate(-50%, 0)" }, // 1
+  { bottom: "12%", left: "81%", transform: "translate(-50%, 0)" }, // 2
 
-  // Left side (uniform Y steps)
-  { top: "63%", left: "10%", transform: "translate(-50%, -50%)" }, // 3 left-low
-  { top: "40%", left: "9%",  transform: "translate(-50%, -50%)" }, // 4 left-mid
-  { top: "16%", left: "18%", transform: "translate(-50%, -50%)" }, // 5 left-high
+  { top: "63%", left: "10%", transform: "translate(-50%, -50%)" }, // 3
+  { top: "40%", left: "9%", transform: "translate(-50%, -50%)" }, // 4
+  { top: "16%", left: "18%", transform: "translate(-50%, -50%)" }, // 5
 
-  // Right side (mirror)
-  { top: "63%", right: "10%", transform: "translate(50%, -50%)" }, // 6 right-low
-  { top: "40%", right: "9%",  transform: "translate(50%, -50%)" }, // 7 right-mid
-  { top: "16%", right: "18%", transform: "translate(50%, -50%)" }, // 8 right-high
+  { top: "63%", right: "10%", transform: "translate(50%, -50%)" }, // 6
+  { top: "40%", right: "9%", transform: "translate(50%, -50%)" }, // 7
+  { top: "16%", right: "18%", transform: "translate(50%, -50%)" }, // 8
 ];
-
-
-
-
-
-// Fill order AFTER hero:
-// PC + Mobile: left of hero, right of hero, then alternate outward
-// (slot indices based on the geometry arrays above)
-const SLOT_FILL_PC = [0, 1, 2, 3, 6, 4, 7, 5, 8];
-const SLOT_FILL_MOBILE = [0, 1, 2, 3, 6, 4, 7, 5, 8];
-
-
-
-
 
 /* ───────────────── Audio hook ───────────────── */
 
@@ -352,7 +272,7 @@ export default function PokerRoomArcade({
       if (!id) {
         const rand =
           typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? (crypto.randomUUID() || "").slice(0, 8)
+            ? ((crypto as any).randomUUID?.() || "").slice(0, 8)
             : Math.random().toString(36).slice(2, 10);
         id = `player-${rand}`;
         window.localStorage.setItem("pgld-poker-player-id", id);
@@ -363,11 +283,6 @@ export default function PokerRoomArcade({
       setPlayerId(fallback);
     }
   }, []);
-
-  const [joinedMidHand, setJoinedMidHand] = useState(false);
-
-
-  
 
   const effectivePlayerId = playerId ?? "player-pending";
 
@@ -384,9 +299,7 @@ export default function PokerRoomArcade({
   const [inviteUrl, setInviteUrl] = useState("");
   const [copiedInvite, setCopiedInvite] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setInviteUrl(window.location.href);
-    }
+    if (typeof window !== "undefined") setInviteUrl(window.location.href);
   }, []);
 
   function handleCopyInvite() {
@@ -402,7 +315,20 @@ export default function PokerRoomArcade({
     }
   }
 
-  /* ───────────────── Derived state from WS messages ───────────────── */
+  /* ───────────────── Dealer log ───────────────── */
+
+  const [dealerLog, setDealerLog] = useState<DealerLogEntry[]>([]);
+  const logIdRef = useRef(0);
+
+  const pushLog = useCallback((text: string) => {
+    setDealerLog((prev) => {
+      const id = logIdRef.current++;
+      const next: DealerLogEntry[] = [{ id, text, ts: Date.now() }, ...prev];
+      return next.slice(0, 24);
+    });
+  }, []);
+
+  /* ───────────────── WS derived state ───────────────── */
 
   const seats = useMemo<SeatView[]>(() => {
     const seatMessages = (messages as any[]).filter(
@@ -412,8 +338,6 @@ export default function PokerRoomArcade({
     const last = seatMessages[seatMessages.length - 1];
     return (last.seats || []) as SeatView[];
   }, [messages]);
-
-  
 
   const table = useMemo<TableState | null>(() => {
     const tableMessages = (messages as any[]).filter(
@@ -429,18 +353,14 @@ export default function PokerRoomArcade({
   }, [messages]);
 
   const betting = useMemo<BettingState | null>(() => {
-    const bs = (messages as any[]).filter(
-      (m) => m && m.type === "betting-state"
-    );
+    const bs = (messages as any[]).filter((m) => m && m.type === "betting-state");
     if (bs.length === 0) return null;
     const last = bs[bs.length - 1];
     return last as BettingState;
   }, [messages]);
 
   const showdown = useMemo<ShowdownState | null>(() => {
-    const sd = (messages as any[]).filter(
-      (m) => m && m.type === "showdown"
-    );
+    const sd = (messages as any[]).filter((m) => m && m.type === "showdown");
     if (sd.length === 0) return null;
     const last = sd[sd.length - 1];
     return last as ShowdownState;
@@ -478,194 +398,149 @@ export default function PokerRoomArcade({
   const isHostClient =
     !!heroSeat && hostSeatIndex !== null && heroSeat.seatIndex === hostSeatIndex;
 
-    const handInProgress = !!betting && betting.street !== "done";
+  const handInProgress = !!betting && betting.street !== "done";
 
   const rawHeroBetting = useMemo(() => {
-  if (!betting) return null;
-  return betting.players.find((p) => p.playerId === playerId) ?? null;
-}, [betting, playerId]);
+    if (!betting) return null;
+    return betting.players.find((p) => p.playerId === playerId) ?? null;
+  }, [betting, playerId]);
 
-const heroBetting =
-  joinedMidHand && handInProgress ? null : rawHeroBetting;
+  const [joinedMidHand, setJoinedMidHand] = useState(false);
+  const heroBetting = joinedMidHand && handInProgress ? null : rawHeroBetting;
 
-const heroHand = useMemo(() => {
-  if (!table) return null;
-  if (joinedMidHand && handInProgress) return null; // hide cards until next hand
-  const hero = table.players.find((p) => p.playerId === playerId);
-  return hero?.holeCards ?? null;
-}, [table, playerId, joinedMidHand, handInProgress]);
+  const heroHand = useMemo(() => {
+    if (!table) return null;
+    if (joinedMidHand && handInProgress) return null;
+    const hero = table.players.find((p) => p.playerId === playerId);
+    return hero?.holeCards ?? null;
+  }, [table, playerId, joinedMidHand, handInProgress]);
 
-const heroHandHelper = useMemo<HandHelper | null>(() => {
-  if (!table) return null;
-  if (!heroHand || heroHand.length < 2) return null;
-  if (!Array.isArray(table.board) || table.board.length < 3) return null; // only from flop
-  return getHandHelper(heroHand, table.board);
-}, [table, heroHand]);
+  const heroHandHelper = useMemo<HandHelper | null>(() => {
+    if (!table) return null;
+    if (!heroHand || heroHand.length < 2) return null;
+    if (!Array.isArray(table.board) || table.board.length < 3) return null;
+    return getHandHelper(heroHand, table.board);
+  }, [table, heroHand]);
 
-const heroTurnPrevRef = useRef(false);
+  const DEFAULT_BUYIN = 500;
 
-// Default buy-in for this room (used for auto top-up + modal default)
-const DEFAULT_BUYIN = 500; // or 1000, whatever you prefer
+  const heroIsInHand =
+    !!heroBetting && heroBetting.inHand && !heroBetting.hasFolded;
 
-
-
-
-
-// Is hero actually in this hand (dealt cards and not folded)?
-const heroIsInHand =
-  !!heroBetting && heroBetting.inHand && !heroBetting.hasFolded;
-
-
-const isHeroTurn: boolean =
-  !!betting &&
-  !!heroSeat &&
-  !!heroBetting &&
-  betting.currentSeatIndex === heroSeat.seatIndex &&
-  betting.street !== "done";
-
-
-  useEffect(() => {
-  if (typeof window === 'undefined') return; // SSR guard
-
-  const wasHeroTurn = heroTurnPrevRef.current;
-
-  // only vibrate on the moment it becomes your turn
-  if (!wasHeroTurn && isHeroTurn && 'vibrate' in window.navigator) {
-    // optional: only vibrate on smaller screens
-    if (window.innerWidth <= 768) {
-      window.navigator.vibrate(35); // 35ms buzz
-    }
-  }
-
-  heroTurnPrevRef.current = isHeroTurn;
-}, [isHeroTurn]);
-
-const heroHasAction =
-  !!heroSeat && !!betting && betting.street !== "done" && !!heroBetting;
-
-    const heroShowdown = useMemo(() => {
-    if (!showdown || !table) return null;
-    if (showdown.handId !== table.handId) return null;
-
-    return (
-      showdown.players.find((p) => p.playerId === playerId) ?? null
-    );
-  }, [showdown, table, playerId]);
-
-
-
-
-  // Show the hero action bar only when it's actually our turn in an active hand
-  const showHeroBar =
+  const isHeroTurn: boolean =
+    !!betting &&
     !!heroSeat &&
-  heroIsInHand &&
-  betting &&
-  betting.street !== "done" && isHeroTurn;
+    !!heroBetting &&
+    betting.currentSeatIndex === heroSeat.seatIndex &&
+    betting.street !== "done";
 
-  /* ───────────────── Dealer log ───────────────── */
+  const heroTurnPrevRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const wasHeroTurn = heroTurnPrevRef.current;
 
-  const [dealerLog, setDealerLog] = useState<DealerLogEntry[]>([]);
-  const logIdRef = useRef(0);
+    if (!wasHeroTurn && isHeroTurn && "vibrate" in window.navigator) {
+      if (window.innerWidth <= 768) window.navigator.vibrate(35);
+    }
+    heroTurnPrevRef.current = isHeroTurn;
+  }, [isHeroTurn]);
+
+  const heroHasAction =
+    !!heroSeat && !!betting && betting.street !== "done" && !!heroBetting;
+
+  const showHeroBar =
+    !!heroSeat && heroIsInHand && betting && betting.street !== "done" && isHeroTurn;
+
+  const describeHero = useCallback(() => {
+    const nm = profile?.name ?? "";
+    if (nm.trim().length > 0) return nm.trim();
+    if (heroSeat?.name) return heroSeat.name;
+    return "You";
+  }, [profile?.name, heroSeat?.name]);
+
+  /* ───────────────── Winners / revealed cards / seat tags (declare BEFORE effects) ───────────────── */
+
+  const [winners, setWinners] = useState<WinnerEntry[]>([]);
+  const winnersToShow: WinnerEntry[] = winners;
+
+  const [revealedHoles, setRevealedHoles] = useState<Record<string, string[]>>(
+    {}
+  );
+
+  const [newPlayerSeats, setNewPlayerSeats] = useState<Record<number, number>>(
+    {}
+  );
+  const prevSeatsRef = useRef<Map<number, string | null>>(new Map());
+
+  /* ───────────────── Table tracking refs ───────────────── */
+
   const handIdRef = useRef<number | null>(null);
   const streetRef = useRef<BettingStreet | null>(null);
   const lastPotRef = useRef<number>(0);
   const lastBoardCountRef = useRef<number>(0);
   const showdownHandRef = useRef<number | null>(null);
 
-  const pushLog = (text: string) => {
-    setDealerLog((prev) => {
-      const id = logIdRef.current++;
-      const next: DealerLogEntry[] = [{ id, text, ts: Date.now() }, ...prev];
-      return next.slice(0, 24);
-    });
-  };
+  /* ───────────────── Misc UI state ───────────────── */
 
-  const describeHero = () => {
-    const nm = profile?.name ?? "";
-    if (nm.trim().length > 0) return nm.trim();
-    if (heroSeat?.name) return heroSeat.name;
-    return "You";
-  };
+  const [showLastWinners, setShowLastWinners] = useState(false);
+  const [showDealerLog, setShowDealerLog] = useState(false);
+  const [showHostPanel, setShowHostPanel] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [openPanels, setOpenPanels] = useState(false);
 
-  /* ───────────────── Blind HUD (static for now) ───────────────── */
+  /* ───────────────── Reset nonce (UI refresh helper) ───────────────── */
 
-  const [tLevel] = useState(1);
-  const [tBlinds] = useState<[number, number]>([25, 50]);
-  const [tNextIn, setTNextIn] = useState<number>(180);
+  const [resetNonce, setResetNonce] = useState(0);
+
+  /* ───────────────── Table transitions + deal sound ───────────────── */
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setTNextIn((prev) => {
-        if (prev <= 1) return 180;
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
+    if (!table) return;
 
-  /* ───────────────── Table / showdown tracking ───────────────── */
-const [showLeaders, setShowLeaders] = useState(false);
-const [revealHeroHand, setRevealHeroHand] = useState(false);
+    if (handIdRef.current == null || table.handId !== handIdRef.current) {
+      handIdRef.current = table.handId;
+      streetRef.current = null;
+      showdownHandRef.current = null;
+      lastBoardCountRef.current = table.board.length;
 
-/** NEW: local nonce so tableIdle/start buttons can reappear reliably */
-const [resetNonce, setResetNonce] = useState(0);
+      setJoinedMidHand(false);
+      setRevealedHoles({});
 
-/** 1) Track table / hand transitions + deal sounds */
-useEffect(() => {
-  if (!table) return;
+      pushLog(`New hand #${table.handId} in the PGLD room.`);
+      playDeal();
+      return;
+    }
 
-  // New hand
-  if (handIdRef.current == null || table.handId !== handIdRef.current) {
-    handIdRef.current = table.handId;
-    streetRef.current = null;
-    showdownHandRef.current = null;
-    lastBoardCountRef.current = table.board.length;
+    const count = table.board.length;
+    if (count > lastBoardCountRef.current) playDeal();
+    lastBoardCountRef.current = count;
+  }, [table, playDeal, pushLog]);
 
-    setRevealHeroHand(false);
+  /* ───────────────── Handle table-reset message ───────────────── */
+
+  useEffect(() => {
+    const sawReset = (messages as any[]).some((m) => m && m.type === "table-reset");
+    if (!sawReset) return;
+
     setJoinedMidHand(false);
     setRevealedHoles({});
+    showdownHandRef.current = null;
+    streetRef.current = null;
+    handIdRef.current = null;
+    lastPotRef.current = 0;
 
-    pushLog(`New hand #${table.handId} in the PGLD room.`);
-    playDeal();
-    return; // important so we don't also run "board count" logic on first render of new hand
-  }
+    setResetNonce((n) => n + 1);
+    pushLog("Table was reset by host.");
+  }, [messages, pushLog]);
 
-  // Board increment sound
-  const count = table.board.length;
-  if (count > lastBoardCountRef.current) playDeal();
-  lastBoardCountRef.current = count;
-}, [table, playDeal, pushLog]);
+  /* ───────────────── Pot change sound + street logging ───────────────── */
 
-/** 2) Handle table-reset message (MUST be its own effect, NOT nested) */
-useEffect(() => {
-  const sawReset = (messages as any[]).some((m) => m && m.type === "table-reset");
-  if (!sawReset) return;
-
-  setJoinedMidHand(false);
-  setRevealedHoles({});
-  setRevealHeroHand(false);
-  showdownHandRef.current = null;
-  streetRef.current = null;
-  handIdRef.current = null;
-  lastPotRef.current = 0;
-
-  // allows UI memo/derived state to refresh (start game reappears)
-  setResetNonce((n) => n + 1);
-
-  pushLog("Table was reset by host.");
-}, [messages, pushLog]);
-
-  // Pot change sound + street logging
   useEffect(() => {
     if (!betting) return;
 
-    // 1) Chip sound when pot increases
-    if (betting.pot > lastPotRef.current) {
-      playChip();
-    }
+    if (betting.pot > lastPotRef.current) playChip();
     lastPotRef.current = betting.pot;
 
-    // 2) Street logging
     if (streetRef.current !== betting.street) {
       streetRef.current = betting.street;
       const labelMap: Record<BettingStreet, string> = {
@@ -676,6 +551,7 @@ useEffect(() => {
         done: "Hand complete",
       };
       const label = labelMap[betting.street] ?? betting.street;
+
       if (betting.street === "done") {
         pushLog(
           `Hand #${betting.handId} complete. Pot locked at ${betting.pot} PGLD chips.`
@@ -684,93 +560,71 @@ useEffect(() => {
         pushLog(`Street: ${label}. Pot currently ${betting.pot}.`);
       }
     }
-  }, [betting, playChip]);
+  }, [betting, playChip, pushLog]);
 
-  // Showdown tracking
+  /* ───────────────── Showdown tracking (deduped) ───────────────── */
+
   useEffect(() => {
-  if (!showdown || !table) return;
-  if (showdown.handId !== table.handId) return;
+    if (!showdown || !table) return;
+    if (showdown.handId !== table.handId) return;
 
-  // Only process each showdown once
-  if (showdownHandRef.current === showdown.handId) return;
-  showdownHandRef.current = showdown.handId;
+    if (showdownHandRef.current === showdown.handId) return;
+    showdownHandRef.current = showdown.handId;
 
-  playWin();
-  pushLog("Showdown: revealing hands and sweeping the pot.");
+    playWin();
+    pushLog("Showdown: revealing hands and sweeping the pot.");
 
-  // GG-style mini leaderboard: track winners for last ~10 hands
-  const now = Date.now();
+    const now = Date.now();
+    if (Array.isArray(showdown.players)) {
+      const additions: WinnerEntry[] = showdown.players
+        .filter((p) => p.isWinner)
+        .map((p) => {
+          const seatMeta = seats.find(
+            (s) => s.seatIndex === p.seatIndex && s.playerId === p.playerId
+          );
+          return {
+            handId: showdown.handId,
+            seatIndex: p.seatIndex,
+            playerId: p.playerId,
+            name: seatMeta?.name,
+            rankName: p.rankName,
+            timestamp: now,
+          };
+        });
 
-  if (Array.isArray(showdown.players)) {
-    const additions: WinnerEntry[] = showdown.players
-      .filter((p) => p.isWinner)
-      .map((p) => {
-        const seatMeta = seats.find(
-          (s) => s.seatIndex === p.seatIndex && s.playerId === p.playerId
-        );
-        return {
-          handId: showdown.handId,
-          seatIndex: p.seatIndex,
-          playerId: p.playerId,
-          name: seatMeta?.name,
-          rankName: p.rankName,
-          timestamp: now,
-        };
-      });
-
-    if (additions.length > 0) {
-      setWinners((prev) => {
-        const merged = [...additions, ...prev];
-        return merged.slice(0, 10);
-      });
+      if (additions.length > 0) {
+        setWinners((prev) => [...additions, ...prev].slice(0, 10));
+      }
     }
-  }
-
-  
-}, [showdown, table, playWin, seats, isHostClient, seatedCount, sendMessage]);
-
-const gameStarted = !!table; 
-// or stricter: !!table && typeof table.handId === "number"
-
+  }, [showdown, table, playWin, pushLog, seats]);
 
   const boardCards = table?.board ?? [];
-
   const buttonSeatIndex = betting?.buttonSeatIndex ?? null;
   const currentSeatIndex = betting?.currentSeatIndex ?? null;
 
-  
+  /* ───────────────── Betting display helpers ───────────────── */
 
- 
-   // -----------------------------
-  // Betting display helpers
-  // -----------------------------
+  const totalBySeat: Record<number, number> = useMemo(() => {
+    const map: Record<number, number> = {};
+    if (!betting?.players) return map;
 
-  // Per-hand total contributed (stays visible the whole hand)
-const totalBySeat: Record<number, number> = useMemo(() => {
-  const map: Record<number, number> = {};
-  if (!betting?.players) return map;
+    for (const p of betting.players) {
+      const total = Number((p as any).totalContributed ?? 0);
+      map[p.seatIndex] = total;
+    }
+    return map;
+  }, [betting]);
 
-  for (const p of betting.players) {
-    // prefer server field; fallback to committed if older server
-    const total = Number((p as any).totalContributed ?? 0);
-    map[p.seatIndex] = total;
-  }
-  return map;
-}, [betting]);
+  const committedBySeat: Record<number, number> = useMemo(() => {
+    const map: Record<number, number> = {};
+    if (!betting?.players) return map;
 
-// Per-street committed (in front on this street)
-const committedBySeat: Record<number, number> = useMemo(() => {
-  const map: Record<number, number> = {};
-  if (!betting?.players) return map;
+    for (const p of betting.players) {
+      map[p.seatIndex] = Number(p.committed ?? 0);
+    }
+    return map;
+  }, [betting]);
 
-  for (const p of betting.players) {
-    map[p.seatIndex] = Number(p.committed ?? 0);
-  }
-  return map;
-}, [betting]);
-
-
-  // Single pot source of truth (server pot should already match sum(totalContributed))
   const pot = useMemo(() => {
     const serverPot = typeof betting?.pot === "number" ? betting.pot : 0;
     const handPot = Object.values(totalBySeat).reduce((sum, v) => sum + (v ?? 0), 0);
@@ -778,7 +632,6 @@ const committedBySeat: Record<number, number> = useMemo(() => {
     return serverPot > 0 ? serverPot : handPot;
   }, [betting?.pot, totalBySeat]);
 
-  // Side-pot hint (keep your logic, but use totalContributed instead of committed)
   const hasPotentialSidePot =
     !!betting &&
     betting.players.some(
@@ -789,44 +642,32 @@ const committedBySeat: Record<number, number> = useMemo(() => {
         ((p.totalContributed ?? 0) > 0 || (betting.pot ?? 0) > 0)
     );
 
-  // -----------------------------
-  // Hand transitions
-  // -----------------------------
+  /* ───────────────── Host auto-deal ───────────────── */
 
-  // Track previous "hand done" state so we trigger auto-deal exactly once per hand end
   const prevHandDoneRef = useRef<boolean>(false);
-
-  // Keep latest host + seat count in refs to avoid stale closure in setTimeout
   const hostRef = useRef<boolean>(false);
   const seatedCountRef = useRef<number>(0);
+  const autoDealTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     hostRef.current = isHostClient;
     seatedCountRef.current = seatedCount;
   }, [isHostClient, seatedCount]);
 
- 
-
   useEffect(() => {
     const isDone = !!betting && betting.street === "done";
     const wasDone = prevHandDoneRef.current;
 
-    // transition: not-done -> done
     if (isDone && !wasDone) {
-      // clear any prior timer
       if (autoDealTimeoutRef.current != null) {
         clearTimeout(autoDealTimeoutRef.current);
         autoDealTimeoutRef.current = null;
       }
 
-      // Arm next hand after 10s (you said you want 10s)
       const AUTO_DEAL_DELAY_MS = 10_000;
-
-      // Optional: log once
       pushLog(`Hand complete. Next hand starts in ${Math.floor(AUTO_DEAL_DELAY_MS / 1000)}s.`);
 
       autoDealTimeoutRef.current = window.setTimeout(() => {
-        // re-check with fresh refs (no stale closure)
         if (!hostRef.current) return;
         if (seatedCountRef.current < MIN_PLAYERS_TO_START) return;
 
@@ -837,9 +678,8 @@ const committedBySeat: Record<number, number> = useMemo(() => {
     }
 
     prevHandDoneRef.current = isDone;
-  }, [betting?.street, betting?.handId]); // minimal deps so it doesn't re-arm constantly
+  }, [betting?.street, betting?.handId, pushLog, sendMessage]);
 
-  // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (autoDealTimeoutRef.current != null) {
@@ -849,71 +689,57 @@ const committedBySeat: Record<number, number> = useMemo(() => {
     };
   }, []);
 
-  // NEW: reset per-hand UI-only stuff when a new hand starts
   useEffect(() => {
     if (!betting?.handId) return;
-
-    // hand started or changed
-    setRevealHeroHand(false);
-    setRevealedHoles({});
     setJoinedMidHand(false);
-
-    // reset pot sound reference etc if you want:
+    setRevealedHoles({});
     lastPotRef.current = betting.pot ?? 0;
   }, [betting?.handId]);
 
+  /* ───────────────── player-show-cards (single effect) ───────────────── */
 
-useEffect(() => {
-  const m = (messages as any[]).slice(-1)[0];
-  if (!m) return;
+  useEffect(() => {
+    const m = (messages as any[]).slice(-1)[0];
+    if (!m) return;
 
-  if (m.type === "player-show-cards" && m.playerId && Array.isArray(m.cards)) {
-    setRevealedHoles((prev) => ({
-      ...prev,
-      [String(m.playerId)]: m.cards.slice(0, 2),
-    }));
-  }
-}, [messages]);
-
-
-
-
-
-   
-
-    useEffect(() => {
-  const prev = prevSeatsRef.current;
-  const next = new Map<number, string | null>();
-
-  seats.forEach((s) => {
-    const currentPid = s.playerId ?? null;
-    next.set(s.seatIndex, currentPid);
-
-    const prevPid = prev.get(s.seatIndex) ?? null;
-
-    // Seat became occupied during an active hand → mark as NEW PLAYER
-    if (handInProgress && currentPid && !prevPid) {
-      setNewPlayerSeats((curr) => ({
-        ...curr,
-        [s.seatIndex]: Date.now(),
+    if (m.type === "player-show-cards" && m.playerId && Array.isArray(m.cards)) {
+      setRevealedHoles((prev) => ({
+        ...prev,
+        [String(m.playerId)]: m.cards.slice(0, 2),
       }));
     }
+  }, [messages]);
 
-    // Seat emptied → remove tag
-    if (!currentPid && prevPid) {
-      setNewPlayerSeats((curr) => {
-        const copy = { ...curr };
-        delete copy[s.seatIndex];
-        return copy;
-      });
-    }
-  });
+  /* ───────────────── NEW PLAYER seat tagging ───────────────── */
 
-  prevSeatsRef.current = next;
-}, [seats, handInProgress]);
+  useEffect(() => {
+    const prev = prevSeatsRef.current;
+    const next = new Map<number, string | null>();
 
+    seats.forEach((s) => {
+      const currentPid = s.playerId ?? null;
+      next.set(s.seatIndex, currentPid);
 
+      const prevPid = prev.get(s.seatIndex) ?? null;
 
+      if (handInProgress && currentPid && !prevPid) {
+        setNewPlayerSeats((curr) => ({
+          ...curr,
+          [s.seatIndex]: Date.now(),
+        }));
+      }
+
+      if (!currentPid && prevPid) {
+        setNewPlayerSeats((curr) => {
+          const copy = { ...curr };
+          delete copy[s.seatIndex];
+          return copy;
+        });
+      }
+    });
+
+    prevSeatsRef.current = next;
+  }, [seats, handInProgress]);
 
   /* ───────────────── Chat ───────────────── */
 
@@ -929,111 +755,89 @@ useEffect(() => {
   /* ───────────────── Buy-in / sit / stand ───────────────── */
 
   const [buyIn, setBuyIn] = useState<number>(DEFAULT_BUYIN);
-  const [autoTopUp, setAutoTopUp] = useState<boolean>(true);
-
   const [showBuyIn, setShowBuyIn] = useState(false);
-
-  
+  const [joinModeMidHand, setJoinModeMidHand] = useState(false);
 
   function handleSitOrStand() {
-  // Already seated
-  if (heroSeat) {
-    if (handInProgress) {
-      pushLog(
-        `${describeHero()} tries to stand, but a hand is in progress. You can stand up after this hand completes.`
-      );
+    if (heroSeat) {
+      if (handInProgress) {
+        pushLog(
+          `${describeHero()} tries to stand, but a hand is in progress. You can stand up after this hand completes.`
+        );
+        return;
+      }
+
+      const cashOut = heroSeat.chips ?? 0;
+      if (cashOut > 0) {
+        setChips((c: number) => c + cashOut);
+        pushLog(`${describeHero()} stands up and cashes out ${cashOut} PGLD chips.`);
+      } else {
+        pushLog(`${describeHero()} stands up from the table.`);
+      }
+      sendMessage({ type: "stand" });
       return;
     }
 
-    const cashOut = heroSeat.chips ?? 0;
-    if (cashOut > 0) {
-      setChips((c: number) => c + cashOut);
-      pushLog(
-        `${describeHero()} stands up and cashes out ${cashOut} PGLD chips.`
-      );
-    } else {
-      pushLog(`${describeHero()} stands up from the table.`);
-    }
-    sendMessage({ type: "stand" });
-    return;
+    setJoinModeMidHand(handInProgress);
+    setShowBuyIn(true);
   }
-
-  // Not seated: open buy-in modal, remember if we started while mid-hand
-  setJoinModeMidHand(handInProgress);
-  setShowBuyIn(true);
-}
-
 
   function confirmSit() {
-  setShowBuyIn(false);
-  const effBuyIn = Math.max(100, Math.floor(buyIn));
-  if (effBuyIn > chips) {
-    pushLog(
-      `Not enough PGLD chips to sit with ${effBuyIn}. Adjust buy-in or reload.`
-    );
-    return;
+    setShowBuyIn(false);
+
+    const effBuyIn = Math.max(100, Math.floor(buyIn));
+    if (effBuyIn > chips) {
+      pushLog(`Not enough PGLD chips to sit with ${effBuyIn}. Adjust buy-in or reload.`);
+      return;
+    }
+
+    setChips((c: number) => Math.max(0, c - effBuyIn));
+
+    if (joinModeMidHand && handInProgress) {
+      setJoinedMidHand(true);
+      pushLog(`${describeHero()} joins the table and will be dealt in next hand with ${effBuyIn} PGLD chips.`);
+    } else {
+      pushLog(`${describeHero()} sits down with ${effBuyIn} PGLD chips.`);
+    }
+
+    sendMessage({
+      type: "sit",
+      name: profile?.name ?? "",
+      buyIn: effBuyIn,
+    } as any);
   }
 
-  // Reserve chips immediately (like buying chips from the cage)
-  setChips((c: number) => Math.max(0, c - effBuyIn));
+  /* ───────────────── Demo bankroll / refill ───────────────── */
 
-  if (joinModeMidHand && handInProgress) {
-    // Joining in the middle of a hand: seat now, but only play next hand
-    setJoinedMidHand(true);
-    pushLog(
-      `${describeHero()} joins the table and will be dealt in next hand with ${effBuyIn} PGLD chips.`
-    );
-  } else {
-    pushLog(`${describeHero()} sits down with ${effBuyIn} PGLD chips.`);
+  function handleReloadDemoBankroll() {
+    const TARGET = 5000;
+
+    setChips((current: number) => {
+      const next = Math.max(current, TARGET);
+      pushLog(`Demo bankroll topped up to ${next.toLocaleString()} PGLD chips.`);
+      return next;
+    });
   }
 
-  sendMessage({
-    type: "sit",
-    name: profile?.name ?? "",
-    buyIn: effBuyIn,
-  } as any);
-}
+  function handleRefillStack(amount: number) {
+    if (!heroSeat) return;
+    if (handInProgress) {
+      pushLog("You can only refill between hands.");
+      return;
+    }
 
+    const amt = Math.max(0, Math.floor(amount));
+    if (amt <= 0) return;
 
-  /* ───────────────── Reload demo bankroll ───────────────── */
+    if (chips < amt) {
+      pushLog(`Not enough bankroll to refill ${amt} PGLD.`);
+      return;
+    }
 
-function handleReloadDemoBankroll() {
-  const TARGET = 5000; // demo top-up target
-
-  setChips((current: number) => {
-    const next = Math.max(current, TARGET);
-    pushLog(
-      `Demo bankroll topped up to ${next.toLocaleString()} PGLD chips.`
-    );
-    return next;
-  });
-}
-
-function handleRefillStack(amount: number) {
-  if (!heroSeat) return;
-  if (handInProgress) {
-    pushLog("You can only refill between hands.");
-    return;
+    setChips((c: number) => Math.max(0, c - amt));
+    pushLog(`${describeHero()} refills stack by ${amt} PGLD.`);
+    sendMessage({ type: "refill-stack", amount: amt });
   }
-
-  const amt = Math.max(0, Math.floor(amount));
-  if (amt <= 0) return;
-
-  if (chips < amt) {
-    pushLog(`Not enough bankroll to refill ${amt} PGLD.`);
-    return;
-  }
-
-  // Optimistic: subtract from local bankroll immediately
-  setChips((c: number) => Math.max(0, c - amt));
-
-  pushLog(`${describeHero()} refills stack by ${amt} PGLD.`);
-
-  // 🔥 Requires server support in room.ts
-  sendMessage({ type: "refill-stack", amount: amt });
-}
-
-
 
   /* ───────────────── Hero actions ───────────────── */
 
@@ -1048,15 +852,9 @@ function handleRefillStack(amount: number) {
     let primaryActionMode: "check" | "call" = "check";
     if (betting && heroBetting) {
       const diff = betting.maxCommitted - heroBetting.committed;
-      if (diff > 0) {
-        primaryActionMode = "call";
-      }
+      if (diff > 0) primaryActionMode = "call";
     }
-    if (primaryActionMode === "call") {
-      pushLog(`${describeHero()} calls.`);
-    } else {
-      pushLog(`${describeHero()} checks.`);
-    }
+    pushLog(`${describeHero()} ${primaryActionMode === "call" ? "calls" : "checks"}.`);
     sendMessage({ type: "action", action: primaryActionMode });
   }
 
@@ -1064,58 +862,33 @@ function handleRefillStack(amount: number) {
   const [manualBet, setManualBet] = useState<string>("");
 
   function handleBet() {
-  if (!isHeroTurn || !betting || !heroBetting) return;
+    if (!isHeroTurn || !betting || !heroBetting) return;
 
-  const alreadyCommitted = heroBetting.committed ?? 0;
-  const stack = heroBetting.stack ?? 0;
+    const alreadyCommitted = heroBetting.committed ?? 0;
+    const stack = heroBetting.stack ?? 0;
+    if (stack <= 0) return;
 
-  // No chips to bet
-  if (stack <= 0) return;
+    const callNeeded = Math.max(0, betting.maxCommitted - alreadyCommitted);
+    const minRaise = betting.bigBlind * 2;
 
-  const callNeeded = Math.max(0, betting.maxCommitted - alreadyCommitted);
-  const minRaise = betting.bigBlind * 2;
+    let raiseDelta =
+      manualBet.trim().length > 0
+        ? Number(manualBet)
+        : raiseSize > 0
+        ? raiseSize
+        : minRaise;
 
-  // Pick a base value from manual input or slider
-  let raiseDelta =
-    manualBet.trim().length > 0
-      ? Number(manualBet)
-      : raiseSize > 0
-      ? raiseSize
-      : minRaise;
+    if (!Number.isFinite(raiseDelta) || raiseDelta <= 0) raiseDelta = minRaise;
+    raiseDelta = Math.max(minRaise, Math.floor(raiseDelta));
 
-  if (!Number.isFinite(raiseDelta) || raiseDelta <= 0) {
-    raiseDelta = minRaise;
+    let totalSpend = callNeeded + raiseDelta;
+    if (totalSpend > stack) totalSpend = stack;
+    if (totalSpend <= 0) return;
+
+    pushLog(`${describeHero()} bets ${totalSpend} PGLD (call ${callNeeded}, raise ${raiseDelta}).`);
+    sendMessage({ type: "action", action: "bet", amount: totalSpend });
+    setManualBet("");
   }
-
-  raiseDelta = Math.max(minRaise, Math.floor(raiseDelta));
-
-  // This is how many chips we want to push into the pot this action
-  let totalSpend = callNeeded + raiseDelta;
-
-  // Clamp to hero stack (all-in if needed)
-  if (totalSpend > stack) {
-    totalSpend = stack;
-  }
-
-  if (totalSpend <= 0) return;
-
-  pushLog(
-    `${describeHero()} bets ${totalSpend} PGLD (call ${callNeeded}, raise ${raiseDelta}).`
-  );
-
-  // 🔥 IMPORTANT: send totalSpend, not just raiseDelta
-  sendMessage({
-    type: "action",
-    action: "bet",
-    amount: totalSpend,
-  });
-
-  // Clear manualBet so slider rules next time
-  // (optional, but usually feels better)
-  // eslint-disable-next-line @typescript-eslint/no-use-before-define
-  setManualBet?.("");
-}
-
 
   function handleAllIn() {
     if (!isHeroTurn || !betting || !heroBetting) return;
@@ -1126,127 +899,42 @@ function handleRefillStack(amount: number) {
     sendMessage({ type: "action", action: "bet", amount: allInRaise });
   }
 
-  /* ───────────────── Manual deal safety ───────────────── */
-
   function handleManualDeal() {
-  if (!isHostClient) return;
-  pushLog("Host starts the game.");
-  sendMessage({ type: "start-hand" });
-}
+    if (!isHostClient) return;
+    pushLog("Host starts the game.");
+    sendMessage({ type: "start-hand" });
+  }
 
+  /* ───────────────── Timer system ───────────────── */
 
-
-  const [showHostPanel, setShowHostPanel] = useState(false);
-
-// Optional: server-side pause flag later. For now it can just stop client UI.
-// Better: add msg types "pause-auto-deal" / "resume-auto-deal" server-side.
-function handleHostResetTable() {
-  if (!isHostClient) return;
-  sendMessage({ type: "reset-table" });
-  pushLog("Host reset the table.");
-}
-
-// If you already have handleManualDeal, we’ll use it from host panel:
-const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
-
-
-  const tableIdle =
-  seatedCount >= MIN_PLAYERS_TO_START &&
-  !!heroSeat &&
-  isHostClient &&
-  (!betting || betting.street === "done");
-
-
-
-
-  /* ───────────────── Winner seat set ───────────────── */
-
-  const winnerSeatKeys = useMemo(() => {
-  const set = new Set<string>();
-
-  if (!showdown || !table) return set;
-  if (showdown.handId !== table.handId) return set;
-  if (!Array.isArray(showdown.players)) return set;
-
-  showdown.players.forEach((p) => {
-    if (p.isWinner) {
-      set.add(`${p.seatIndex}:${p.playerId}`);
-    }
-  });
-
-  return set;
-}, [showdown, table]);
-
-
-  
-
- 
-
-  /* ───────────────── Avatar initials ───────────────── */
-
-  const initials =
-    profile?.avatarInitials ||
-    (profile?.name
-      ? profile.name
-          .trim()
-          .split(/\s+/)
-          .map((p: string) => p[0] ?? "")
-          .join("")
-          .slice(0, 3)
-      : "??");
-
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-   // ───────────────── Game-level timers ─────────────────
-
-  const ACTION_BASE_MS = 30_000; // first 30 seconds
-  const ACTION_EXTRA_MS = 30_000; // last-chance 30 seconds
+  const ACTION_BASE_MS = 30_000;
+  const ACTION_EXTRA_MS = 30_000;
 
   const [actionPhase, setActionPhase] = useState<ActionPhase>(null);
   const [actionDeadline, setActionDeadline] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
-
   const lastActionKeyRef = useRef<string | null>(null);
 
-  // Host-only auto-deal timeout after each hand
-  const autoDealTimeoutRef = useRef<number | null>(null);
-
-
-  // Global ticking clock
   useEffect(() => {
-    const id = setInterval(() => {
-      setNow(Date.now());
-    }, 250);
+    const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
   }, []);
-
-
-   const [revealedHoles, setRevealedHoles] = useState<Record<string, string[]>>(
-    {}
-  );
-
-  // ───────────────── Time Bank (still 30s if you want to keep it) ─────────────────
 
   const TIME_BANK_SECONDS = 30;
   const [timeBankUsed, setTimeBankUsed] = useState(false);
 
   function handleUseTimeBank() {
     if (!isHeroTurn || !actionDeadline || timeBankUsed) return;
-
     const extended = actionDeadline + TIME_BANK_SECONDS * 1000;
-
     setTimeBankUsed(true);
     setActionDeadline(extended);
-
     pushLog(`${describeHero()} uses time bank (+${TIME_BANK_SECONDS}s).`);
   }
 
   useEffect(() => {
     if (!betting) return;
     setTimeBankUsed(false);
-  }, [betting]);
-
-  // ───────────────── Action timer + auto-fold (base → extra) ─────────────────
+  }, [betting?.handId, betting?.street, betting?.currentSeatIndex]);
 
   useEffect(() => {
     if (!betting) {
@@ -1257,34 +945,25 @@ const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
     }
 
     const key = `${betting.handId}-${betting.street}-${betting.currentSeatIndex}`;
-
-    // New action turn: start a fresh 30s base window for the *current* seat
     if (lastActionKeyRef.current !== key) {
       lastActionKeyRef.current = key;
       setActionPhase("base");
       setActionDeadline(Date.now() + ACTION_BASE_MS);
     }
-  }, [betting]);
+  }, [betting?.handId, betting?.street, betting?.currentSeatIndex]);
 
   useEffect(() => {
     if (!actionDeadline || !actionPhase) return;
 
-    // Everyone's UI advances the timers…
     const isExpired = now >= actionDeadline;
 
-    // When base window expires → go to LAST CHANCE for the active seat
     if (actionPhase === "base" && isExpired) {
       setActionPhase("extra");
       setActionDeadline(Date.now() + ACTION_EXTRA_MS);
-
-      // If this client *is* the active player, log it
-      if (isHeroTurn) {
-        pushLog(`${describeHero()} last chance to act!`);
-      }
+      if (isHeroTurn) pushLog(`${describeHero()} last chance to act!`);
       return;
     }
 
-    // When extra window expires → if it's *our* turn, auto-fold
     if (actionPhase === "extra" && isExpired) {
       if (isHeroTurn) {
         handleFold();
@@ -1293,26 +972,7 @@ const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
       setActionDeadline(null);
       setActionPhase(null);
     }
-  }, [now, actionDeadline, actionPhase, isHeroTurn]);
-
-  useEffect(() => {
-    if (!isHeroTurn || !actionDeadline) return;
-
-    // Base window ended → go to LAST CHANCE 30s
-    if (actionPhase === "base" && now >= actionDeadline) {
-      setActionPhase("extra");
-      setActionDeadline(Date.now() + ACTION_EXTRA_MS);
-      pushLog(`${describeHero()} last chance to act!`);
-      return;
-    }
-
-    // Extra window ended → auto-fold
-    if (actionPhase === "extra" && now >= actionDeadline) {
-      handleFold();
-      setActionDeadline(null);
-      setActionPhase(null);
-    }
-  }, [now, isHeroTurn, actionDeadline, actionPhase]);
+  }, [now, actionDeadline, actionPhase, isHeroTurn, pushLog]);
 
   const actionRemainingMs = useMemo(() => {
     if (!actionDeadline) return null;
@@ -1320,31 +980,13 @@ const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
     return diff > 0 ? diff : 0;
   }, [actionDeadline, now]);
 
-  const totalWindowMs =
-    actionPhase === "extra" ? ACTION_EXTRA_MS : ACTION_BASE_MS;
+  const totalWindowMs = actionPhase === "extra" ? ACTION_EXTRA_MS : ACTION_BASE_MS;
 
-  const actionSeconds = actionRemainingMs
-    ? Math.ceil(actionRemainingMs / 1000)
-    : null;
+  const actionSeconds = actionRemainingMs ? Math.ceil(actionRemainingMs / 1000) : null;
 
   const actionPct = actionRemainingMs
-    ? Math.max(
-        0,
-        Math.min(100, (actionRemainingMs / totalWindowMs) * 100)
-      )
+    ? Math.max(0, Math.min(100, (actionRemainingMs / totalWindowMs) * 100))
     : 0;
-
-    useEffect(() => {
-  const last = (messages as any[]).slice(-1)[0];
-  if (!last) return;
-
-  if (last.type === "player-show-cards" && last.playerId && Array.isArray(last.cards)) {
-    setRevealedHoles((prev) => ({
-      ...prev,
-      [String(last.playerId)]: last.cards,
-    }));
-  }
-}, [messages]);
 
   /* ───────────────── Auto-check / auto-fold / sit-out ───────────────── */
 
@@ -1363,9 +1005,7 @@ const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
       return;
     }
 
-    if (autoCheck && diff === 0) {
-      handlePrimaryAction();
-    }
+    if (autoCheck && diff === 0) handlePrimaryAction();
   }, [isHeroTurn, betting, heroBetting, autoCheck, autoFoldFlag]);
 
   useEffect(() => {
@@ -1375,144 +1015,80 @@ const canManualDeal = isHostClient && seatedCount >= MIN_PLAYERS_TO_START;
 
   /* ───────────────── Primary action label ───────────────── */
 
-  // Primary action label (check/call)
   let primaryActionLabel = "Check";
   if (betting && heroBetting) {
     const diff = betting.maxCommitted - heroBetting.committed;
-    if (diff > 0) {
-      primaryActionLabel = `Call ${diff}`;
+    if (diff > 0) primaryActionLabel = `Call ${diff}`;
+  }
+
+  /* ───────────────── Layout helpers ───────────────── */
+
+  const HERO_CENTER_VIEW = true;
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  // PC: after hero -> directly LEFT of hero slot, then directly RIGHT, then far-left, then sides, then top
+  const SLOT_FILL_PC = [0, 2, 3, 1, 7, 8, 4, 6, 5];
+
+  // Mobile: after hero -> bottom-left, bottom-right, then alternate left/right arcs upward
+  const SLOT_FILL_MOBILE = [0, 1, 2, 3, 6, 4, 7, 5, 8];
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mq: MediaQueryList = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
     }
-  }
 
-  
+    (mq as any).addListener(apply);
+    return () => (mq as any).removeListener(apply);
+  }, []);
 
- /* ───────────────── Layout helpers for seats ───────────────── */
+  const ACTIVE_SLOT_FILL = isMobile ? SLOT_FILL_MOBILE : SLOT_FILL_PC;
+  const ACTIVE_GEOMETRY = isMobile ? SEAT_GEOMETRY_MOBILE : SEAT_GEOMETRY_PC;
 
-const [winners, setWinners] = useState<WinnerEntry[]>([]);
+  const winnerSeatKeys = useMemo(() => {
+    const set = new Set<string>();
+    if (!showdown || !table) return set;
+    if (showdown.handId !== table.handId) return set;
+    if (!Array.isArray(showdown.players)) return set;
 
-// History of winners for the side panel
-const [lastWinners, setLastWinners] = useState<WinnerEntry[]>([]);
+    showdown.players.forEach((p) => {
+      if (p.isWinner) set.add(`${p.seatIndex}:${p.playerId}`);
+    });
+    return set;
+  }, [showdown, table]);
 
-const [showLastWinners, setShowLastWinners] = useState(false);
-const [showDealerLog, setShowDealerLog] = useState(false);
+  /* ───────────────── Header / panels ───────────────── */
 
-// For JSX – always a WinnerEntry[]
-const winnersToShow: WinnerEntry[] = lastWinners;
+  const initials =
+    profile?.avatarInitials ||
+    (profile?.name
+      ? profile.name
+          .trim()
+          .split(/\s+/)
+          .map((p: string) => p[0] ?? "")
+          .join("")
+          .slice(0, 3)
+      : "??");
 
+  const tableIdle =
+    seatedCount >= MIN_PLAYERS_TO_START &&
+    !!heroSeat &&
+    isHostClient &&
+    (!betting || betting.street === "done");
 
-
-
-
-
-
-// Toggle behavior:
-// - true  => GG-style: each player sees THEMSELF bottom-center
-// - false => casino-style: seatIndex decides position, same on all screens
-const HERO_CENTER_VIEW = true;
-
-
-// Whether the current sit flow started while a hand was in progress
-const [joinModeMidHand, setJoinModeMidHand] = useState(false);
-
-// Track "NEW PLAYER" seats (seatIndex → timestamp)
-const [newPlayerSeats, setNewPlayerSeats] = useState<Record<number, number>>({});
-const prevSeatsRef = useRef<Map<number, string | null>>(new Map());
-
-const [isMobile, setIsMobile] = useState(false);
-
-// PC: after hero -> directly LEFT of hero slot, then directly RIGHT, then far-left, then sides, then top
-const SLOT_FILL_PC = [0, 2, 3, 1, 7, 8, 4, 6, 5];
-
-// Mobile: after hero -> bottom-left, bottom-right, then alternate left/right arcs upward
-const SLOT_FILL_MOBILE = [0, 1, 2, 3, 6, 4, 7, 5, 8];
-
-const ACTIVE_SLOT_FILL = isMobile ? SLOT_FILL_MOBILE : SLOT_FILL_PC;
-
-
-useEffect(() => {
-  if (typeof window === "undefined") return;
-
-  const mq: MediaQueryList = window.matchMedia("(max-width: 767px)");
-
-  const apply = () => setIsMobile(mq.matches);
-  apply(); // initial
-
-  // Modern browsers
-  if (typeof mq.addEventListener === "function") {
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }
-
-  // Safari fallback
-  (mq as any).addListener(apply);
-  return () => (mq as any).removeListener(apply);
-}, []);
-
-
-const ACTIVE_GEOMETRY = isMobile ? SEAT_GEOMETRY_MOBILE : SEAT_GEOMETRY_PC;
-
-
-
-const maxSeats = ACTIVE_GEOMETRY.length;
-
-// Only enable hero-centered layout once heroSeat is known
-const heroSeatIndexForLayout = heroSeat?.seatIndex ?? null;
-const useHeroCenter = HERO_CENTER_VIEW && heroSeatIndexForLayout !== null;
-
-
-
-const heroHasShownCards =
-  !!playerId && !!revealedHoles?.[playerId] && revealedHoles[playerId].length === 2;
-
-const canShowCardsNow =
-  !!heroSeat &&
-  !!betting &&
-  betting.street === "done" &&
-  !!showdown &&
-  !!table &&
-  showdown.handId === table.handId &&
-  !!heroHand &&
-  heroHand.length === 2 &&
-  !heroHasShownCards;
-
-
-
-
-
-const [showProfileCard, setShowProfileCard] = useState(false);
-const [showChipsCard, setShowChipsCard] = useState(false);
-
-
-const [openPanels, setOpenPanels] = useState(false);
-const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
-
-
-
-
-
-
-
-
-
-    /* ───────────────── JSX ───────────────── */
+  /* ───────────────── JSX ───────────────── */
 
   return (
     <>
-      <div
-        className={
-          isFullscreen ? "space-y-0 pb-0 md:pb-0" : "space-y-6 pb-8 md:pb-4"
-        }
-      >
-        {/* TABLE + SIDEBAR */}
-        <section
-  className={
-    isFullscreen
-      ? "space-y-0"
-      : "space-y-0"
-  }
->
-
-          {/* TABLE */}
+      <div className={isFullscreen ? "space-y-0 pb-0 md:pb-0" : "space-y-6 pb-8 md:pb-4"}>
+        <section className={"space-y-0"}>
           <div
             className={[
               "relative flex flex-col rounded-3xl border border-[#FFD700]/40",
@@ -1520,11 +1096,9 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
               "shadow-[0_0_50px_rgba(0,0,0,0.9)]",
               "p-4 md:p-6",
               "space-y-3",
-              // clamp spill on mobile; allow full glow on larger screens
               "overflow-hidden md:overflow-visible",
             ].join(" ")}
           >
-            {/* Exit fullscreen button – floating above table */}
             {isFullscreen && (
               <button
                 type="button"
@@ -1535,204 +1109,168 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
               </button>
             )}
 
-            {/* Glow background behind felt */}
             <div className="pointer-events-none absolute inset-0 opacity-40">
               <div className="absolute -top-40 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-[#0ea5e9]/30 blur-3xl" />
               <div className="absolute bottom-0 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#FFD700]/20 blur-[70px]" />
             </div>
 
-            {/* Header – ONLY in non-fullscreen */}
-{!isFullscreen && (
-  <>
-    {/* GAME HEADER (mobile-tight) */}
-<div className="mb-2 md:mb-3">
-  <div
-    className={[
-      "rounded-2xl border border-white/15 bg-black/55 backdrop-blur",
-      "px-3 py-2 md:px-5 md:py-3",
-      "shadow-[0_0_18px_rgba(0,0,0,0.65)]",
-    ].join(" ")}
-  >
-    {/* Row 1: title + right controls */}
-    <div className="flex items-start justify-between gap-2">
-      {/* LEFT: title block (clamps + doesn’t force height) */}
-      <div className="min-w-0">
-        <div className="text-[11px] md:text-xs uppercase tracking-[0.22em] text-white/55 leading-tight">
-          Base Gold Rush • Hold’em
-        </div>
+            {!isFullscreen && (
+              <>
+                <div className="mb-2 md:mb-3">
+                  <div
+                    className={[
+                      "rounded-2xl border border-white/15 bg-black/55 backdrop-blur",
+                      "px-3 py-2 md:px-5 md:py-3",
+                      "shadow-[0_0_18px_rgba(0,0,0,0.65)]",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[11px] md:text-xs uppercase tracking-[0.22em] text-white/55 leading-tight">
+                          Base Gold Rush • Hold’em
+                        </div>
 
-        <div className="mt-0.5 flex items-center gap-2 min-w-0">
-          <div className="truncate text-[12px] md:text-base font-extrabold text-white/90">
-  {roomId}
-</div>
+                        <div className="mt-0.5 flex items-center gap-2 min-w-0">
+                          <div className="truncate text-[12px] md:text-base font-extrabold text-white/90">
+                            {roomId}
+                          </div>
 
+                          <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-2 py-[1px] text-[10px] md:text-[11px] font-bold text-emerald-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                            LIVE
+                          </span>
+                        </div>
+                      </div>
 
-          {/* LIVE pill */}
-          <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-2 py-[1px] text-[10px] md:text-[11px] font-bold text-emerald-200">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-            LIVE
-          </span>
-        </div>
-      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyInvite}
+                          className="rounded-xl border border-white/15 bg-black/50 px-2 py-[5px] text-[10px] md:text-[11px] font-bold text-white/80 hover:bg-black/70"
+                        >
+                          Copy ID
+                        </button>
 
-     <div className="shrink-0 flex items-center gap-2">
-  <button
-    type="button"
-    onClick={handleCopyInvite}
-    className="rounded-xl border border-white/15 bg-black/50 px-2 py-[5px] text-[10px] md:text-[11px] font-bold text-white/80 hover:bg-black/70"
-  >
-    Copy ID
-  </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsFullscreen((v) => !v)}
+                          className="rounded-xl border border-[#FFD700]/25 bg-black/50 px-2 py-[5px] text-[10px] md:text-[11px] font-bold text-[#FFD700]/90 hover:bg-black/70"
+                        >
+                          Fullscreen
+                        </button>
+                      </div>
+                    </div>
 
-  <button
-    type="button"
-    onClick={() => setIsFullscreen((v) => !v)}
-    className="rounded-xl border border-[#FFD700]/25 bg-black/50 px-2 py-[5px] text-[10px] md:text-[11px] font-bold text-[#FFD700]/90 hover:bg-black/70"
-  >
-    Fullscreen
-  </button>
-</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
+                        {seatedCount}/9 seated
+                      </span>
 
-    </div>
+                      <button
+                        type="button"
+                        onClick={() => setOpenPanels((v) => !v)}
+                        className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/80 hover:bg-black/70"
+                      >
+                        {openPanels ? "Hide panels" : "Panels"}
+                      </button>
 
-   {/* Row 2: Pills (mobile-safe, no overlap) */}
-<div className="mt-2 flex flex-wrap items-center gap-2">
-  <span className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
-    {seatedCount}/9 seated
-  </span>
+                      <span className="inline-flex items-center rounded-full border border-[#FFD700]/25 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
+                        BR
+                        <span className="ml-2 font-mono font-extrabold text-[#FFD700]">
+                          {chips.toLocaleString()}
+                        </span>
+                        <span className="ml-1 text-white/55">PGLD</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-  <button
-    type="button"
-    onClick={() => setOpenPanels((v) => !v)}
-    className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/80 hover:bg-black/70"
-  >
-    {openPanels ? "Hide panels" : "Panels"}
-  </button>
+                {openPanels && (
+                  <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/15 bg-black/70 p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                            Player Profile
+                          </div>
+                          <div className="text-[11px] text-white/50">
+                            Name + avatar at table
+                          </div>
+                        </div>
+                        <div
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-bold text-black shadow-[0_0_16px_rgba(250,204,21,0.7)]"
+                          style={{ backgroundColor: profile?.avatarColor ?? "#facc15" }}
+                        >
+                          {initials.slice(0, 3).toUpperCase()}
+                        </div>
+                      </div>
 
-  <span className="inline-flex items-center rounded-full border border-[#FFD700]/25 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
-    BR
-    <span className="ml-2 font-mono font-extrabold text-[#FFD700]">
-      {chips.toLocaleString()}
-    </span>
-    <span className="ml-1 text-white/55">PGLD</span>
-  </span>
-</div>
+                      <div className="mt-2 text-[12px] font-semibold text-white/80">
+                        {profile?.name?.trim()?.length ? profile.name : "Unnamed Player"}
+                      </div>
 
-  </div>
-</div>
+                      <div className="mt-1 text-[10px] text-white/45">
+                        Edit your name & avatar on the profile page before joining.
+                      </div>
+                    </div>
 
+                    <div className="rounded-2xl border border-white/15 bg-black/70 p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                          PGLD Chips
+                        </div>
+                        <div className="text-[12px] font-semibold text-white/80">
+                          BR{" "}
+                          <span className="font-mono text-[#FFD700]">
+                            {chips.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
 
-    {/* Panels drawer (RIGHT-ALIGNED, not inside the header row) */}
-    {openPanels && (
-  <div className="mt-2 grid gap-3 md:grid-cols-2">
-    {/* PLAYER PROFILE (compact) */}
-    <div className="rounded-2xl border border-white/15 bg-black/70 p-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-            Player Profile
-          </div>
-          <div className="text-[11px] text-white/50">
-            Name + avatar at table
-          </div>
-        </div>
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-bold text-black shadow-[0_0_16px_rgba(250,204,21,0.7)]"
-          style={{ backgroundColor: profile?.avatarColor ?? "#facc15" }}
-        >
-          {initials.slice(0, 3).toUpperCase()}
-        </div>
-      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleReloadDemoBankroll}
+                          className="rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
+                        >
+                          Reload demo bankroll (5,000)
+                        </button>
 
-      <div className="mt-2 text-[12px] font-semibold text-white/80">
-        {profile?.name?.trim()?.length ? profile.name : "Unnamed Player"}
-      </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRefillStack(500)}
+                          disabled={!heroSeat || handInProgress}
+                          className="rounded-full border border-emerald-400/60 bg-black/70 px-3 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-[#111827] disabled:opacity-40"
+                        >
+                          Refill stack +500
+                        </button>
+                      </div>
 
-      <div className="mt-1 text-[10px] text-white/45">
-        Edit your name & avatar on the profile page before joining.
-      </div>
-    </div>
+                      <div className="mt-1 text-[10px] text-white/45">
+                        Refill only works between hands.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
-    {/* PGLD CHIPS (compact + reload demo) */}
-    <div className="rounded-2xl border border-white/15 bg-black/70 p-3">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
-          PGLD Chips
-        </div>
-        <div className="text-[12px] font-semibold text-white/80">
-          BR{" "}
-          <span className="font-mono text-[#FFD700]">
-            {chips.toLocaleString()}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={handleReloadDemoBankroll}
-          className="rounded-full border border-[#FFD700]/70 bg-black/70 px-3 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-[#111827]"
-        >
-          Reload demo bankroll (5,000)
-        </button>
-
-        {/* NEW: Refill stack from bankroll (between hands) */}
-        <button
-          type="button"
-          onClick={() => handleRefillStack(500)} // pick a default or open a small input later
-          disabled={!heroSeat || handInProgress}
-          className="rounded-full border border-emerald-400/60 bg-black/70 px-3 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-[#111827] disabled:opacity-40"
-        >
-          Refill stack +500
-        </button>
-      </div>
-
-      <div className="mt-1 text-[10px] text-white/45">
-        Refill only works between hands.
-      </div>
-    </div>
-  </div>
-)}
-
-  </>
-)}
-
-
-            {/* MAIN FELT + TABLE AREA */}
-            <div
-              className={
-                isFullscreen
-                  ? "flex-1 flex w-full items-center justify-center"
-                  : ""
-              }
-            >
-              {/* FELT + TABLE wrapper – fullscreen geometry used as default */}
-<div
-  className={
-    isFullscreen
-      ? // Fullscreen: same geometry, just more breathing room
-        "relative mx-auto mt-1 w-full max-w-[1320px] h-[82vh] [perspective:1800px]"
-      : // Normal: big cinematic table even in standard view
-        "relative mx-auto mt-2 w-full max-w-[1320px] h-[72vh] [perspective:1800px]"
-  }
->
-
-
-
-                {/* 3D group */}
+            <div className={isFullscreen ? "flex-1 flex w-full items-center justify-center" : ""}>
+              <div
+                className={
+                  isFullscreen
+                    ? "relative mx-auto mt-1 w-full max-w-[1320px] h-[82vh] [perspective:1800px]"
+                    : "relative mx-auto mt-2 w-full max-w-[1320px] h-[72vh] [perspective:1800px]"
+                }
+              >
                 <div className="absolute inset-0 [transform:rotateX(18deg)] [transform-style:preserve-3d]">
-                  {/* Outer rail */}
                   <div className="absolute inset-0 rounded-[999px] bg-[radial-gradient(circle_at_top,#4b2f1a_0,#2b1a0d_52%,#050509_100%)] shadow-[0_26px_90px_rgba(0,0,0,1)]">
                     <div className="absolute inset-x-[14%] top-[6%] h-5 rounded-full bg-gradient-to-b from-white/18 to-transparent blur-md opacity-80" />
                   </div>
 
-                  {/* Inner felt – thinner bumper, no weird squash */}
-<div className="absolute inset-[4%] md:inset-[5%] origin-center rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
-
-                    {/* Felt texture */}
+                  <div className="absolute inset-[4%] md:inset-[5%] origin-center rounded-[999px] border border-emerald-400/45 bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)] shadow-[0_0_90px_rgba(0,0,0,0.9)] overflow-hidden">
                     <div className="pointer-events-none absolute inset-0 bg-[url('/felt/felt-texture.png')] mix-blend-soft-light opacity-[0.16]" />
 
-                    {/* Center logo */}
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       <div className="flex translate-y-1 flex-col items-center md:translate-y-0">
                         <div className="mb-1 opacity-85">
@@ -1750,17 +1288,14 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
                       </div>
                     </div>
 
-                    {/* TOTAL POT – always above board cards */}
                     {pot > 0 && (
                       <div className="pointer-events-none absolute left-1/2 top-[3%] -translate-x-1/2 z-[60]">
-                        <div className="rounded-full px-7 py-2 ... text-base md:text-lg font-extrabold">
-
-                          Total Pot {pot.toLocaleString()} PGLD
+                        <div className="rounded-full bg-black/85 border border-[#FFD700]/40 px-5 py-1.5 text-[12px] md:text-base font-extrabold text-[#FFD700] shadow-[0_0_18px_rgba(0,0,0,0.9)]">
+                          -
                         </div>
                       </div>
                     )}
 
-                    {/* Board cards – centered on felt */}
                     <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-2 z-20">
                       <div className="flex gap-1.5 md:gap-2">
                         {boardCards.map((c, i) => {
@@ -1777,776 +1312,716 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
                       </div>
                     </div>
 
-                    {/* SHOWDOWN – under total pot */}
-                    {showdown &&
-                      table &&
-                      showdown.handId === table.handId && (
-                        <div className="pointer-events-none absolute left-1/2 top-[16%] z-40 flex -translate-x-1/2 flex-col items-center gap-1.5 text-[11px] md:text-sm">
-                          <div
-                            className={[
-                              "rounded-full bg-black/90 px-4 py-1.5 font-semibold",
-                              "text-emerald-300 shadow-[0_0_18px_rgba(0,0,0,0.9)]",
-                              "border border-emerald-400/70",
-                            ].join(" ")}
-                          >
-                            Showdown • Pot {pot.toLocaleString()} PGLD
-                          </div>
-
-                          {Array.isArray(showdown.players) &&
-                            showdown.players
-                              .filter((p) => p.isWinner)
-                              .map((p) => (
-                                <div
-                                  key={p.playerId + p.seatIndex}
-                                  className="rounded-full bg-black/85 px-3.5 py-1 text-[10px] md:text-[11px] text-amber-100 shadow shadow-black/80 border border-[#FFD700]/60"
-                                >
-                                  Seat {p.seatIndex + 1} wins — {p.rankName}
-                                </div>
-                              ))}
+                    {showdown && table && showdown.handId === table.handId && (
+                      <div className="pointer-events-none absolute left-1/2 top-[16%] z-40 flex -translate-x-1/2 flex-col items-center gap-1.5 text-[11px] md:text-sm">
+                        <div
+                          className={[
+                            "rounded-full bg-black/90 px-4 py-1.5 font-semibold",
+                            "text-emerald-300 shadow-[0_0_18px_rgba(0,0,0,0.9)]",
+                            "border border-emerald-400/70",
+                          ].join(" ")}
+                        >
+                          Showdown • Pot {pot.toLocaleString()} PGLD
                         </div>
-                      )}
+
+                        {Array.isArray(showdown.players) &&
+                          showdown.players
+                            .filter((p) => p.isWinner)
+                            .map((p) => (
+                              <div
+                                key={p.playerId + p.seatIndex}
+                                className="rounded-full bg-black/85 px-3.5 py-1 text-[10px] md:text-[11px] text-amber-100 shadow shadow-black/80 border border-[#FFD700]/60"
+                              >
+                                Seat {p.seatIndex + 1} wins — {p.rankName}
+                              </div>
+                            ))}
+                      </div>
+                    )}
                   </div>
 
-                  
+                  {/* SEATS */}
+                  <div className="absolute inset-[2%] text-[10px] text-white/80 md:text-[11px]">
+                    {(() => {
+                      const N = 9;
+                      const seatByIndex = new Map<number, (typeof seats)[number]>();
+                      seats.forEach((s) => seatByIndex.set(s.seatIndex, s));
 
-                {/* SEATS ON BUMPER – fixed slots (OPEN seats) + deterministic fan-out */}
-<div className="absolute inset-[2%] text-[10px] text-white/80 md:text-[11px]">
+                      const heroSeatIndex = heroSeat?.seatIndex ?? null;
+                      const slotToSeatIndex: Array<number | null> = Array(N).fill(null);
 
-  {(() => {
-    const N = 9;
+                      if (HERO_CENTER_VIEW && heroSeatIndex !== null) {
+                        slotToSeatIndex[0] = heroSeatIndex;
 
-    // Build a seat map by seatIndex (0..8)
-    const seatByIndex = new Map<number, (typeof seats)[number]>();
-    seats.forEach((s) => seatByIndex.set(s.seatIndex, s));
+                        const order: number[] = [];
+                        for (let d = 1; d <= 4; d++) {
+                          const left = (heroSeatIndex - d + N) % N;
+                          const right = (heroSeatIndex + d) % N;
+                          order.push(left, right);
+                        }
 
-    // Hero seatIndex (only when seated)
-    const heroSeatIndex = heroSeat?.seatIndex ?? null;
+                        const occupied = order.filter((idx) => !!seatByIndex.get(idx)?.playerId);
 
-    // Decide which seatIndex goes into each visual slot (0..8)
-    // slotToSeatIndex[slot] = seatIndex | null
-    const slotToSeatIndex: Array<number | null> = Array(N).fill(null);
+                        let k = 0;
+                        for (let fillPos = 1; fillPos < ACTIVE_SLOT_FILL.length; fillPos++) {
+                          const slot = ACTIVE_SLOT_FILL[fillPos];
+                          const seatIndex = occupied[k++];
+                          if (typeof seatIndex === "number") slotToSeatIndex[slot] = seatIndex;
+                        }
+                      } else {
+                        for (let i = 0; i < N; i++) slotToSeatIndex[i] = i;
+                      }
 
-    // If hero-centered and hero exists, force hero into slot 0
-    if (HERO_CENTER_VIEW && heroSeatIndex !== null) {
-      slotToSeatIndex[0] = heroSeatIndex;
+                      return Array.from({ length: N }).map((_, slotIndex) => {
+                        const seatIndex = slotToSeatIndex[slotIndex];
+                        const seat =
+                          typeof seatIndex === "number"
+                            ? seatByIndex.get(seatIndex)
+                            : undefined;
 
-      // Fan-out seatIndex order around hero: left, right, left2, right2...
-      const order: number[] = [];
-      for (let d = 1; d <= 4; d++) {
-        const left = (heroSeatIndex - d + N) % N;  // CCW
-        const right = (heroSeatIndex + d) % N;     // CW
-        order.push(left, right);
-      }
+                        const isOccupied = !!seat?.playerId;
+                        const isHeroSeat = isOccupied && seat!.playerId === playerId;
 
-      // Take only occupied (playerId) seats in that fan-out order
-      const occupied = order.filter((idx) => {
-        const s = seatByIndex.get(idx);
-        return !!s?.playerId;
-      });
+                        const seatBetting = isOccupied
+                          ? betting?.players.find((p) => p.seatIndex === seat!.seatIndex)
+                          : undefined;
 
-      // Fill the visual slots in your desired pattern
-      let k = 0;
-      for (let fillPos = 1; fillPos < ACTIVE_SLOT_FILL.length; fillPos++) {
-        const slot = ACTIVE_SLOT_FILL[fillPos];
-        const seatIndex = occupied[k++];
-        if (typeof seatIndex === "number") slotToSeatIndex[slot] = seatIndex;
-      }
-    } else {
-      // Casino-style fallback: seatIndex == slot
-      for (let i = 0; i < N; i++) slotToSeatIndex[i] = i;
-    }
+                        const committed = isOccupied ? (totalBySeat[seat!.seatIndex] ?? 0) : 0;
 
-    // Now render 9 fixed slots (OPEN if empty)
-    return Array.from({ length: N }).map((_, slotIndex) => {
-      const seatIndex = slotToSeatIndex[slotIndex];
-      const seat = typeof seatIndex === "number" ? seatByIndex.get(seatIndex) : undefined;
+                        const stackAmount = isOccupied
+                          ? (seatBetting?.stack ?? seat!.chips ?? 0)
+                          : 0;
 
-      const isOccupied = !!seat?.playerId;
-      const isHeroSeat = isOccupied && seat!.playerId === playerId;
+                        const isInHand =
+                          !!seatBetting && seatBetting.inHand && !seatBetting.hasFolded;
 
-      const seatBetting = isOccupied
-        ? betting?.players.find((p) => p.seatIndex === seat!.seatIndex)
-        : undefined;
+                        const isOut =
+                          !!seatBetting &&
+                          (seatBetting.hasFolded || !(seatBetting.inHand ?? false));
 
-      const committed =
-  isOccupied ? (totalBySeat[seat!.seatIndex] ?? 0) : 0;
+                        const isCurrentTurn =
+                          isOccupied &&
+                          currentSeatIndex !== null &&
+                          betting?.street !== "done" &&
+                          currentSeatIndex === seat!.seatIndex;
 
+                        const isButton =
+                          isOccupied && buttonSeatIndex !== null && buttonSeatIndex === seat!.seatIndex;
 
-      const stackAmount =
-        isOccupied ? (seatBetting?.stack ?? seat!.chips ?? 0) : 0;
+                        const sbSeatIndex =
+                          betting && typeof betting.smallBlindSeatIndex === "number"
+                            ? betting.smallBlindSeatIndex
+                            : null;
 
-      const isInHand =
-        !!seatBetting && seatBetting.inHand && !seatBetting.hasFolded;
+                        const bbSeatIndex =
+                          betting && typeof betting.bigBlindSeatIndex === "number"
+                            ? betting.bigBlindSeatIndex
+                            : null;
 
-      const isOut =
-        !!seatBetting && (seatBetting.hasFolded || !(seatBetting.inHand ?? false));
+                        const isSmallBlindSeat =
+                          isOccupied &&
+                          sbSeatIndex !== null &&
+                          betting?.street === "preflop" &&
+                          sbSeatIndex === seat!.seatIndex;
 
-      const isCurrentTurn =
-        isOccupied &&
-        currentSeatIndex !== null &&
-        betting?.street !== "done" &&
-        currentSeatIndex === seat!.seatIndex;
+                        const isBigBlindSeat =
+                          isOccupied &&
+                          bbSeatIndex !== null &&
+                          betting?.street === "preflop" &&
+                          bbSeatIndex === seat!.seatIndex;
 
-      const isButton =
-        isOccupied &&
-        buttonSeatIndex !== null &&
-        buttonSeatIndex === seat!.seatIndex;
+                        const label = !isOccupied
+                          ? `Seat ${slotIndex + 1}`
+                          : seat!.name
+                          ? seat!.name
+                          : seat!.playerId
+                          ? seat!.playerId
+                          : `Seat ${seat!.seatIndex + 1}`;
 
-      const sbSeatIndex =
-        betting && typeof betting.smallBlindSeatIndex === "number"
-          ? betting.smallBlindSeatIndex
-          : null;
+                        const winnerKey = isOccupied ? `${seat!.seatIndex}:${seat!.playerId ?? ""}` : "";
+                        const rawIsWinnerSeat = isOccupied ? winnerSeatKeys.has(winnerKey) : false;
+                        const isWinnerSeat = rawIsWinnerSeat && !(isHeroSeat && !handInProgress);
 
-      const bbSeatIndex =
-        betting && typeof betting.bigBlindSeatIndex === "number"
-          ? betting.bigBlindSeatIndex
-          : null;
+                        let visibleCards: string[] | null = null;
 
-      const isSmallBlindSeat =
-        isOccupied &&
-        sbSeatIndex !== null &&
-        betting?.street === "preflop" &&
-        sbSeatIndex === seat!.seatIndex;
+                        if (isHeroSeat && !handInProgress) {
+                          visibleCards = null;
+                        } else if (
+                          handInProgress &&
+                          isHeroSeat &&
+                          isInHand &&
+                          heroHand?.length === 2
+                        ) {
+                          visibleCards = heroHand;
+                        } else if (isOccupied) {
+                          const manual = revealedHoles[seat!.playerId!];
+                          if (betting?.street === "done" && manual?.length === 2 && !isHeroSeat) {
+                            visibleCards = manual;
+                          } else if (
+                            betting?.street === "done" &&
+                            showdown &&
+                            table &&
+                            showdown.handId === table.handId &&
+                            !isHeroSeat
+                          ) {
+                            const sdPlayer = showdown.players.find(
+                              (p) =>
+                                p.seatIndex === seat!.seatIndex &&
+                                p.playerId === seat!.playerId
+                            );
+                            if (sdPlayer?.holeCards?.length === 2) visibleCards = sdPlayer.holeCards;
+                          }
+                        }
 
-      const isBigBlindSeat =
-        isOccupied &&
-        bbSeatIndex !== null &&
-        betting?.street === "preflop" &&
-        bbSeatIndex === seat!.seatIndex;
+                        const stylePos: React.CSSProperties =
+                          ACTIVE_GEOMETRY[slotIndex] ??
+                          ACTIVE_GEOMETRY[ACTIVE_GEOMETRY.length - 1];
 
-      const label = !isOccupied
-        ? `Seat ${slotIndex + 1}`
-        : seat!.name
-        ? seat!.name
-        : seat!.playerId
-        ? seat!.playerId
-        : `Seat ${seat!.seatIndex + 1}`;
+                        return (
+                          <div
+                            key={`slot-${slotIndex}`}
+                            className="absolute flex flex-col items-center gap-1"
+                            style={stylePos}
+                          >
+                            <div className="mb-0.5 flex gap-1">
+                              {isOccupied && isButton && (
+                                <div className="rounded-full bg-[#FFD700] px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
+                                  D
+                                </div>
+                              )}
+                              {isOccupied && isSmallBlindSeat && (
+                                <div className="rounded-full bg-sky-400 px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
+                                  SB
+                                </div>
+                              )}
+                              {isOccupied && isBigBlindSeat && (
+                                <div className="rounded-full bg-emerald-400 px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
+                                  BB
+                                </div>
+                              )}
+                            </div>
 
-      // Winner key / banner (only if occupied)
-      const winnerKey = isOccupied ? `${seat!.seatIndex}:${seat!.playerId ?? ""}` : "";
-      const rawIsWinnerSeat = isOccupied ? winnerSeatKeys.has(winnerKey) : false;
-      const isWinnerSeat =
-        rawIsWinnerSeat && !(isHeroSeat && !handInProgress);
+                            {isOccupied && committed > 0 && (
+                              <div className="pointer-events-none rounded-full bg-black/85 border border-amber-300/60 px-3 py-[2px] text-[11px] md:text-[12px] font-extrabold text-amber-200 shadow shadow-black/80">
+                                BET {formatChips(committed)}
+                              </div>
+                            )}
 
-      // Visible cards rules (keep your current behavior)
-      let visibleCards: string[] | null = null;
+                            <div className="relative flex flex-col items-center">
+                              {isOccupied && isWinnerSeat && (
+                                <div
+                                  className="pointer-events-none absolute left-1/2 z-50 flex -translate-x-1/2 flex-col items-center winner-anim"
+                                  style={{ top: -62 }}
+                                >
+                                  <div className="winner-emoji-pop mb-1 text-[28px] md:text-[36px] drop-shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+                                    🏆
+                                  </div>
+                                  <div className="px-3 py-0.5 rounded-full bg-gradient-to-r from-[#F59E0B]/90 via-[#FCD34D]/95 to-[#F59E0B]/90 border border-[#7C2D12]/60 shadow-[0_2px_6px_rgba(0,0,0,0.7)] text-[9px] md:text-[10px] font-bold text-black tracking-wide uppercase leading-none">
+                                    Winner
+                                  </div>
+                                </div>
+                              )}
 
-      if (isHeroSeat && !handInProgress) {
-        visibleCards = null;
-      } else if (handInProgress && isHeroSeat && isInHand && heroHand?.length === 2) {
-        visibleCards = heroHand;
-      } else if (isOccupied) {
-        const manual = revealedHoles[seat!.playerId!];
-        if (betting?.street === "done" && manual?.length === 2 && !isHeroSeat) {
-          visibleCards = manual;
-        } else if (
-          betting?.street === "done" &&
-          showdown &&
-          table &&
-          showdown.handId === table.handId &&
-          !isHeroSeat
-        ) {
-          const sdPlayer = showdown.players.find(
-            (p) => p.seatIndex === seat!.seatIndex && p.playerId === seat!.playerId
-          );
-          if (sdPlayer?.holeCards?.length === 2) visibleCards = sdPlayer.holeCards;
-        }
-      }
+                              {isOccupied &&
+                                !isWinnerSeat &&
+                                seatBetting?.hasFolded &&
+                                betting?.street !== "done" && (
+                                  <div className="pointer-events-none absolute -top-8 left-1/2 z-30 -translate-x-1/2 rounded-full bg-slate-800/95 px-2 py-[2px] text-[9px] font-bold text-white/90 shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+                                    FOLDED
+                                  </div>
+                                )}
 
-      const stylePos: React.CSSProperties =
-        ACTIVE_GEOMETRY[slotIndex] ?? ACTIVE_GEOMETRY[ACTIVE_GEOMETRY.length - 1];
+                              <div className="relative">
+                                {isOccupied && isCurrentTurn && actionSeconds !== null && (
+                                  <div
+                                    className="hero-timer-ring pointer-events-none absolute inset-[-5px] rounded-full"
+                                    style={{
+                                      backgroundImage: `conic-gradient(${
+                                        actionPhase === "extra" ? "#f97373" : "#FACC15"
+                                      } ${actionPct}%, transparent 0)`,
+                                    }}
+                                  >
+                                    <div className="absolute inset-[4px] rounded-full bg-transparent" />
+                                  </div>
+                                )}
 
-      return (
-        <div
-          key={`slot-${slotIndex}`}
-          className="absolute flex flex-col items-center gap-1"
-          style={stylePos}
-        >
-          {/* Position badges: D / SB / BB (only when occupied) */}
-          <div className="mb-0.5 flex gap-1">
-            {isOccupied && isButton && (
-              <div className="rounded-full bg-[#FFD700] px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
-                D
+                                <div
+                                  className={[
+                                    "relative z-0 flex h-14 w-14 md:h-20 md:w-20 items-center justify-center rounded-full overflow-hidden",
+                                    isOccupied ? "bg-slate-900" : "bg-black/40",
+                                    isOccupied && isCurrentTurn && !isHeroSeat
+                                      ? "animate-soft-glow border border-[#FACC15] shadow-[0_0_16px_rgba(250,204,21,0.8)]"
+                                      : "border border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.9)]",
+                                    isWinnerSeat ? "winner-glow" : "",
+                                    isOccupied && isOut ? "opacity-40" : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                >
+                                  {isOccupied ? (
+                                    isHeroSeat && (profile as any)?.avatarUrl ? (
+                                      <Image
+                                        src={(profile as any).avatarUrl}
+                                        alt="Avatar"
+                                        width={80}
+                                        height={80}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <Image
+                                        src="/felt/bgrc-logo.png"
+                                        alt="PGLD"
+                                        width={80}
+                                        height={80}
+                                        className="object-contain opacity-90"
+                                      />
+                                    )
+                                  ) : (
+                                    <div className="text-[10px] font-bold tracking-widest text-white/70">
+                                      OPEN
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isOccupied && (
+                                <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-between">
+                                  <div className="mt-[6px] flex justify-center">
+                                    {visibleCards && visibleCards.length === 2 ? (
+                                      <div className="relative flex -space-x-5 md:-space-x-6">
+                                        {visibleCards.map((c, i) => (
+                                          <div
+                                            key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
+                                            className="relative"
+                                            style={{
+                                              transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
+                                              transformOrigin: "50% 80%",
+                                            }}
+                                          >
+                                            <PokerCard card={c} highlight={isWinnerSeat} />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : isInHand && handInProgress ? (
+                                      <div className="relative flex -space-x-5 md:-space-x-6">
+                                        {[0, 1].map((i) => (
+                                          <div
+                                            key={i}
+                                            className={`h-9 w-7 md:h-10 md:w-8 rounded-[4px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
+                                              i === 1 ? "rotate-[10deg]" : "rotate-[-10deg]"
+                                            } ${isOut ? "opacity-30" : "opacity-90"}`}
+                                            style={{
+                                              transformOrigin: "50% 80%",
+                                              transform: "translateY(0px)",
+                                            }}
+                                          />
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="mb-[4px] flex w-full justify-center">
+                                    <div className="pointer-events-auto flex w-[104px] md:w-auto md:min-w-[112px] md:max-w-[150px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
+                                      <div className="rounded-full bg-black/70 px-2 py-[1px] text-[12px] md:text-[15px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+                                        {formatChips(stackAmount)} PGLD
+                                      </div>
+
+                                      <div className="mt-[1px] max-w-[96px] md:max-w-[118px] truncate text-[10px] md:text-[12px] text-white/85 leading-tight">
+                                        {label}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {isOccupied &&
+                                !isInHand &&
+                                !seatBetting?.hasFolded &&
+                                betting &&
+                                betting.street !== "done" && (
+                                  <div className="mt-1 rounded-full bg-black/80 px-2 py-[1px] text-[9px] text-white/75 border border-white/25 shadow shadow-black/60">
+                                    Waiting for next hand
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
               </div>
-            )}
-            {isOccupied && isSmallBlindSeat && (
-              <div className="rounded-full bg-sky-400 px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
-                SB
-              </div>
-            )}
-            {isOccupied && isBigBlindSeat && (
-              <div className="rounded-full bg-emerald-400 px-1.5 py-0.5 text-[9px] font-bold text-black shadow">
-                BB
-              </div>
-            )}
-          </div>
-
-          {/* BET badge (high visibility, global readability) */}
-          {isOccupied && committed > 0 && (
-            <div className="pointer-events-none rounded-full bg-black/85 border border-amber-300/60 px-3 py-[2px] text-[11px] md:text-[12px] font-extrabold text-amber-200 shadow shadow-black/80">
-              BET {formatChips(committed)}
             </div>
-          )}
 
-          {/* Avatar + overlays */}
-          <div className="relative flex flex-col items-center">
-            {/* Winner banner (fixed: no invalid Tailwind, sits ABOVE cards) */}
-            {isOccupied && isWinnerSeat && (
-              <div
-                className="pointer-events-none absolute left-1/2 z-50 flex -translate-x-1/2 flex-col items-center winner-anim"
-                style={{ top: -62 }}
-              >
-                <div className="winner-emoji-pop mb-1 text-[28px] md:text-[36px] drop-shadow-[0_0_10px_rgba(0,0,0,0.9)]">
-                  🏆
-                </div>
-                <div className="px-3 py-0.5 rounded-full bg-gradient-to-r from-[#F59E0B]/90 via-[#FCD34D]/95 to-[#F59E0B]/90 border border-[#7C2D12]/60 shadow-[0_2px_6px_rgba(0,0,0,0.7)] text-[9px] md:text-[10px] font-bold text-black tracking-wide uppercase leading-none">
-                  Winner
-                </div>
-              </div>
-            )}
-
-            {/* Fold banner */}
-            {isOccupied && !isWinnerSeat && seatBetting?.hasFolded && betting?.street !== "done" && (
-              <div className="pointer-events-none absolute -top-8 left-1/2 z-30 -translate-x-1/2 rounded-full bg-slate-800/95 px-2 py-[2px] text-[9px] font-bold text-white/90 shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
-                FOLDED
-              </div>
-            )}
-
-
-            {/* Avatar + countdown ring */}
-            <div className="relative">
-              {isOccupied && isCurrentTurn && actionSeconds !== null && (
-                <div
-                  className="hero-timer-ring pointer-events-none absolute inset-[-5px] rounded-full"
-                  style={{
-                    backgroundImage: `conic-gradient(${
-                      actionPhase === "extra" ? "#f97373" : "#FACC15"
-                    } ${actionPct}%, transparent 0)`,
-                  }}
-                >
-                  <div className="absolute inset-[4px] rounded-full bg-transparent" />
-                </div>
-              )}
-
+            {/* HERO ACTION BAR */}
+            <div
+              className={[
+                "mt-3 mb-4 flex w-full justify-center",
+                isFullscreen ? "max-w-[1100px] mx-auto" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
               <div
                 className={[
-                  // slightly smaller on mobile so 9 fits cleanly
-                  "relative z-0 flex h-14 w-14 md:h-20 md:w-20 items-center justify-center rounded-full overflow-hidden",
-                  isOccupied ? "bg-slate-900" : "bg-black/40",
-                  isOccupied && isCurrentTurn && !isHeroSeat
-                    ? "animate-soft-glow border border-[#FACC15] shadow-[0_0_16px_rgba(250,204,21,0.8)]"
-                    : "border border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.9)]",
-                  isWinnerSeat ? "winner-glow" : "",
-                  isOccupied && isOut ? "opacity-40" : "",
+                  "antialiased w-full max-w-[660px] rounded-2xl border border-white/15 bg-black/85 px-4 py-2 md:px-5 md:py-2",
+                  "text-[12px] text-white/85 font-semibold shadow-[0_0_18px_rgba(0,0,0,0.75)]",
+                  "transition-all duration-300 ease-out transform hero-bar-slide",
+                  heroHasAction && isHeroTurn
+                    ? "translate-y-0 opacity-100 scale-100"
+                    : "translate-y-1 opacity-95 scale-[0.99] md:translate-y-0",
                 ]
                   .filter(Boolean)
                   .join(" ")}
               >
-                {isOccupied ? (
-                  isHeroSeat && (profile as any)?.avatarUrl ? (
-                    <Image
-                      src={(profile as any).avatarUrl}
-                      alt="Avatar"
-                      width={80}
-                      height={80}
-                      className="h-full w-full object-cover"
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 truncate">
+                    <div className="truncate text-white text-[14px] font-semibold leading-tight">
+                      {describeHero()}
+                    </div>
+
+                    <div className="mt-[2px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
+                      {heroBetting && (
+                        <span className="rounded-full bg-black/50 px-2 py-[1px] border border-white/15">
+                          Stack{" "}
+                          <span className="font-mono text-[#FFD700]">
+                            {heroBetting.stack} PGLD
+                          </span>
+                        </span>
+                      )}
+
+                      <span className="ml-2 font-mono font-extrabold text-[#FFD700]">
+  {chips.toLocaleString()}
+</span>
+<span className="ml-1 text-white/55">PGLD</span>
+<span className="ml-2 text-emerald-200/90 font-mono">
+  {formatUsdFromPgld(chips)}
+</span>
+
+
+                      {isSittingOut && (
+                        <span className="rounded-full bg-amber-500/10 px-2 py-[1px] border border-amber-400/50 text-amber-200">
+                          Sitting out
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1.5 max-w-[190px]">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRefillStack(500)}
+                        disabled={!heroSeat || handInProgress}
+                        className="rounded-full border border-emerald-400/50 bg-black/60 px-3 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-black/75 disabled:opacity-40"
+                      >
+                        Refill +500
+                      </button>
+
+                      {isHostClient && (
+                        <button
+                          type="button"
+                          onClick={() => setShowHostPanel((v: boolean) => !v)}
+                          className="rounded-full border border-amber-300/40 bg-black/60 px-3 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/75"
+                        >
+                          Host {showHostPanel ? "▾" : "▸"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isHeroTurn && actionSeconds !== null && (
+                        <span
+                          className={[
+                            "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
+                            "timer-neon",
+                            actionPhase === "extra"
+                              ? "border border-red-500/60 text-red-200 bg-red-600/25"
+                              : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleUseTimeBank}
+                        disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
+                        className="rounded-full border border-sky-400/45 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-sky-200 hover:bg-black/75 disabled:opacity-40"
+                      >
+                        {timeBankUsed ? "Used" : `+${TIME_BANK_SECONDS}s`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="flex-1 text-[11px] text-white/65">
+                    {!betting || betting.street === "done"
+                      ? showdown && table && showdown.handId === table.handId
+                        ? "Hand complete. Showdown on the felt."
+                        : "Waiting for next hand…"
+                      : !heroSeat || !heroBetting
+                      ? "Sit to join the action."
+                      : !heroIsInHand
+                      ? "Seated. Wait for next hand."
+                      : isSittingOut
+                      ? "You are sitting out."
+                      : !isHeroTurn
+                      ? "Waiting for other players…"
+                      : "Your turn."}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSittingOut((v: boolean) => !v)}
+                    disabled={!heroSeat}
+                    className="rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[10px] font-semibold text-white/80 hover:border-[#FFD700]/60 disabled:opacity-40"
+                  >
+                    {isSittingOut ? "Sit in" : "Sit out"}
+                  </button>
+                </div>
+
+                {isHeroTurn && betting && heroBetting && (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                        Raise
+                      </span>
+                      <span className="rounded-full border border-white/15 bg-black/55 px-2 py-[2px] text-[11px] font-mono text-[#FFD700]">
+                        {manualBet.trim() !== ""
+                          ? manualBet
+                          : raiseSize > 0
+                          ? raiseSize
+                          : betting.bigBlind * 2}{" "}
+                        PGLD
+                      </span>
+                    </div>
+
+                    <div className="flex-1">
+                      <input
+                        type="range"
+                        min={betting.bigBlind * 2}
+                        max={Math.max(betting.bigBlind * 8, betting.pot || betting.bigBlind * 4)}
+                        step={betting.bigBlind}
+                        value={raiseSize || betting.bigBlind * 2}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setRaiseSize(v);
+                          setManualBet("");
+                        }}
+                        className="w-full accent-[#FFD700]"
+                      />
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={betting.bigBlind * 2}
+                        value={manualBet}
+                        onChange={(e) => setManualBet(e.target.value)}
+                        placeholder="Manual"
+                        className="w-20 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[11px] text-white/85 outline-none focus:border-[#FFD700]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setManualBet("")}
+                        className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRaiseSize(betting.bigBlind * 2);
+                          setManualBet("");
+                        }}
+                        className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
+                      >
+                        Min
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {heroHandHelper &&
+                  betting &&
+                  betting.street !== "preflop" &&
+                  table &&
+                  table.board.length >= 3 && (
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[14px] md:text-[15px]">
+                      <span
+                        className={[
+                          "font-semibold",
+                          heroHandHelper.category >= 6
+                            ? "text-emerald-300"
+                            : heroHandHelper.category >= 4
+                            ? "text-sky-300"
+                            : heroHandHelper.category >= 2
+                            ? "text-amber-200"
+                            : "text-white/70",
+                        ].join(" ")}
+                      >
+                        {heroHandHelper.label}
+                      </span>
+                    </div>
+                  )}
+
+                {isHeroTurn && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={
+                        actionPhase === "extra"
+                          ? "h-full rounded-full bg-gradient-to-r from-red-400 via-red-500 to-red-700 timer-bar"
+                          : "h-full rounded-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500 timer-bar"
+                      }
+                      style={{ width: `${actionPct}%` }}
                     />
-                  ) : (
-                    <Image
-                      src="/felt/bgrc-logo.png"
-                      alt="PGLD"
-                      width={80}
-                      height={80}
-                      className="object-contain opacity-90"
-                    />
-                  )
-                ) : (
-                  <div className="text-[10px] font-bold tracking-widest text-white/70">
-                    OPEN
+                  </div>
+                )}
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleSitOrStand}
+                    disabled={!ready || (!!heroSeat && handInProgress)}
+                    className="rounded-xl bg-emerald-500 px-3 py-2 text-[12px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+                  >
+                    {heroSeat ? "Stand up" : "Sit at table"}
+                  </button>
+
+                  {(() => {
+                    const canShowCards =
+                      !!heroSeat &&
+                      !!heroHand &&
+                      heroHand.length === 2 &&
+                      !!betting &&
+                      betting.street === "done" &&
+                      !!showdown &&
+                      !!table &&
+                      showdown.handId === table.handId;
+
+                    if (!canShowCards) return null;
+
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => sendMessage({ type: "show-cards" })}
+                        className="rounded-xl border border-[#FFD700]/45 bg-black/55 px-3 py-2 text-[12px] font-semibold text-[#FFD700] hover:bg-black/70"
+                      >
+                        Show cards
+                      </button>
+                    );
+                  })()}
+                </div>
+
+                {isHeroTurn && betting && heroBetting && (
+                  <div className="mt-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={handlePrimaryAction}
+                        className="rounded-xl bg-slate-800 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.25)]"
+                      >
+                        {primaryActionLabel}
+                      </button>
+
+                      <button
+                        onClick={handleBet}
+                        disabled={!betting || !heroBetting}
+                        className="rounded-xl bg-emerald-500 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.35)] disabled:opacity-40"
+                      >
+                        {(() => {
+                          if (!betting || !heroBetting) return "Bet";
+                          const callNeeded = Math.max(
+                            0,
+                            betting.maxCommitted - heroBetting.committed
+                          );
+                          const minRaise = betting.bigBlind * 2;
+                          const rawRaise =
+                            manualBet.trim().length > 0
+                              ? Number(manualBet)
+                              : raiseSize > 0
+                              ? raiseSize
+                              : minRaise;
+
+                          const raiseDelta = Math.max(
+                            minRaise,
+                            Number.isFinite(rawRaise) && rawRaise > 0
+                              ? Math.floor(rawRaise)
+                              : minRaise
+                          );
+
+                          const total = callNeeded + raiseDelta;
+                          return `Bet ${total}`;
+                        })()}{" "}
+                        <span className="opacity-70">PGLD</span>
+                      </button>
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={handleFold}
+                        className="rounded-lg bg-red-500/75 px-3 py-2 text-[12px] font-semibold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.35)]"
+                      >
+                        Fold
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleAllIn}
+                        disabled={!heroBetting}
+                        className="rounded-lg bg-slate-900/80 px-3 py-2 text-[12px] font-semibold text-red-200 border border-red-400/40 hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        All-in
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isHostClient && (
+                  <div className="mt-2 rounded-xl border border-white/10 bg-black/50 px-2 py-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowHostPanel((v: boolean) => !v)}
+                        className="rounded-lg border border-amber-300/35 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/70"
+                      >
+                        Host tools {showHostPanel ? "▾" : "▸"}
+                      </button>
+
+                      {showHostPanel && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
+                            <button
+                              type="button"
+                              onClick={handleManualDeal}
+                              className="rounded-lg bg-[#FFD700] px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-yellow-400"
+                            >
+                              Start game
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => sendMessage({ type: "reset-table" })}
+                            className="rounded-lg border border-red-400/45 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-red-200 hover:bg-black/70"
+                          >
+                            Reset
+                          </button>
+
+                          <span className="text-[10px] text-white/45">Host-only controls</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Overlay: cards + stack/name pill (only if occupied) */}
-            {isOccupied && (
-              <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-between">
-                {/* Cards */}
-                <div className="mt-[6px] flex justify-center">
-                  {visibleCards && visibleCards.length === 2 ? (
-                    <div className="relative flex -space-x-5 md:-space-x-6">
-                      {visibleCards.map((c, i) => (
-                        <div
-                          key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
-                          className="relative"
-                          style={{
-                            transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
-                            transformOrigin: "50% 80%",
-                          }}
-                        >
-                          <PokerCard card={c} highlight={isWinnerSeat} />
-                        </div>
-                      ))}
-                    </div>
-                  ) : isInHand && handInProgress ? (
-                    <div className="relative flex -space-x-5 md:-space-x-6">
-                      {[0, 1].map((i) => (
-                        <div
-                          key={i}
-                          className={`h-9 w-7 md:h-10 md:w-8 rounded-[4px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
-                            i === 1 ? "rotate-[10deg]" : "rotate-[-10deg]"
-                          } ${isOut ? "opacity-30" : "opacity-90"}`}
-                          style={{ transformOrigin: "50% 80%", transform: "translateY(0px)" }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Pill */}
-                <div className="mb-[4px] flex w-full justify-center">
-  <div className="pointer-events-auto flex w-[104px] md:w-auto md:min-w-[112px] md:max-w-[150px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
-    <div className="rounded-full bg-black/70 px-2 py-[1px] text-[12px] md:text-[15px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-      {formatChips(stackAmount)} PGLD
-    </div>
-
-    <div className="mt-[1px] max-w-[96px] md:max-w-[118px] truncate text-[10px] md:text-[12px] text-white/85 leading-tight">
-      {label}
-    </div>
-  </div>
-</div>
-
-              </div>
-            )}.
-
-            
-{/* Waiting label (occupied, not in hand) */}
-            {isOccupied &&
-              !isInHand &&
-              !seatBetting?.hasFolded &&
-              betting &&
-              betting.street !== "done" && (
-                <div className="mt-1 rounded-full bg-black/80 px-2 py-[1px] text-[9px] text-white/75 border border-white/25 shadow shadow-black/60">
-                  Waiting for next hand
-                </div>
-              )}
-          </div>
-        </div>
-      );
-    });
-  })()}
-</div>
-
-
-                </div>
-              </div>
-            </div>
-
-
-            
-
-           {/* HERO ACTION BAR – compact, centered, mobile-safe (clean + tight) */}
-<div
-  className={[
-    "mt-3 mb-4 flex w-full justify-center",
-    isFullscreen ? "max-w-[1100px] mx-auto" : "",
-  ]
-    .filter(Boolean)
-    .join(" ")}
->
-  <div
-    className={[
-      // add antialiased + slightly softer border/shadow for crisp UI
-      "antialiased w-full max-w-[660px] rounded-2xl border border-white/15 bg-black/85 px-4 py-2 md:px-5 md:py-2",
-      "text-[12px] text-white/85 font-semibold shadow-[0_0_18px_rgba(0,0,0,0.75)]",
-      "transition-all duration-300 ease-out transform hero-bar-slide",
-      heroHasAction && isHeroTurn
-        ? "translate-y-0 opacity-100 scale-100"
-        : "translate-y-1 opacity-95 scale-[0.99] md:translate-y-0",
-    ]
-      .filter(Boolean)
-      .join(" ")}
-  >
-    {/* TOP ROW: hero label + stack/bankroll + refill + timer */}
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0 flex-1 truncate">
-        <div className="truncate text-white text-[14px] font-semibold leading-tight">
-          {describeHero()}
-        </div>
-
-        <div className="mt-[2px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
-          {heroBetting && (
-            <span className="rounded-full bg-black/50 px-2 py-[1px] border border-white/15">
-              Stack{" "}
-              <span className="font-mono text-[#FFD700]">
-                {heroBetting.stack} PGLD
-              </span>
-            </span>
-          )}
-
-          <span className="rounded-full bg-black/50 px-2.5 py-[1px] border border-white/15">
-            BR{" "}
-            <span className="font-mono text-[#FFD700]">
-              {chips.toLocaleString()} PGLD
-            </span>
-          </span>
-
-          {isSittingOut && (
-            <span className="rounded-full bg-amber-500/10 px-2 py-[1px] border border-amber-400/50 text-amber-200">
-              Sitting out
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Right cluster: refill + timers + host toggle (constrained so it doesn't bloat mobile) */}
-      <div className="flex flex-col items-end gap-1.5 max-w-[190px]">
-        <div className="flex items-center gap-2">
-          {/* Refill stack from bankroll (between hands) */}
-          <button
-            type="button"
-            onClick={() => handleRefillStack(500)}
-            disabled={!heroSeat || handInProgress}
-            className="rounded-full border border-emerald-400/50 bg-black/60 px-3 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-black/75 disabled:opacity-40"
-          >
-            Refill +500
-          </button>
-
-          {/* Host panel toggle (host only) */}
-          {isHostClient && (
-            <button
-              type="button"
-              onClick={() => setShowHostPanel((v: boolean) => !v)}
-              className="rounded-full border border-amber-300/40 bg-black/60 px-3 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/75"
-            >
-              Host {showHostPanel ? "▾" : "▸"}
-            </button>
-          )}
-        </div>
-
-        {/* Timer + time bank */}
-        <div className="flex items-center gap-2">
-          {isHeroTurn && actionSeconds !== null && (
-            <span
-              className={[
-                "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
-                "timer-neon",
-                actionPhase === "extra"
-                  ? "border border-red-500/60 text-red-200 bg-red-600/25"
-                  : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
-            </span>
-          )}
-
-          <button
-            type="button"
-            onClick={handleUseTimeBank}
-            disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
-            className="rounded-full border border-sky-400/45 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-sky-200 hover:bg-black/75 disabled:opacity-40"
-          >
-            {timeBankUsed ? "Used" : `+${TIME_BANK_SECONDS}s`}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    {/* STATUS LINE + SIT OUT TOGGLE */}
-    <div className="mt-2 flex items-center justify-between gap-2">
-      <span className="flex-1 text-[11px] text-white/65">
-        {!betting || betting.street === "done" ? (
-          showdown && table && showdown.handId === table.handId ? (
-            "Hand complete. Showdown on the felt."
-          ) : (
-            "Waiting for next hand…"
-          )
-        ) : !heroSeat || !heroBetting ? (
-          "Sit to join the action."
-        ) : !heroIsInHand ? (
-          "Seated. Wait for next hand."
-        ) : isSittingOut ? (
-          "You are sitting out."
-        ) : !isHeroTurn ? (
-          "Waiting for other players…"
-        ) : (
-          "Your turn."
-        )}
-      </span>
-
-      <button
-        type="button"
-        onClick={() => setIsSittingOut((v: boolean) => !v)}
-        disabled={!heroSeat}
-        className="rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[10px] font-semibold text-white/80 hover:border-[#FFD700]/60 disabled:opacity-40"
-      >
-        {isSittingOut ? "Sit in" : "Sit out"}
-      </button>
-    </div>
-
-    {/* BET SIZING STRIP (replaces the rotated slider block; sits in the dead space above progress bar) */}
-    {isHeroTurn && betting && heroBetting && (
-      <div className="mt-2 flex items-center justify-between gap-2">
-        {/* Left: label + value pill */}
-        <div className="shrink-0 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.22em] text-white/45">
-            Raise
-          </span>
-          <span className="rounded-full border border-white/15 bg-black/55 px-2 py-[2px] text-[11px] font-mono text-[#FFD700]">
-            {manualBet.trim() !== ""
-              ? manualBet
-              : raiseSize > 0
-              ? raiseSize
-              : betting.bigBlind * 2}{" "}
-            PGLD
-          </span>
-        </div>
-
-        {/* Center: slider (never clips; minimal height) */}
-        <div className="flex-1">
-          <input
-            type="range"
-            min={betting.bigBlind * 2}
-            max={Math.max(
-              betting.bigBlind * 8,
-              betting.pot || betting.bigBlind * 4
-            )}
-            step={betting.bigBlind}
-            value={raiseSize || betting.bigBlind * 2}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setRaiseSize(v);
-              setManualBet("");
-            }}
-            className="w-full accent-[#FFD700]"
-          />
-        </div>
-
-        {/* Right: manual compact */}
-        <div className="shrink-0 flex items-center gap-1.5">
-          <input
-            type="number"
-            min={betting.bigBlind * 2}
-            value={manualBet}
-            onChange={(e) => setManualBet(e.target.value)}
-            placeholder="Manual"
-            className="w-20 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[11px] text-white/85 outline-none focus:border-[#FFD700]"
-          />
-          <button
-            type="button"
-            onClick={() => setManualBet("")}
-            className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRaiseSize(betting.bigBlind * 2);
-              setManualBet("");
-            }}
-            className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
-          >
-            Min
-          </button>
-        </div>
-      </div>
-    )}
-
-    {/* HERO HAND HELPER */}
-    {heroHandHelper &&
-      betting &&
-      betting.street !== "preflop" &&
-      table &&
-      table.board.length >= 3 && (
-        <div className="mt-2 flex items-center justify-between gap-2 text-[14px] md:text-[15px]">
-          <span
-            className={[
-              "font-semibold",
-              heroHandHelper.category >= 6
-                ? "text-emerald-300"
-                : heroHandHelper.category >= 4
-                ? "text-sky-300"
-                : heroHandHelper.category >= 2
-                ? "text-amber-200"
-                : "text-white/70",
-            ].join(" ")}
-          >
-            {heroHandHelper.label}
-          </span>
-        </div>
-      )}
-
-    {/* SLIM PROGRESS BAR – ONLY when it's hero's turn */}
-    {isHeroTurn && (
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div
-          className={
-            actionPhase === "extra"
-              ? "h-full rounded-full bg-gradient-to-r from-red-400 via-red-500 to-red-700 timer-bar"
-              : "h-full rounded-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-500 timer-bar"
-          }
-          style={{ width: `${actionPct}%` }}
-        />
-      </div>
-    )}
-
-
-        {/* TABLE CONTROLS */}
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <button
-        onClick={handleSitOrStand}
-        disabled={!ready || (!!heroSeat && handInProgress)}
-        className="rounded-xl bg-emerald-500 px-3 py-2 text-[12px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
-      >
-        {heroSeat ? "Stand up" : "Sit at table"}
-      </button>
-
-      {/* Show cards (ONLY when valid: post-showdown for current hand) */}
-      {(() => {
-        const canShowCards =
-          !!heroSeat &&
-          !!heroHand &&
-          heroHand.length === 2 &&
-          !!betting &&
-          betting.street === "done" &&
-          !!showdown &&
-          !!table &&
-          showdown.handId === table.handId;
-
-        if (!canShowCards) return null;
-
-        return (
-          <button
-            type="button"
-            onClick={() => sendMessage({ type: "show-cards" })}
-            className="rounded-xl border border-[#FFD700]/45 bg-black/55 px-3 py-2 text-[12px] font-semibold text-[#FFD700] hover:bg-black/70"
-          >
-            Show cards
-          </button>
-        );
-      })()}
-    </div>
-
-    {/* MAIN ACTIONS – ONLY when it's hero's turn */}
-    {isHeroTurn && betting && heroBetting && (
-      <div className="mt-2">
-        {/* Primary row: main buttons (most prominent) */}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={handlePrimaryAction}
-            className="rounded-xl bg-slate-800 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.25)]"
-          >
-            {primaryActionLabel}
-          </button>
-
-          <button
-            onClick={handleBet}
-            disabled={!betting || !heroBetting}
-            className="rounded-xl bg-emerald-500 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.35)] disabled:opacity-40"
-          >
-            {(() => {
-              if (!betting || !heroBetting) return "Bet";
-              const callNeeded = Math.max(
-                0,
-                betting.maxCommitted - heroBetting.committed
-              );
-              const minRaise = betting.bigBlind * 2;
-              const rawRaise =
-                manualBet.trim().length > 0
-                  ? Number(manualBet)
-                  : raiseSize > 0
-                  ? raiseSize
-                  : minRaise;
-
-              const raiseDelta = Math.max(
-                minRaise,
-                Number.isFinite(rawRaise) && rawRaise > 0
-                  ? Math.floor(rawRaise)
-                  : minRaise
-              );
-
-              const total = callNeeded + raiseDelta;
-              return `Bet ${total}`;
-            })()}{" "}
-            <span className="opacity-70">PGLD</span>
-          </button>
-        </div>
-
-        {/* Secondary row: smaller / less dominant */}
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            onClick={handleFold}
-            className="rounded-lg bg-red-500/75 px-3 py-2 text-[12px] font-semibold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.35)]"
-          >
-            Fold
-          </button>
-
-          <button
-            type="button"
-            onClick={handleAllIn}
-            disabled={!heroBetting}
-            className="rounded-lg bg-slate-900/80 px-3 py-2 text-[12px] font-semibold text-red-200 border border-red-400/40 hover:bg-slate-800 disabled:opacity-40"
-          >
-            All-in
-          </button>
-        </div>
-      </div>
-    )}
-
-    {/* HOST TOOLS (thin footer bar; host only; uses empty space, doesn't bloat) */}
-    {isHostClient && (
-      <div className="mt-2 rounded-xl border border-white/10 bg-black/50 px-2 py-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => setShowHostPanel((v: boolean) => !v)}
-            className="rounded-lg border border-amber-300/35 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/70"
-          >
-            Host tools {showHostPanel ? "▾" : "▸"}
-          </button>
-
-          {showHostPanel && (
-            <div className="flex flex-wrap items-center gap-2">
-              {seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
-                <button
-                  type="button"
-                  onClick={handleManualDeal}
-                  className="rounded-lg bg-[#FFD700] px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-yellow-400"
-                >
-                  Start game
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => sendMessage({ type: "reset-table" })}
-                className="rounded-lg border border-red-400/45 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-red-200 hover:bg-black/70"
-              >
-                Reset
-              </button>
-
-              <span className="text-[10px] text-white/45">
-                Host-only controls
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    )}
-  </div>
-</div>
-
-
-
-           
-
-            {/* Dealer area – HIDDEN in fullscreen */}
+            {/* Dealer area – hidden in fullscreen */}
             {!isFullscreen && (
               <>
-                {/* LAST WINNERS – collapsible */}
                 <div className="mt-3 rounded-2xl border border-white/15 bg-black/70 px-3 py-2 text-[11px] text-white/80 shadow-[0_0_20px_rgba(0,0,0,0.85)]">
                   <button
                     type="button"
@@ -2571,22 +2046,14 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
 
                   {showLastWinners && winnersToShow.length > 0 && (
                     <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
-                      {winnersToShow
-                        .slice(0, 5)
-                        .map((w: WinnerEntry, idx: number) => (
-                          <div
-                            key={w.handId ?? idx}
-                            className="flex items-center justify-between gap-2"
-                          >
-                            <span className="font-mono text-white/75">
-                              Hand #{w.handId ?? "–"}
-                            </span>
-                            <span className="truncate text-white/65">
-                              Seat {(w.seatIndex ?? 0) + 1} •{" "}
-                              {w.rankName ?? "Winner"}
-                            </span>
-                          </div>
-                        ))}
+                      {winnersToShow.slice(0, 5).map((w: WinnerEntry, idx: number) => (
+                        <div key={`${w.handId}-${w.playerId}-${idx}`} className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-white/75">Hand #{w.handId ?? "–"}</span>
+                          <span className="truncate text-white/65">
+                            Seat {(w.seatIndex ?? 0) + 1} • {w.rankName ?? "Winner"}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -2597,7 +2064,6 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
                   )}
                 </div>
 
-                {/* DEALER LOG – collapsible */}
                 <div className="mt-3 rounded-2xl border border-white/15 bg-black/75 px-3 py-2 text-[11px] text-white/80 shadow-[0_0_20px_rgba(0,0,0,0.85)]">
                   <button
                     type="button"
@@ -2608,9 +2074,7 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
                       <span className="text-[10px] uppercase tracking-[0.25em] text-white/45">
                         Dealer log
                       </span>
-                      <span className="text-[9px] text-white/50">
-                        Latest events first
-                      </span>
+                      <span className="text-[9px] text-white/50">Latest events first</span>
                     </div>
                     <span className="text-[11px] text-white/60">
                       {showDealerLog ? "▾" : "▸"}
@@ -2623,92 +2087,67 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
                         .slice()
                         .reverse()
                         .slice(0, 15)
-                        .map((entry: DealerLogEntry, idx: number) => {
-                          const e = entry as any;
-                          const tsLabel = e.timestamp
-                            ? new Date(e.timestamp).toLocaleTimeString()
-                            : "";
-                          const msg =
-                            e.message ?? e.text ?? String(e);
-
-                          return (
-                            <div key={idx} className="flex gap-2">
-                              {tsLabel && (
-                                <span className="min-w-[52px] font-mono text-white/40">
-                                  {tsLabel}
-                                </span>
-                              )}
-                              <span className="flex-1">{msg}</span>
-                            </div>
-                          );
-                        })}
+                        .map((entry: DealerLogEntry) => (
+                          <div key={entry.id} className="flex gap-2">
+                            <span className="min-w-[52px] font-mono text-white/40">
+                              {new Date(entry.ts).toLocaleTimeString()}
+                            </span>
+                            <span className="flex-1">{entry.text}</span>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>
 
                 <div className="relative mt-3 text-[11px] font-semibold text-white/40">
-                  Seats, blinds, betting, showdown, and winners are all
-                  synced live for every player.
+                  Seats, blinds, betting, showdown, and winners are all synced live for every
+                  player.
                 </div>
               </>
             )}
           </div>
 
-          {/* SIDEBAR – HIDE in fullscreen */}
+          {/* CHAT – hide in fullscreen */}
           {!isFullscreen && (
-            <div className="space-y-4">
-            </div>
+            <section className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+                  Table Chat • PGLD Poker Room
+                </div>
+                <div className="text-[10px] text-white/40">Live for all seated players.</div>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto rounded-lg bg-black/60 p-2 text-[11px] space-y-1">
+                {chatMessages.length === 0 && (
+                  <div className="text-white/40">No messages yet. Say hello to the table.</div>
+                )}
+                {chatMessages.map((m, i) => (
+                  <div key={i}>
+                    <span className="font-mono text-emerald-300">{(m as any).playerId}</span>
+                    <span className="text-white/60">: </span>
+                    <span>{(m as any).text}</span>
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={handleSendChat} className="mt-2 flex gap-2 text-[11px]">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type a message…"
+                  className="flex-1 rounded-lg bg-black/70 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+                />
+                <button
+                  type="submit"
+                  disabled={!ready || !chatInput.trim()}
+                  className="rounded-lg bg-emerald-500 px-3 py-1.5 font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+                >
+                  Send
+                </button>
+              </form>
+            </section>
           )}
         </section>
-
-        {/* CHAT – hide in fullscreen */}
-        {!isFullscreen && (
-          <section className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#020617] to-black p-4 text-xs">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
-                Table Chat • PGLD Poker Room
-              </div>
-              <div className="text-[10px] text-white/40">
-                Live for all seated players.
-              </div>
-            </div>
-            <div className="max-h-64 overflow-y-auto rounded-lg bg-black/60 p-2 text-[11px] space-y-1">
-              {chatMessages.length === 0 && (
-                <div className="text-white/40">
-                  No messages yet. Say hello to the table.
-                </div>
-              )}
-              {chatMessages.map((m, i) => (
-                <div key={i}>
-                  <span className="font-mono text-emerald-300">
-                    {(m as any).playerId}
-                  </span>
-                  <span className="text-white/60">: </span>
-                  <span>{(m as any).text}</span>
-                </div>
-              ))}
-            </div>
-
-            <form
-              onSubmit={handleSendChat}
-              className="mt-2 flex gap-2 text-[11px]"
-            >
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type a message…"
-                className="flex-1 rounded-lg bg-black/70 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-              />
-              <button
-                type="submit"
-                disabled={!ready || !chatInput.trim()}
-                className="rounded-lg bg-emerald-500 px-3 py-1.5 font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
-              >
-                Send
-              </button>
-            </form>
-          </section>
-        )}
       </div>
 
       {/* BUY-IN MODAL */}
@@ -2718,17 +2157,13 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
             <div className="mb-1 text-[10px] uppercase tracking-[0.25em] text-[#FFD700]/80">
               Buy-in
             </div>
-            <h2 className="mb-1 text-lg font-bold">
-              Sit at the Base Gold Rush table
-            </h2>
+            <h2 className="mb-1 text-lg font-bold">Sit at the Base Gold Rush table</h2>
             <p className="mb-3 text-[11px] text-white/60">
               Choose your PGLD chip buy-in amount for this session.
             </p>
 
             <div className="mb-3 space-y-2">
-              <label className="block text-xs text-white/60">
-                Buy-in (PGLD chips)
-              </label>
+              <label className="block text-xs text-white/60">Buy-in (PGLD chips)</label>
               <input
                 type="number"
                 min={100}
@@ -2751,9 +2186,7 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
               </div>
               <div className="text-[11px] text-white/45">
                 PGLD chips available:{" "}
-                <span className="font-mono text-[#FFD700]">
-                  {chips.toLocaleString()} PGLD
-                </span>
+                <span className="font-mono text-[#FFD700]">{chips.toLocaleString()} PGLD</span>
               </div>
             </div>
 
@@ -2831,9 +2264,6 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
         .winner-emoji-pop {
           animation: winner-emoji-pop 0.6s ease-out;
         }
-        .winner-scroll-fade {
-          animation: winner-scroll-fade 0.6s ease-out 0.1s both;
-        }
 
         @keyframes winner-fade-in {
           from {
@@ -2855,23 +2285,10 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
           }
         }
 
-        @keyframes winner-scroll-fade {
-          from {
-            opacity: 0;
-            transform: translateY(3px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        /* Hero bar subtle slide-in */
         .hero-bar-slide {
           will-change: transform, opacity;
         }
 
-        /* Neon pulse for timer pill */
         @keyframes neonPulse {
           0% {
             box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
@@ -2891,12 +2308,10 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
           animation: neonPulse 1.05s ease-in-out infinite;
         }
 
-        /* Smooth width animation for the thin timer bar */
         .timer-bar {
           transition: width 0.25s linear;
         }
 
-        /* Circular hero timer ring */
         @keyframes heroRingPulse {
           0% {
             box-shadow: 0 0 4px rgba(250, 204, 21, 0.3);
@@ -2919,4 +2334,3 @@ const [openHeaderPanel, setOpenHeaderPanel] = useState(false);
     </>
   );
 }
-

@@ -150,7 +150,7 @@ export default function SiteFooter() {
                   <span className="relative h-5 w-5">
                     <Image
                       src="/images/cashier-icon.png"
-                      alt="BGLD token"
+                      alt="GLD token"
                       fill
                       className="object-contain"
                     />

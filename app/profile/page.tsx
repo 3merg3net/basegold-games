@@ -1,7 +1,7 @@
 // app/profile/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState, ChangeEvent, FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
@@ -22,6 +22,7 @@ export default function CasinoProfilePage() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -46,6 +47,12 @@ export default function CasinoProfilePage() {
   // cross-device profile id import
   const [importId, setImportId] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  // Collapsible sections (default collapsed, so the page feels like a dashboard)
+  const [openIdentity, setOpenIdentity] = useState(true); // keep handle visible by default
+  const [openPrefs, setOpenPrefs] = useState(false);
+  const [openSocial, setOpenSocial] = useState(false);
+  const [openPrivacy, setOpenPrivacy] = useState(false);
 
   const avatarUrl = (profile as any)?.avatarUrl as string | undefined;
   const profileId = (profile as any)?.id as string | undefined;
@@ -72,11 +79,13 @@ export default function CasinoProfilePage() {
     setFavoriteGame((profile.favoriteGame as FavoriteGame) ?? "Poker");
     setPreferredStake((profile.preferredStake as PreferredStake) ?? "Low");
     setProfileVisibility((profile.profileVisibility as "public" | "private") ?? "public");
-    setShowBalancesPublic(typeof profile.showBalancesPublic === "boolean" ? profile.showBalancesPublic : false);
+    setShowBalancesPublic(
+      typeof profile.showBalancesPublic === "boolean" ? profile.showBalancesPublic : false
+    );
   }, [profile]);
 
   const initials = useMemo(() => {
-    const base = (localNickname.trim() || localHandle.trim());
+    const base = localNickname.trim() || localHandle.trim();
     if (!base) return "??";
     return base
       .split(/\s+/)
@@ -127,15 +136,13 @@ export default function CasinoProfilePage() {
       } as any);
 
       const rt =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(RETURN_TO_KEY)
-          : null;
+        typeof window !== "undefined" ? window.localStorage.getItem(RETURN_TO_KEY) : null;
 
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(RETURN_TO_KEY);
       }
 
-      router.push(rt || "/live-tables");
+      router.push(rt || "/");
     } catch (err: any) {
       console.error("[profile] save error", err);
       const msg = String(err?.message || "");
@@ -165,7 +172,14 @@ export default function CasinoProfilePage() {
       // keep existing bucket name if that's what you already have
       const bucket = "poker-avatars";
       const ext = file.name.split(".").pop() || "png";
-      const path = `${profile.id}/${crypto.randomUUID()}.${ext}`;
+
+      // crypto.randomUUID can throw in some older envs; guard it
+      const uid =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+
+      const path = `${profile.id}/${uid}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
@@ -202,9 +216,13 @@ export default function CasinoProfilePage() {
     if (!trimmed) return;
 
     try {
-      localStorage.setItem(LOCAL_STORAGE_PLAYER_ID_KEY, trimmed);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LOCAL_STORAGE_PLAYER_ID_KEY, trimmed);
+      }
       setImportStatus("Profile ID applied. Reloading this browser to sync…");
-      setTimeout(() => window.location.reload(), 600);
+      setTimeout(() => {
+        if (typeof window !== "undefined") window.location.reload();
+      }, 600);
     } catch (err) {
       console.error(err);
       setImportStatus("Could not apply Profile ID in this browser.");
@@ -249,8 +267,8 @@ export default function CasinoProfilePage() {
               Player Identity &amp; Casino Profile
             </h1>
             <p className="mt-2 text-sm text-white/70 max-w-xl">
-              Your single identity across every Base Gold Rush Casino experience. Handle, avatar, preferences,
-              and privacy live here. Demo requires a handle only.
+              Your single identity across every Base Gold Rush Casino experience. Handle, avatar,
+              preferences, and privacy live here. Demo requires a handle only.
             </p>
           </div>
 
@@ -300,15 +318,13 @@ export default function CasinoProfilePage() {
                     <span>{initials}</span>
                   )}
                 </div>
-                <div className="mt-2 text-[10px] text-white/50">
-                  Avatar shown across the casino
-                </div>
+                <div className="mt-2 text-[10px] text-white/50">Avatar shown across the casino</div>
               </div>
 
               <div className="flex-1 space-y-2 text-[11px]">
                 <div className="font-semibold text-white/80">Upload avatar</div>
                 <p className="text-white/55">
-                  Choose a square-ish image (JPG/PNG). Stored in Supabase Storage and rendered on tables,
+                  Choose a square-ish image (JPG/PNG). Stored and rendered on tables,
                   leaderboards, and profile cards.
                 </p>
                 <div className="flex flex-col gap-2">
@@ -321,125 +337,223 @@ export default function CasinoProfilePage() {
                   {avatarUploading && (
                     <div className="text-[11px] text-amber-300">Uploading avatar…</div>
                   )}
-                  {avatarError && (
-                    <div className="text-[11px] text-red-400">{avatarError}</div>
-                  )}
+                  {avatarError && <div className="text-[11px] text-red-400">{avatarError}</div>}
                 </div>
               </div>
             </div>
 
-            {/* Core identity */}
-            <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
+            {/* ✅ Collapsible: Identity */}
+            <div className="rounded-2xl border border-white/10 bg-black/40">
+              <button
+                type="button"
+                onClick={() => setOpenIdentity((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
                 <div>
-                  <label className="block text-xs text-white/60 mb-1">
-                    Casino handle <span className="text-[#FFD700]">(required)</span>
-                  </label>
-                  <input
-                    value={localHandle}
-                    onChange={(e) => setLocalHandle(e.target.value)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-3 py-2 text-sm outline-none focus:border-[#FFD700]"
-                    placeholder="Ex: IM_M3, GoldRushGrinder…"
-                  />
-                  <p className="mt-1 text-[11px] text-white/45">
-                    Your global name across Base Gold Rush Casino. Shown on leaderboards and public profile cards.
-                  </p>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                    Identity
+                  </div>
+                  <div className="text-sm font-semibold text-white/85">
+                    Handle + display name
+                  </div>
                 </div>
+                <span className="text-xs text-white/60">{openIdentity ? "Hide" : "Edit"}</span>
+              </button>
 
+              {openIdentity && (
+                <div className="px-4 pb-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">
+                        Casino handle <span className="text-[#FFD700]">(required)</span>
+                      </label>
+                      <input
+                        value={localHandle}
+                        onChange={(e) => setLocalHandle(e.target.value)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-3 py-2 text-sm outline-none focus:border-[#FFD700]"
+                        placeholder="Ex: IM_M3, GoldRushGrinder…"
+                      />
+                      <p className="mt-1 text-[11px] text-white/45">
+                        Your global name across BGRC. Shown on leaderboards and public profile cards.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">
+                        Nickname <span className="text-white/45">(optional)</span>
+                      </label>
+                      <input
+                        value={localNickname}
+                        onChange={(e) => setLocalNickname(e.target.value)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-3 py-2 text-sm outline-none focus:border-[#FFD700]"
+                        placeholder="Ex: River King, GG Grinder…"
+                      />
+                      <p className="mt-1 text-[11px] text-white/45">
+                        Optional display name for chat/rails. Handle remains the primary identity.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-1">Bio</label>
+                    <textarea
+                      value={localBio}
+                      onChange={(e) => setLocalBio(e.target.value)}
+                      className="w-full rounded-lg bg-black/60 border border-white/20 px-3 py-2 text-[11px] outline-none focus:border-[#FFD700] min-h-[70px]"
+                      placeholder="One or two lines about your vibe…"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ✅ Collapsible: Preferences */}
+            <div className="rounded-2xl border border-white/10 bg-black/40">
+              <button
+                type="button"
+                onClick={() => setOpenPrefs((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
                 <div>
-                  <label className="block text-xs text-white/60 mb-1">
-                    Nickname <span className="text-white/45">(optional)</span>
-                  </label>
-                  <input
-                    value={localNickname}
-                    onChange={(e) => setLocalNickname(e.target.value)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-3 py-2 text-sm outline-none focus:border-[#FFD700]"
-                    placeholder="Ex: River King, GG Grinder, BasedDegen…"
-                  />
-                  <p className="mt-1 text-[11px] text-white/45">
-                    Optional display name for chat/rails. Your handle remains your primary casino identity.
-                  </p>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                    Preferences
+                  </div>
+                  <div className="text-sm font-semibold text-white/85">
+                    Style, game, stakes
+                  </div>
                 </div>
-              </div>
+                <span className="text-xs text-white/60">{openPrefs ? "Hide" : "Edit"}</span>
+              </button>
 
-              <div>
-                <label className="block text-xs text-white/60 mb-1">Bio</label>
-                <textarea
-                  value={localBio}
-                  onChange={(e) => setLocalBio(e.target.value)}
-                  className="w-full rounded-lg bg-black/60 border border-white/20 px-3 py-2 text-[11px] outline-none focus:border-[#FFD700] min-h-[70px]"
-                  placeholder="One or two lines about your vibe…"
-                />
-              </div>
+              {openPrefs && (
+                <div className="px-4 pb-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">Style (optional)</label>
+                      <select
+                        value={localStyle}
+                        onChange={(e) => setLocalStyle(e.target.value as StyleOption)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+                      >
+                        <option value="tight">Tight</option>
+                        <option value="loose">Loose</option>
+                        <option value="aggro">Aggressive</option>
+                        <option value="balanced">Balanced</option>
+                      </select>
+                    </div>
 
-              {/* Preferences */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">Favorite game</label>
+                      <select
+                        value={favoriteGame}
+                        onChange={(e) => setFavoriteGame(e.target.value as FavoriteGame)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+                      >
+                        <option value="Poker">Poker</option>
+                        <option value="Blackjack">Blackjack</option>
+                        <option value="Slots">Slots</option>
+                        <option value="Roulette">Roulette</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">Preferred stakes</label>
+                      <select
+                        value={preferredStake}
+                        onChange={(e) => setPreferredStake(e.target.value as PreferredStake)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ✅ Collapsible: Social + Avatar color */}
+            <div className="rounded-2xl border border-white/10 bg-black/40">
+              <button
+                type="button"
+                onClick={() => setOpenSocial((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
                 <div>
-                  <label className="block text-xs text-white/60 mb-1">Style (optional)</label>
-                  <select
-                    value={localStyle}
-                    onChange={(e) => setLocalStyle(e.target.value as StyleOption)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-                  >
-                    <option value="tight">Tight</option>
-                    <option value="loose">Loose</option>
-                    <option value="aggro">Aggressive</option>
-                    <option value="balanced">Balanced</option>
-                  </select>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                    Social + Look
+                  </div>
+                  <div className="text-sm font-semibold text-white/85">
+                    Twitter, Telegram, avatar color
+                  </div>
                 </div>
+                <span className="text-xs text-white/60">{openSocial ? "Hide" : "Edit"}</span>
+              </button>
 
+              {openSocial && (
+                <div className="px-4 pb-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">X / Twitter (optional)</label>
+                      <input
+                        value={localTwitter}
+                        onChange={(e) => setLocalTwitter(e.target.value)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+                        placeholder="@handle"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1">Telegram (optional)</label>
+                      <input
+                        value={localTelegram}
+                        onChange={(e) => setLocalTelegram(e.target.value)}
+                        className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
+                        placeholder="@handle"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-[auto,1fr] gap-3 items-center pt-1">
+                    <div className="text-[11px] text-white/60">Avatar color</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={localAvatarColor}
+                        onChange={(e) => setLocalAvatarColor(e.target.value)}
+                        className="h-8 w-10 rounded-md border border-white/30 bg-transparent"
+                      />
+                      <span className="text-[11px] text-white/45">
+                        Used behind initials if no image is uploaded.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ✅ Collapsible: Privacy */}
+            <div className="rounded-2xl border border-white/10 bg-black/40">
+              <button
+                type="button"
+                onClick={() => setOpenPrivacy((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
                 <div>
-                  <label className="block text-xs text-white/60 mb-1">Favorite game</label>
-                  <select
-                    value={favoriteGame}
-                    onChange={(e) => setFavoriteGame(e.target.value as FavoriteGame)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-                  >
-                    <option value="Poker">Poker</option>
-                    <option value="Blackjack">Blackjack</option>
-                    <option value="Slots">Slots</option>
-                    <option value="Roulette">Roulette</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-white/50">
+                    Privacy
+                  </div>
+                  <div className="text-sm font-semibold text-white/85">
+                    Visibility + balances
+                  </div>
                 </div>
+                <span className="text-xs text-white/60">{openPrivacy ? "Hide" : "Edit"}</span>
+              </button>
 
-                <div>
-                  <label className="block text-xs text-white/60 mb-1">Preferred stakes</label>
-                  <select
-                    value={preferredStake}
-                    onChange={(e) => setPreferredStake(e.target.value as PreferredStake)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Socials + balances toggle */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-white/60 mb-1">X / Twitter (optional)</label>
-                  <input
-                    value={localTwitter}
-                    onChange={(e) => setLocalTwitter(e.target.value)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-                    placeholder="@handle"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-white/60 mb-1">Telegram (optional)</label>
-                  <input
-                    value={localTelegram}
-                    onChange={(e) => setLocalTelegram(e.target.value)}
-                    className="w-full rounded-lg bg-black/60 border border-white/20 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#FFD700]"
-                    placeholder="@handle"
-                  />
-                </div>
-
-                <div className="pt-4">
+              {openPrivacy && (
+                <div className="px-4 pb-4 space-y-3">
                   <div className="flex items-center gap-2 text-[11px] text-white/70">
                     <input
                       id="show-balances"
@@ -452,53 +566,36 @@ export default function CasinoProfilePage() {
                       Show balances on public leaderboards (later)
                     </label>
                   </div>
-                </div>
-              </div>
 
-              {/* Avatar color */}
-              <div className="grid grid-cols-[auto,1fr] gap-3 items-center pt-1">
-                <div className="text-[11px] text-white/60">Avatar color</div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={localAvatarColor}
-                    onChange={(e) => setLocalAvatarColor(e.target.value)}
-                    className="h-8 w-10 rounded-md border border-white/30 bg-transparent"
-                  />
-                  <span className="text-[11px] text-white/45">
-                    Used behind initials if no image is uploaded.
-                  </span>
+                  <div className="border-t border-white/10 pt-3 mt-1 space-y-2">
+                    <div className="text-[11px] text-white/60 font-semibold">Profile visibility</div>
+                    <div className="flex flex-wrap gap-3 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setProfileVisibility("public")}
+                        className={`rounded-full border px-3 py-1 ${
+                          profileVisibility === "public"
+                            ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
+                            : "border-white/20 bg-black/40 text-white/60"
+                        }`}
+                      >
+                        Public
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfileVisibility("private")}
+                        className={`rounded-full border px-3 py-1 ${
+                          profileVisibility === "private"
+                            ? "border-white/60 bg-white/10 text-white"
+                            : "border-white/20 bg-black/40 text-white/60"
+                        }`}
+                      >
+                        Private
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* Visibility */}
-              <div className="border-t border-white/10 pt-3 mt-1 space-y-2">
-                <div className="text-[11px] text-white/60 font-semibold">Profile visibility</div>
-                <div className="flex flex-wrap gap-3 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setProfileVisibility("public")}
-                    className={`rounded-full border px-3 py-1 ${
-                      profileVisibility === "public"
-                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
-                        : "border-white/20 bg-black/40 text-white/60"
-                    }`}
-                  >
-                    Public
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProfileVisibility("private")}
-                    className={`rounded-full border px-3 py-1 ${
-                      profileVisibility === "private"
-                        ? "border-white/60 bg-white/10 text-white"
-                        : "border-white/20 bg-black/40 text-white/60"
-                    }`}
-                  >
-                    Private
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="pt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -510,12 +607,10 @@ export default function CasinoProfilePage() {
                 {saving ? "Saving…" : "Save Profile ID"}
               </button>
 
-              {saveError && (
-                <div className="mt-1 text-[11px] text-red-400">{saveError}</div>
-              )}
+              {saveError && <div className="mt-1 text-[11px] text-red-400">{saveError}</div>}
 
               <div className="text-[10px] text-white/45 sm:text-right">
-                Stored in a Secured Casino database and used across Base Gold Rush Casino.
+                Stored in our casino profile database. You control what you share.
               </div>
             </div>
           </form>
@@ -565,7 +660,11 @@ export default function CasinoProfilePage() {
                   {profileId && (
                     <button
                       type="button"
-                      onClick={() => navigator.clipboard.writeText(profileId).catch(() => {})}
+                      onClick={() => {
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(profileId).catch(() => {});
+                        }
+                      }}
                       className="rounded-lg border border-white/30 bg-white/5 px-2 py-1 text-[10px] hover:bg-white/10"
                     >
                       Copy
@@ -577,10 +676,11 @@ export default function CasinoProfilePage() {
                 </p>
               </div>
 
-              <form onSubmit={handleImportProfileId} className="space-y-2 pt-2 border-t border-white/10 mt-2">
-                <div className="text-[10px] text-white/55">
-                  Use existing Profile ID (new device / browser)
-                </div>
+              <form
+                onSubmit={handleImportProfileId}
+                className="space-y-2 pt-2 border-t border-white/10 mt-2"
+              >
+                <div className="text-[10px] text-white/55">Use existing Profile ID (new device / browser)</div>
                 <input
                   value={importId}
                   onChange={(e) => setImportId(e.target.value)}
@@ -593,9 +693,7 @@ export default function CasinoProfilePage() {
                 >
                   Apply Profile ID to this browser
                 </button>
-                {importStatus && (
-                  <div className="text-[10px] text-emerald-300 mt-1">{importStatus}</div>
-                )}
+                {importStatus && <div className="text-[10px] text-emerald-300 mt-1">{importStatus}</div>}
               </form>
 
               <p className="text-[10px] text-white/45">
@@ -636,16 +734,10 @@ export default function CasinoProfilePage() {
                 {walletLinking ? "Linking wallet…" : "Link current wallet to this Casino ID"}
               </button>
 
-              {walletLinkError && (
-                <div className="text-[10px] text-red-300 mt-1">{walletLinkError}</div>
-              )}
-              {walletLinkSuccess && (
-                <div className="text-[10px] text-emerald-300 mt-1">{walletLinkSuccess}</div>
-              )}
+              {walletLinkError && <div className="text-[10px] text-red-300 mt-1">{walletLinkError}</div>}
+              {walletLinkSuccess && <div className="text-[10px] text-emerald-300 mt-1">{walletLinkSuccess}</div>}
 
-              <p className="mt-1 text-[10px] text-sky-200/70">
-                Email recovery can be added later as a secondary option.
-              </p>
+              <p className="mt-1 text-[10px] text-sky-200/70">Email recovery can be added later as a secondary option.</p>
             </div>
           </div>
         </div>

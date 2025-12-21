@@ -1,16 +1,19 @@
-import type { Metadata } from 'next'
-import '@rainbow-me/rainbowkit/styles.css'
-import './globals.css'
-import Providers from '@/components/wallet/Providers'
-import SiteHeader from '@/components/wallet/SiteHeader'
-// ❌ remove SiteFooter import
-import RootClient from '@/components/wallet/RootClient'
-import { WalletBarProvider } from '@/components/wallet/WalletBarProvider'
-import AgeGateOverlay from '@/components/legal/AgeGateOverlay'
-import RiskBanner from '@/components/legal/RiskBanner'
+import type { Metadata } from "next";
+import "@rainbow-me/rainbowkit/styles.css";
+import "./globals.css";
+
+import Providers from "@/components/wallet/Providers";
+import SiteHeader from "@/components/wallet/SiteHeader";
+import RootClient from "@/components/wallet/RootClient";
+import { WalletBarProvider } from "@/components/wallet/WalletBarProvider";
+
+import AgeGateOverlay from "@/components/legal/AgeGateOverlay";
+import RiskBanner from "@/components/legal/RiskBanner";
+import ProfileGateOverlay from "@/components/legal/ProfileGateOverlay";
+
 import { PlayerProfileProvider } from "@/lib/player/PlayerProfileProvider";
-import { CasinoChipsProvider } from '@/lib/useCasinoChips'
-import ArcadeRootClient from '@/components/casino/layout/ArcadeRootClient'
+import { CasinoChipsProvider } from "@/lib/useCasinoChips";
+import ArcadeRootClient from "@/components/casino/layout/ArcadeRootClient";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://casino.basereserve.gold"),
@@ -50,7 +53,7 @@ export const metadata: Metadata = {
     images: ["/images/og-base-gold-rush.png"],
     creator: "@basegoldrush",
   },
-}
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -59,28 +62,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <WalletBarProvider>
             <div className="flex min-h-screen flex-col">
-              {/* ✅ keep header everywhere (wallet always available) */}
               <SiteHeader />
 
               <main className="flex-1">
                 <RootClient>
                   <PlayerProfileProvider>
                     <CasinoChipsProvider>
+                      {/* ✅ gates that rely on profile MUST live inside provider */}
+                      <ProfileGateOverlay />
+
                       <ArcadeRootClient>{children}</ArcadeRootClient>
                     </CasinoChipsProvider>
                   </PlayerProfileProvider>
                 </RootClient>
               </main>
 
-              {/* ✅ keep these if you want them everywhere */}
+              {/* ✅ these do NOT need profile, can stay global */}
               <RiskBanner />
               <AgeGateOverlay />
-
-              {/* ❌ footer removed globally */}
             </div>
           </WalletBarProvider>
         </Providers>
       </body>
     </html>
-  )
+  );
 }

@@ -52,7 +52,6 @@ function NavLink(props: {
 export default function NavBar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [cashierOpen, setCashierOpen] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
 
   const mobileBoxRef = useRef<HTMLDivElement>(null)
@@ -65,10 +64,7 @@ export default function NavBar() {
     }
 
     const onEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        setCashierOpen(false)
-      }
+      if (e.key === 'Escape') setOpen(false)
     }
 
     document.addEventListener('mousedown', onClick as any)
@@ -115,12 +111,6 @@ export default function NavBar() {
     } catch (err) {
       console.error('Invite share failed', err)
     }
-  }
-
-  const closeCashier = () => setCashierOpen(false)
-
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) closeCashier()
   }
 
   return (
@@ -198,12 +188,13 @@ export default function NavBar() {
             Profile
           </NavLink>
 
-          <button
-            onClick={() => setCashierOpen(true)}
+          {/* ✅ Cashier now routes directly */}
+          <NavLink
+            href="/cashier"
             className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#facc15]/50 text-[#facc15] bg-black/50 hover:bg-[#1f2937]"
           >
             Cashier
-          </button>
+          </NavLink>
         </div>
       </div>
 
@@ -305,79 +296,21 @@ export default function NavBar() {
                 {inviteCopied ? 'Invite link copied' : 'Invite friends to poker'}
               </button>
 
-              {/* Cashier */}
+              {/* ✅ Cashier (no modal) */}
               <div className="px-4 pt-1 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Cashier
               </div>
-              <button
-                onClick={() => {
-                  setOpen(false)
-                  setCashierOpen(true)
-                }}
-                className="mx-3 mb-3 w-[calc(100%-1.5rem)] rounded-lg border border-[#facc15]/40 px-3 py-2 text-sm font-semibold text-[#facc15] bg-black hover:bg-[#1f2937]"
+              <NavLink
+                href="/cashier"
+                onClick={() => setOpen(false)}
+                className="mx-3 mb-3 block w-[calc(100%-1.5rem)] rounded-lg border border-[#facc15]/40 px-3 py-2 text-sm font-semibold text-[#facc15] bg-black hover:bg-[#1f2937]"
               >
-                Cashier Preview
-              </button>
+                Open Cashier →
+              </NavLink>
             </div>
           </div>
         )}
       </div>
-
-      {/* CASHIER MODAL (unchanged) */}
-      {cashierOpen && (
-        <div
-          className="fixed inset-0 z-[99] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          onClick={handleBackdropClick}
-        >
-          <div
-            className="relative w-full max-w-lg rounded-2xl border border-[#facc15]/40 bg-[#020617] shadow-[0_0_60px_rgba(0,0,0,0.9)] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="relative h-40 w-full">
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-              <img
-                src="/images/cashier-preview-hero.png"
-                alt="Base Gold Rush Cashier Preview"
-                className="h-full w-full object-cover"
-              />
-              <button
-                onClick={closeCashier}
-                className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white/80 hover:bg-black"
-              >
-                Close
-              </button>
-            </div>
-            <div className="px-5 py-4 text-sm text-white/80 space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#facc15]/80">
-                Coming Soon • Cashier Window
-              </div>
-              <div className="text-base font-semibold">
-                Swap $BGLD ↔ GLD Casino Chips at the Cage
-              </div>
-              <p className="text-[13px] text-white/70">
-                This preview shows where you&apos;ll swap real{' '}
-                <span className="font-semibold">$BGLD</span> tokens for playable{' '}
-                <span className="font-semibold">GLD casino chips</span> on Base
-                mainnet. During early access, some tables and games still run
-                on free-play balances while we finalize the cashier.
-              </p>
-              <div className="flex items-center justify-between pt-2 text-[11px] text-white/55">
-                <NavLink
-                  href="/cashier-preview"
-                  className="rounded-full border border-[#facc15]/60 bg-black/70 px-3 py-1.5 text-xs font-semibold text-[#facc15] hover:bg-[#111827]"
-                  onClick={closeCashier}
-                >
-                  View Full Cashier Preview →
-                </NavLink>
-                <span>
-                  Real-value play may be region-limited and will include full
-                  legal checks.
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </nav>
   )
 }

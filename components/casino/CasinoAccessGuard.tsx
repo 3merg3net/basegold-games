@@ -4,6 +4,8 @@
 import { ReactNode, useEffect, useState } from "react";
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 import GcidRequiredModal from "./GcidRequiredModal";
+import CasinoFullScreenLoader from "./CasinoFullScreenLoader";
+
 
 const RETURN_TO_KEY = "bgrc_return_to";
 
@@ -12,12 +14,9 @@ export default function CasinoAccessGuard({ children }: { children: ReactNode })
   const [returnToSet, setReturnToSet] = useState(false);
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-black text-white">
-        <div className="text-xs text-white/60">Loading casino access…</div>
-      </div>
-    );
-  }
+  return <CasinoFullScreenLoader label="Loading casino access…" />;
+}
+
 
   const isProfileComplete = Boolean(profile?.isProfileComplete);
 

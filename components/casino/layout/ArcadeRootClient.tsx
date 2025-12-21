@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation'
 import { ArcadeWalletProvider } from '@/lib/useArcadeWallet'
 import ChipBalanceBar from '@/components/casino/layout/ChipBalanceBar'
 
+
+
 export default function ArcadeRootClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 

@@ -5,23 +5,40 @@ import { useEffect, useState } from "react";
 import { getDemoBalances, setDemoBalances } from "@/lib/demoChips";
 import { IS_DEMO } from "@/config/env";
 
-export function CashierPanel() {
-  const [chips, setChips] = useState(0);
+export type ChipKind = "gld" | "pgld";
+
+type Props = {
+  chip: ChipKind; // controlled by parent
+  onChipChange?: (chip: ChipKind) => void; // optional if you want to show toggle inside panel later
+};
+
+export function CashierPanel({ chip }: Props) {
+  const [gld, setGld] = useState(0);
+  const [pgld, setPgld] = useState(0);
 
   useEffect(() => {
-    const { bgrc } = getDemoBalances();
-    setChips(bgrc);
+    const { gld, pgld } = getDemoBalances();
+    setGld(gld);
+    setPgld(pgld);
   }, []);
 
-  const handleAddChips = (amount: number) => {
-    const next = chips + amount;
-    setChips(next);
-    setDemoBalances({ bgrc: next });
+  const current = chip === "gld" ? gld : pgld;
+  const label = chip === "gld" ? "GLD" : "PGLD";
+
+  const write = (nextGld: number, nextPgld: number) => {
+    setGld(nextGld);
+    setPgld(nextPgld);
+    setDemoBalances({ gld: nextGld, pgld: nextPgld });
   };
 
-  const handleReset = () => {
-    setChips(0);
-    setDemoBalances({ bgrc: 0 });
+  const add = (amt: number) => {
+    if (chip === "gld") write(gld + amt, pgld);
+    else write(gld, pgld + amt);
+  };
+
+  const reset = () => {
+    if (chip === "gld") write(0, pgld);
+    else write(gld, 0);
   };
 
   return (
@@ -41,16 +58,16 @@ export function CashierPanel() {
             <>
               You&apos;re using{" "}
               <span className="font-semibold text-yellow-200">
-                BGRC demo chips
+                demo {label} chips
               </span>{" "}
-              on testnet. These have no real-world value and are for testing the
-              Base Gold Rush experience only.
+              for early access testing.
             </>
           ) : (
             <>
-              BGRC chips represent in-casino credits backed by BGLD on Base
-              mainnet. Play responsibly and never wager more than you can afford
-              to lose.
+              Load <span className="font-semibold text-yellow-200">GLD</span> for
+              the casino floor and{" "}
+              <span className="font-semibold text-yellow-200">PGLD</span> for live
+              poker tables. Play responsibly.
             </>
           )}
         </p>
@@ -59,11 +76,11 @@ export function CashierPanel() {
           <div className="text-[11px] text-neutral-400">
             Current Chips
             <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-              BGRC Balance
+              {label} Balance
             </div>
           </div>
           <div className="font-mono text-xl md:text-2xl text-yellow-300">
-            {chips.toLocaleString()}
+            {current.toLocaleString()}
           </div>
         </div>
 
@@ -73,7 +90,7 @@ export function CashierPanel() {
               {[100, 500, 1000].map((amt) => (
                 <button
                   key={amt}
-                  onClick={() => handleAddChips(amt)}
+                  onClick={() => add(amt)}
                   className="flex-1 rounded-lg border border-yellow-500/40 py-1.5 hover:bg-yellow-500/10 transition"
                 >
                   +{amt.toLocaleString()}
@@ -81,23 +98,23 @@ export function CashierPanel() {
               ))}
             </div>
             <button
-              onClick={handleReset}
+              onClick={reset}
               className="w-full text-[11px] text-neutral-400 hover:text-neutral-200 underline underline-offset-2"
             >
-              Reset demo balance
+              Reset {label} demo balance
             </button>
           </>
         ) : (
           <div className="space-y-2 text-[11px]">
             <button className="w-full rounded-lg border border-yellow-500/60 py-1.5 hover:bg-yellow-500/10 transition">
-              Deposit BGLD → BGRC
+              Load chips (Cashier)
             </button>
             <button className="w-full rounded-lg border border-yellow-500/40 py-1.5 hover:bg-yellow-500/5 transition">
-              Cash Out BGRC → BGLD
+              Withdraw chips (Cashier)
             </button>
             <p className="text-[10px] text-neutral-500">
-              Actual on-chain deposits and withdrawals will be processed via
-              smart contracts on Base mainnet.
+              Cashier actions will be clearly shown when live. Demo mode uses
+              local balances for testing.
             </p>
           </div>
         )}

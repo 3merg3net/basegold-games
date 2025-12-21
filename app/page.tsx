@@ -7,8 +7,8 @@ import SiteFooter from '@/components/wallet/SiteFooter'
 
 const CASINO_GAMES = [
   { title: "Casino Lobby", subtitle: "Full floor", href: "/arcade", icon: "/icons/game-slots.png" },
-  { title: "Blackjack", subtitle: "Live tables", href: "/blackjack-live", icon: "/icons/game-blackjack1.png" },
-  { title: "Roulette", subtitle: "Coming soon", href: "/arcade", icon: "/icons/game-roulette1.png" },
+  { title: "Blackjack", subtitle: "Live tables", href: "/blackjack-live", icon: "/icons/game-blackjack.png" },
+  { title: "Roulette", subtitle: "Coming soon", href: "/arcade", icon: "/icons/game-roulette.png" },
   { title: "Slots", subtitle: "Progressives", href: "/arcade", icon: "/icons/game-slots.png" },
   // Keep only icons/routes that actually exist in /public
   // { title: "Keno", subtitle: "Fast draws", href: "/keno", icon: "/icons/game-keno.png" },
@@ -94,7 +94,7 @@ export default function HomePage() {
             >
               <div className="relative w-full h-72 sm:h-80 md:h-[24rem]">
                 <Image
-                  src="/images/poker-hero-wide1.png"
+                  src="/images/poker-card-hero.png"
                   alt="Base Gold Rush Poker Lobby"
                   fill
                   sizes="(max-width:768px) 100vw, 66vw"
@@ -135,7 +135,7 @@ export default function HomePage() {
             >
               <div className="relative w-full h-72 sm:h-80 md:h-[24rem] bg-black">
                 <Image
-                  src="/images/blackjack-live-hero.png"
+                  src="/images/blackjack-live-hero2.png"
                   alt="Base Gold Rush Blackjack"
                   fill
                   sizes="(max-width:768px) 100vw, 34vw"
@@ -144,7 +144,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-black/90" />
 
                 <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-black/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-emerald-200/90">
-                  Blackjack
+                  LIVE TABLE
                 </div>
               </div>
 
@@ -153,7 +153,7 @@ export default function HomePage() {
                   Play <span className="text-emerald-200">21</span>.
                 </h3>
                 <p className="text-[11px] sm:text-xs text-white/75">
-                  Vegas-style blackjack tables wired into the same chip rails.
+                  Vegas-style Live blackjack tables. Take a seat and stack that 21 Gold
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-white/60">
                   <span>Jump straight in.</span>
