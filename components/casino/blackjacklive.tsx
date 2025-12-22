@@ -37,13 +37,13 @@ const BET_STEP = 50;
  * 0 = far right, 6 = far left, arcing up toward table edge.
  */
 const BJ_SEAT_POSITIONS: CSSProperties[] = [
-  { left: "74%", top: "28%" }, // 0 right
-  { left: "72%", top: "44%" }, // 1
-  { left: "65%", top: "51%" }, // 2 bottom-right
-  { left: "46%", top: "57%" }, // 3 center
-  { left: "29%", top: "51%" }, // 4 bottom-left
-  { left: "29%", top: "44%" }, // 5
-  { left: "27%", top: "28%" }, // 6 left
+  { left: "76%", top: "24%" }, // 0 right
+  { left: "74%", top: "40%" }, // 1
+  { left: "63%", top: "53%" }, // 2 bottom-right
+  { left: "44%", top: "57%" }, // 3 center
+  { left: "24%", top: "53%" }, // 4 bottom-left
+  { left: "13%", top: "40%" }, // 5
+  { left: "10%", top: "24%" }, // 6 left
 ];
 
 /**
@@ -311,6 +311,11 @@ const ctaFlashRef = useRef<Map<string, { label: string; tone: "win" | "lose" | "
   new Map()
 );
 
+// --- seat outcome flash store (no hooks inside renderSeat) ---
+type SeatOutcome = { key: string; label: "WIN" | "LOSE" | "PUSH" | "BJ"; pnl: number; until: number };
+const SEAT_OUTCOME_FLASH = new Map<string, SeatOutcome>(); // key = `${roomId}:${playerId}:${roundId}:${seatIndex}`
+
+
 
   // Dealer suspense (client-only reveal pacing)
   const dealerNewCardIndex = useRef<number>(-1);
@@ -463,39 +468,50 @@ const ctaFlashRef = useRef<Map<string, { label: string; tone: "win" | "lose" | "
   const dealerCardsToRender = phase === "dealer-turn" ? dealerCardsAnimated : dealerCardsRaw;
 
   useEffect(() => {
-    if (phase !== "dealer-turn") {
-      setDealerCardsAnimated([]);
-      dealerNewCardIndex.current = -1;
-      return;
-    }
-
-    const full = dealerCardsRaw ?? [];
-    if (full.length === 0) {
-      setDealerCardsAnimated([]);
-      dealerNewCardIndex.current = -1;
-      return;
-    }
-
-    let cancelled = false;
+  if (phase !== "dealer-turn") {
     setDealerCardsAnimated([]);
     dealerNewCardIndex.current = -1;
+    return;
+  }
 
-    const timeouts: number[] = [];
-    full.forEach((_, i) => {
+  const full = dealerCardsRaw ?? [];
+  if (full.length === 0) {
+    setDealerCardsAnimated([]);
+    dealerNewCardIndex.current = -1;
+    return;
+  }
+
+  let cancelled = false;
+  const timeouts: number[] = [];
+
+  setDealerCardsAnimated((prev) => {
+    const prevArr = Array.isArray(prev) ? prev : [];
+    const prevLen = prevArr.length;
+
+    // ✅ if we already revealed some cards, keep them (no flash to empty)
+    const already = full.slice(0, Math.min(prevLen, full.length));
+
+    // ✅ reveal only NEW cards (prevLen -> full.length)
+    for (let i = prevLen; i < full.length; i++) {
+      const delay = 260 + (i - prevLen) * 380; // smooth cadence
       const t = window.setTimeout(() => {
         if (cancelled) return;
         dealerNewCardIndex.current = i;
         setDealerCardsAnimated(full.slice(0, i + 1));
         setDealerNewCardTick((x) => x + 1);
-      }, 350 + i * 420);
+      }, delay);
       timeouts.push(t as unknown as number);
-    });
+    }
 
-    return () => {
-      cancelled = true;
-      timeouts.forEach((t) => window.clearTimeout(t));
-    };
-  }, [phase, dealerCardsRaw]);
+    return already;
+  });
+
+  return () => {
+    cancelled = true;
+    timeouts.forEach((t) => window.clearTimeout(t));
+  };
+}, [phase, dealerCardsRaw]);
+
 
   // Dealer value follows rendered cards
   const dealerValue = useMemo(() => {
@@ -1048,22 +1064,14 @@ optimisticExtraRef.current.set(optKey, (optimisticExtraRef.current.get(optKey) ?
 
 
 
- /* ───────────── Seat renderer ───────────── */
+
+
+/* ───────────── Seat renderer ───────────── */
 
 function renderSeat(seat: BlackjackSeatState) {
   const pos =
     (isMobile ? BJ_SEAT_POSITIONS_MOBILE : BJ_SEAT_POSITIONS)[seat.seatIndex] ??
     (isMobile ? BJ_SEAT_POSITIONS_MOBILE : BJ_SEAT_POSITIONS)[0];
-
-    const liftedPos = useMemo(() => {
-  // push bottom seats up on desktop a bit
-  if (!isMobile && (seat.seatIndex === 2 || seat.seatIndex === 3 || seat.seatIndex === 4)) {
-    return { ...pos, top: `calc(${pos.top} - 4%)` };
-  }
-  return pos;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [isMobile, seat.seatIndex, pos.left, pos.top]);
-
 
   const isHero = heroSeatIndex === seat.seatIndex;
   const seatTaken = !!seat.playerId;
@@ -1072,25 +1080,111 @@ function renderSeat(seat: BlackjackSeatState) {
   const tableInRound = phase !== "waiting-bets";
   if (!seatTaken && tableInRound) return null;
 
+  const primaryHand = seat.hands && seat.hands.length > 0 ? seat.hands[0] : null;
   const rawHands = seat.hands ?? [];
 
-  // Dedupe hands (WS duplication guard)
+  // Dedupe hands (server sometimes repeats)
   const handsToRender = rawHands.filter((h, idx, arr) => {
     const key = `${h.bet}|${h.result}|${(h.cards ?? []).join(",")}`;
     return idx === arr.findIndex((x) => `${x.bet}|${x.result}|${(x.cards ?? []).join(",")}` === key);
   });
 
-  const primaryHand = handsToRender.length > 0 ? handsToRender[0] : null;
+  const value =
+    primaryHand && (primaryHand.cards?.length ?? 0) > 0
+      ? computeBlackjackValue(primaryHand.cards)
+      : null;
 
   const isActive = activeSeatIndex === seat.seatIndex;
   const isMySeat = !!playerId && seat.playerId === playerId;
 
-  const showBetUI =
+  const showSitButton = !takenByOther && !seatTaken && phase === "waiting-bets";
+
+  const isSitOnly = showSitButton && !seatTaken;
+
+
+  const canShowBetControls =
     isMySeat && (phase === "waiting-bets" || phase === "round-complete") && canPlaceBet;
 
-  const showActions = isMySeat && phase === "player-action" && isActive;
-  const showSit = !takenByOther && !seatTaken && phase === "waiting-bets";
+  const showActionButtons = isMySeat && phase === "player-action" && isActive;
 
+  const seatWrapperProps = isHero ? { ref: heroSeatRef } : {};
+
+  // tighter scaling rules
+  const mobileScale = isMobile ? (isActive || isHero ? 1.0 : 0.9) : 1.0;
+  const mobileOpacity = (() => {
+    if (!isMobile) return "";
+    if (isHero) return "opacity-100";
+    if (phase === "player-action") return isActive ? "opacity-100" : "opacity-80";
+    return "opacity-100";
+  })();
+
+  // totals (use server truth)
+  const baseTotalBet = handsToRender.reduce((sum, h) => sum + Number(h?.bet ?? 0), 0);
+
+  // resolved?
+  const allResolved =
+    handsToRender.length > 0 &&
+    handsToRender.every((h) => normalizeResult(h?.result) !== "pending");
+
+  // pnl helpers (bet is already deducted earlier)
+  function computePnlForHand(hand: any) {
+    const bet = Number(hand?.bet ?? 0);
+    if (!Number.isFinite(bet) || bet <= 0) return 0;
+
+    const r = normalizeResult(hand?.result);
+    if (r === "blackjack") return roundChip(bet * 1.5); // profit
+    if (r === "win") return roundChip(bet * 1.0);       // profit
+    if (r === "push") return 0;
+    if (r === "lose") return -bet;                      // loss display
+    return 0;
+  }
+
+  function computeLabelForSeat(hands: any[]): "WIN" | "LOSE" | "PUSH" | "BJ" {
+    const results = hands.map((h) => normalizeResult(h?.result));
+    if (results.some((r) => r === "blackjack")) return "BJ";
+    if (results.every((r) => r === "push")) return "PUSH";
+    if (results.some((r) => r === "win")) return "WIN";
+    return "LOSE";
+  }
+
+  // Outcome flash storage (no hooks). We key by room+player+round+seat.
+  const outcomeKey =
+    table && playerId
+      ? `${derivedRoomId}:${playerId}:${table.roundId}:${seat.seatIndex}`
+      : null;
+
+  let flashedOutcome: SeatOutcome | null = null;
+
+  if (outcomeKey) {
+    // purge expired
+    const existing = SEAT_OUTCOME_FLASH.get(outcomeKey);
+    if (existing && Date.now() > existing.until) {
+      SEAT_OUTCOME_FLASH.delete(outcomeKey);
+    }
+
+    // capture new outcome once per resolved round
+    if (table && isMySeat && allResolved) {
+      const existingNow = SEAT_OUTCOME_FLASH.get(outcomeKey);
+      if (!existingNow) {
+        const pnl = handsToRender.reduce((sum, h) => sum + computePnlForHand(h), 0);
+        const label = computeLabelForSeat(handsToRender);
+        const until = Date.now() + 350; // tight flash
+
+        const entry: SeatOutcome = { key: outcomeKey, pnl, label, until };
+        SEAT_OUTCOME_FLASH.set(outcomeKey, entry);
+
+        // schedule cleanup (no state needed)
+        window.setTimeout(() => {
+          const cur = SEAT_OUTCOME_FLASH.get(outcomeKey);
+          if (cur && Date.now() > cur.until) SEAT_OUTCOME_FLASH.delete(outcomeKey);
+        }, 750);
+      }
+    }
+
+    flashedOutcome = SEAT_OUTCOME_FLASH.get(outcomeKey) ?? null;
+  }
+
+  // layout type
   const layout =
     seat.seatIndex === 0 ||
     seat.seatIndex === 1 ||
@@ -1101,450 +1195,286 @@ function renderSeat(seat: BlackjackSeatState) {
 
   const isLeftSideSeat = seat.seatIndex >= 3;
 
-  const mobileScale = isMobile ? (isActive ? 1.06 : 0.90) : isHero ? 1.03 : 1.0;
+  // ───────── compact seat UI (single contained box) ─────────
+  const SeatBox = () => {
+    const betMin = uiMinBet;
+    const betMax = uiMaxBet;
 
-  const mobileOpacity = (() => {
-    if (!isMobile) return "";
-    if (isHero) return "opacity-100";
-    if (phase === "player-action") return isActive ? "opacity-100" : "opacity-70";
-    return "opacity-100";
-  })();
+    // main button state (multi-use)
+    let mainLabel = "—";
+    let mainSub: string | null = null;
+    let mainOnClick: (() => void) | null = null;
 
-  const value =
-    primaryHand && (primaryHand.cards?.length ?? 0) > 0
-      ? computeBlackjackValue(primaryHand.cards)
-      : null;
+    let mainClass =
+      "bg-emerald-400 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.30)]";
 
-  // ---- totals ----
-  const baseTotalBet = handsToRender.reduce((sum, h) => sum + Number(h?.bet ?? 0), 0);
-  const totalReturn = handsToRender.reduce((sum, h) => sum + computeTotalReturnForHand(h), 0);
+    // ✅ Outcome flash override (WIN/LOSE/PUSH/BJ + amount)
+    if (seatTaken && isMySeat && flashedOutcome) {
+  const pnl = flashedOutcome.pnl ?? 0;
+  const sign = pnl > 0 ? "+" : pnl < 0 ? "-" : "";
+  const amt = pnl === 0 ? "0" : `${sign}${Math.abs(pnl).toLocaleString()}`;
 
-  const allResolved =
-    handsToRender.length > 0 &&
-    handsToRender.every((h) => {
-      const r = String(h?.result ?? "").toLowerCase();
-      return r && r !== "pending";
-    });
+  const lbl =
+    flashedOutcome.label === "BJ"
+      ? "BJ"
+      : flashedOutcome.label;
 
-  const pnl = allResolved ? (totalReturn - baseTotalBet) : 0;
+  // ✅ show amount on the button itself
+  mainLabel = `${lbl} ${amt}`;
 
-  // optimistic extra for THIS seat/round/player
-  const optimisticExtra = (() => {
-    if (!table || !playerId) return 0;
-    const keyPrefix = `${derivedRoomId}:${playerId}:${table.roundId}:${seat.seatIndex}:`;
-    let sum = 0;
-    for (const [key, v] of optimisticExtraRef.current.entries()) {
-      if (key.startsWith(keyPrefix)) sum += Number(v ?? 0);
+  // keep sub optional (can remove if you want it even tighter)
+  mainSub = null;
+
+
+      // allow fast next bet tap if bet controls are available
+      mainOnClick =
+        canShowBetControls ? () => handlePlaceBet() : null;
+
+      mainClass =
+        flashedOutcome.label === "LOSE"
+          ? "bg-red-500 text-slate-950 shadow-[0_0_20px_rgba(239,68,68,0.45)]"
+          : flashedOutcome.label === "PUSH"
+          ? "bg-slate-600 text-white shadow-[0_0_18px_rgba(148,163,184,0.35)]"
+          : "bg-emerald-500 text-slate-950 shadow-[0_0_22px_rgba(16,185,129,0.55)]";
+    } else if (showSitButton) {
+      mainLabel = "SIT";
+      mainSub = null;
+      mainOnClick = () => handleSit(seat.seatIndex);
+      mainClass =
+        "bg-emerald-400 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.30)]";
+    } else if (seatTaken && canShowBetControls) {
+      mainLabel = baseTotalBet > 0 ? "BET IN" : "BET";
+      mainSub = betAmount.toLocaleString();
+      mainOnClick = () => handlePlaceBet();
+      mainClass = baseTotalBet > 0
+        ? "bg-emerald-500/80 text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.35)]"
+        : "bg-emerald-400 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.30)]";
+    } else if (seatTaken && showActionButtons) {
+      // main button = HIT, grid contains STAND/DOUBLE/SPLIT
+      mainLabel = "HIT";
+      mainSub = null;
+      mainOnClick = () => handleAction("hit");
+      mainClass =
+        "bg-emerald-400 text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.35)]";
+    } else {
+      // occupied but idle (no avatar circle)
+      mainLabel = seatTaken ? "IN" : "—";
+      mainSub = null;
+      mainOnClick = null;
+      mainClass =
+        "bg-black/55 text-white/80 border border-white/15 shadow-[0_0_14px_rgba(0,0,0,0.45)]";
     }
-    return sum;
-  })();
 
-  const displayedTotalBet = showBetUI ? betAmount : Math.max(0, baseTotalBet + optimisticExtra);
+    // compact sizing
+    const boxW = isMobile ? "w-[104px]" : "w-[112px]";
 
-  const fmt = (n: number) => Math.max(0, Math.round(n)).toLocaleString();
+const pad = "p-[7px]";
+const rounding = isSitOnly ? "rounded-full" : "rounded-xl";
 
-  // tight sizes
-  const boxW = isMobile ? "w-[112px]" : "w-[128px]";
-  const pad = isMobile ? "p-2" : "p-2.5";
-  const btnH = isMobile ? "h-9" : "h-10";
+// transparent shell for sit-only, normal shell otherwise
+const shell = isSitOnly
+  ? "bg-transparent border border-transparent shadow-none"
+  : "bg-black/55 backdrop-blur-md border border-white/15 shadow-[0_0_18px_rgba(0,0,0,0.55)]";
 
-  const toneBorder =
-    allResolved && displayedTotalBet > 0
-      ? pnl > 0
-        ? "border-emerald-300/60"
-        : pnl < 0
-        ? "border-red-300/60"
-        : "border-white/20"
-      : "border-white/20";
 
- const BetBox = (align: "left" | "center") => {
-  // ----- derive small state flags -----
-  const hasAnyBet = displayedTotalBet > 0;
+    
 
-  const inHand =
-    hasAnyBet &&
-    (phase === "dealing" || phase === "player-action" || phase === "dealer-turn");
-
-  const canPlaceNow = showBetUI; // you already computed this
-
-  // Round result flash setup (WIN/LOSE/PUSH) – UI only
-  const flashKey = table && playerId ? `${derivedRoomId}:${playerId}:${table.roundId}:${seat.seatIndex}` : "";
-  const now = Date.now();
-  const existingFlash = flashKey ? ctaFlashRef.current.get(flashKey) : null;
-
-  // If round resolved and we have a bet, set/refresh a flash for 1.2s
-  if (flashKey && allResolved && hasAnyBet) {
-    const tone: "win" | "lose" | "push" = pnl > 0 ? "win" : pnl < 0 ? "lose" : "push";
-    const label =
-      tone === "win" ? `WIN +${fmt(Math.abs(pnl))}` : tone === "lose" ? `LOSE -${fmt(Math.abs(pnl))}` : "PUSH 0";
-
-    // only set if missing/expired or different round result
-    if (!existingFlash || existingFlash.until < now) {
-      ctaFlashRef.current.set(flashKey, { label, tone, until: now + 1200 });
-    }
-  }
-
-  const flash = existingFlash && existingFlash.until > now ? existingFlash : null;
-
-  // Main CTA label + styling
-  const cta = (() => {
-    if (flash) return { label: flash.label, mode: "flash" as const, tone: flash.tone };
-    if (inHand) return { label: `BET IN • ${fmt(displayedTotalBet)}`, mode: "locked" as const, tone: "push" as const };
-    return { label: "PLACE BET", mode: "bet" as const, tone: "push" as const };
-  })();
-
-  const ctaClass = (() => {
-    if (cta.mode === "flash") {
-      if (cta.tone === "win")
-        return "bg-emerald-400 text-black shadow-[0_0_16px_rgba(16,185,129,0.55)]";
-      if (cta.tone === "lose")
-        return "bg-red-500 text-black shadow-[0_0_16px_rgba(239,68,68,0.55)]";
-      return "bg-slate-300 text-black shadow-[0_0_14px_rgba(148,163,184,0.45)]";
-    }
-    if (cta.mode === "locked") {
-      return "bg-white/10 text-white/80 border border-white/15";
-    }
-    return "bg-emerald-400 text-black shadow-[0_0_16px_rgba(16,185,129,0.55)]";
-  })();
-
-  // tighter sizes
-  const boxW = isMobile ? "w-[112px]" : "w-[128px]";
-  const pad = isMobile ? "p-2" : "p-2.5";
-  const btnH = isMobile ? "h-8" : "h-9"; // tighter than before
-  const smallBtnH = isMobile ? "h-8" : "h-9";
-
-  return (
-    <div className={align === "center" ? "flex flex-col items-center" : "flex flex-col items-start"}>
-      <div
-  className={[
-    "rounded-xl bg-black/80 border",
-    toneBorder,
-    "shadow-[0_0_16px_rgba(0,0,0,0.55)]",
-    boxW,
-    pad,
-    "min-h-[142px] md:min-h-[150px]",
-  ].join(" ")}
->
-        {/* TOP: Total bet + +/- */}
+    return (
+      <div className={`${boxW} ${rounding} ${shell} ${pad}`}>
+        {/* Top: BET TOTAL + +/- */}
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-[9px] font-extrabold tracking-[0.18em] uppercase text-emerald-200/90">
-              Bet Total
+            <div className="text-[10px] font-extrabold tracking-[0.22em] uppercase text-emerald-300/90">
+              Bet
             </div>
-            <div className="font-mono text-[15px] font-extrabold text-white leading-none truncate">
-              {fmt(displayedTotalBet)}
+            <div className="mt-[1px] text-[14px] font-extrabold text-white leading-none">
+              {Math.max(0, baseTotalBet).toLocaleString()}
             </div>
-
-            {/* Resolved summary line (tight) */}
-            {hasAnyBet && allResolved ? (
-              <div className="mt-1 flex items-center gap-2">
-                <div className="text-[9px] font-bold text-white/55">Return</div>
-                <div className="font-mono text-[11px] font-extrabold text-white">{fmt(totalReturn)}</div>
-                <div
-                  className={[
-                    "ml-auto rounded-md px-2 py-[2px]",
-                    "font-mono text-[11px] font-extrabold",
-                    pnl > 0
-                      ? "bg-emerald-400/90 text-black"
-                      : pnl < 0
-                      ? "bg-red-500/85 text-black"
-                      : "bg-white/10 text-white",
-                  ].join(" ")}
-                >
-                  {pnl >= 0 ? "+" : "-"}
-                  {fmt(Math.abs(pnl))}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-1 text-[9px] text-white/45">{hasAnyBet ? "In hand" : "—"}</div>
-            )}
           </div>
 
-          {/* +/- only when placing bet */}
-          {canPlaceNow ? (
-            <div className="flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  bumpBet(+BET_STEP);
-                }}
-                className={[
-                  "w-8 h-8 rounded-lg",
-                  "bg-emerald-400 text-black",
-                  "font-extrabold text-[18px] leading-none",
-                  "shadow-[0_0_10px_rgba(16,185,129,0.40)]",
-                  "active:scale-95",
-                ].join(" ")}
-                aria-label="Increase bet"
-              >
-                +
-              </button>
+          {seatTaken && canShowBetControls ? (
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   bumpBet(-BET_STEP);
                 }}
-                className={[
-                  "w-8 h-8 rounded-lg",
-                  "bg-white/10 text-white",
-                  "border border-white/15",
-                  "font-extrabold text-[18px] leading-none",
-                  "active:scale-95",
-                ].join(" ")}
+                className="h-7 w-7 rounded-xl bg-black/60 border border-white/15 text-white font-extrabold active:scale-95"
                 aria-label="Decrease bet"
+                title={`Min ${betMin} / Max ${betMax}`}
               >
-                −
+                –
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  bumpBet(+BET_STEP);
+                }}
+                className="h-7 w-7 rounded-xl bg-black/60 border border-white/15 text-white font-extrabold active:scale-95"
+                aria-label="Increase bet"
+                title={`Min ${betMin} / Max ${betMax}`}
+              >
+                +
               </button>
             </div>
-          ) : null}
+          ) : (
+            <div className="h-7 w-[58px]" />
+          )}
         </div>
 
-       {/* FIXED CONTROL AREA: either CTA or ACTION GRID (no extra height) */}
-<div className="mt-2">
-  {seatTaken && showActions ? (
-    // ACTION MODE: uses the same vertical space as the CTA button
-    <div className="grid grid-cols-2 gap-1.5">
-      <button
-        type="button"
-        onClick={() => handleAction("hit")}
-        className={[
-          "h-9 rounded-lg bg-emerald-500/90 text-black",
-          "font-extrabold text-[11px] tracking-[0.12em] uppercase",
-          "shadow-[0_0_10px_rgba(16,185,129,0.30)] active:scale-95",
-        ].join(" ")}
-      >
-        Hit
-      </button>
+        {/* Main button */}
+        <button
+          type="button"
+          disabled={!mainOnClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            mainOnClick?.();
+          }}
+          className={[
+            "mt-2 w-full rounded-lg px-2 py-[7px]",
+,
+            "text-[13px] font-extrabold tracking-[0.18em] uppercase",
+            "active:scale-[0.99] transition",
+            mainClass,
+            !mainOnClick ? "opacity-90 cursor-default" : "",
+          ].join(" ")}
+        >
+          <div className="leading-none">{mainLabel}</div>
+          {mainSub && (
+            <div className="mt-1 text-[11px] font-mono font-extrabold tracking-normal leading-none opacity-90">
+              {mainSub}
+            </div>
+          )}
+        </button>
 
-      <button
-        type="button"
-        onClick={() => handleAction("stand")}
-        className={[
-          "h-9 rounded-lg bg-slate-950/90 text-white border border-white/15",
-          "font-extrabold text-[11px] tracking-[0.12em] uppercase active:scale-95",
-        ].join(" ")}
-      >
-        Stand
-      </button>
+        {/* Action grid (inside box) */}
+        {seatTaken && showActionButtons && (
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => handleAction("stand")}
+              className="h-9 rounded-xl bg-slate-900 text-white font-extrabold text-[12px] border border-white/15 active:scale-95"
+            >
+              STAND
+            </button>
 
-      <button
-        type="button"
-        onClick={() => handleAction("double")}
-        disabled={!canDouble}
-        className={[
-          "h-9 rounded-lg",
-          canDouble
-            ? "bg-emerald-200 text-black border border-emerald-50"
-            : "bg-white/5 text-white/35 border border-white/10 cursor-not-allowed",
-          "font-extrabold text-[11px] tracking-[0.12em] uppercase active:scale-95",
-        ].join(" ")}
-      >
-        Double
-      </button>
+            <button
+              type="button"
+              disabled={!canDouble}
+              onClick={() => handleAction("double")}
+              className={[
+                "h-9 rounded-xl font-extrabold text-[12px] active:scale-95",
+                canDouble
+                  ? "bg-amber-400 text-slate-950"
+                  : "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed",
+              ].join(" ")}
+            >
+              DOUBLE
+            </button>
 
-      <button
-        type="button"
-        onClick={() => handleAction("split")}
-        disabled={!canSplit}
-        className={[
-          "h-9 rounded-lg",
-          canSplit
-            ? "bg-emerald-700 text-white border border-emerald-300/30"
-            : "bg-white/5 text-white/35 border border-white/10 cursor-not-allowed",
-          "font-extrabold text-[11px] tracking-[0.12em] uppercase active:scale-95",
-        ].join(" ")}
-      >
-        Split
-      </button>
+            <button
+              type="button"
+              disabled={!canSplit}
+              onClick={() => handleAction("split")}
+              className={[
+                "col-span-2 h-9 rounded-xl font-extrabold text-[12px] active:scale-95",
+                canSplit
+                  ? "bg-purple-400 text-slate-950"
+                  : "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed",
+              ].join(" ")}
+            >
+              SPLIT
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Cards block (keep your working version)
+  const CardsBlock = () => (
+    <div className="relative z-[1] flex flex-col items-center justify-center">
+      {primaryHand && (primaryHand.cards?.length ?? 0) > 0 && (
+        <>
+          <div className="flex flex-col items-center justify-center gap-1">
+            {handsToRender.map((hand, handIndex) => (
+              <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="relative flex">
+                <ResultPill result={hand.result} />
+                {hand.cards.map((c, i) => {
+                  const overlap = hand.cards.length >= 4;
+                  const style: CSSProperties = overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+                  return (
+                    <div key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`} style={style}>
+                      <BJCard card={c} small />
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {value && (
+            <div className="mt-1 flex justify-center">
+              <div
+                className={[
+                  "rounded-full border px-3 py-[3px]",
+                  "text-[11px] md:text-xs font-mono font-bold",
+                  "shadow-[0_0_14px_rgba(16,185,129,0.25)]",
+                  isHero
+                    ? "bg-black/90 border-emerald-300/45 text-emerald-100"
+                    : "bg-black/80 border-white/25 text-white/90",
+                ].join(" ")}
+              >
+                Total {value.total}
+                {value.soft ? " (soft)" : ""}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
-  ) : (
-    // CTA MODE: exactly one row height
-    (!seatTaken && showSit ? (
-      <button
-        type="button"
-        onClick={() => handleSit(seat.seatIndex)}
-        className={[
-          "w-full h-9 rounded-lg bg-emerald-400 text-black",
-          "font-extrabold text-[12px] tracking-[0.14em] uppercase",
-          "shadow-[0_0_14px_rgba(16,185,129,0.45)] active:scale-95",
-        ].join(" ")}
-      >
-        Sit
-      </button>
-    ) : (
-      <button
-        type="button"
-        onClick={cta.mode === "bet" ? handlePlaceBet : undefined}
-        disabled={cta.mode !== "bet"}
-        className={[
-          "w-full h-9 rounded-lg",
-          ctaClass,
-          "font-extrabold text-[11px] tracking-[0.14em] uppercase",
-          "active:scale-95",
-          cta.mode !== "bet" ? "cursor-default" : "",
-        ].join(" ")}
-      >
-        {cta.label}
-      </button>
-    ))
-  )}
-</div>
+  );
 
+  // Position wrapper
+  const wrap = (
+    <div
+      className={`relative transition-transform transition-opacity duration-300 ease-out md:scale-100 ${mobileOpacity}`}
+      style={{
+        transform: isMobile ? `scale(${mobileScale})` : undefined,
+        transformOrigin: "center center",
+      }}
+    >
+      {isActive && (
+        <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
+      )}
+
+      <div className="relative z-[1] flex flex-col items-center justify-center gap-2">
+        {/* Cards above, SeatBox below */}
+        <CardsBlock />
+        <SeatBox />
       </div>
     </div>
   );
-};
 
-
-  const seatWrapperProps = isHero ? { ref: heroSeatRef } : {};
-
-  // Bottom seats
+  // Bottom seats vs side seats
   if (layout === "bottom") {
     return (
       <div key={seat.seatIndex} {...seatWrapperProps} className="absolute" style={pos}>
-        <div
-          className={[
-            "relative flex flex-col items-center justify-center",
-            "transition-transform transition-opacity duration-300 ease-out md:scale-100",
-            mobileOpacity,
-          ].join(" ")}
-          style={{ transform: isMobile ? `scale(${mobileScale})` : undefined }}
-        >
-          {isActive && (
-            <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/16 blur-xl" />
-          )}
-
-          {isActive && isMySeat && (
-            <div className="mb-1 rounded-full bg-emerald-400/90 px-2 py-[2px] text-[10px] font-extrabold text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.6)]">
-              Your turn
-            </div>
-          )}
-
-          {/* Cards */}
-          <div className="relative z-[1] flex flex-col items-center justify-center">
-            {primaryHand && (primaryHand.cards?.length ?? 0) > 0 && (
-              <>
-                <div className="flex flex-col items-center justify-center gap-1">
-                  {handsToRender.map((hand, handIndex) => (
-                    <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="relative flex">
-                      <ResultPill result={hand.result} />
-                      {hand.cards.map((c, i) => {
-                        const overlap = hand.cards.length >= 4;
-                        const style: CSSProperties = overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-                        return (
-                          <div key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`} style={style}>
-                            <BJCard card={c} small />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Hand total pill (kept clean, never covered) */}
-                {value && (
-                  <div className="mt-1 flex justify-center">
-                    <div
-                      className={[
-                        "rounded-full border px-3 py-[3px]",
-                        "text-[11px] md:text-xs font-mono font-bold",
-                        "shadow-[0_0_14px_rgba(16,185,129,0.25)]",
-                        isHero
-                          ? "bg-black/90 border-emerald-300/45 text-emerald-100"
-                          : "bg-black/80 border-white/25 text-white/90",
-                      ].join(" ")}
-                    >
-                      Total {value.total}
-                      {value.soft ? " (soft)" : ""}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Tight bet box under cards */}
-          <div className="relative z-[2] mt-2">{BetBox("center")}</div>
-        </div>
+        {wrap}
       </div>
     );
   }
 
-  // Side seats
   return (
     <div key={seat.seatIndex} {...seatWrapperProps} className="absolute" style={pos}>
-      <div
-        className={[
-          "relative transition-transform transition-opacity duration-300 ease-out md:scale-100",
-          mobileOpacity,
-        ].join(" ")}
-        style={{
-          transform: isMobile ? `scale(${mobileScale})` : undefined,
-          transformOrigin: "center center",
-        }}
-      >
-        {isActive && (
-          <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/16 blur-xl" />
-        )}
-
-        {/* Tight bet box beside cards */}
-        {isLeftSideSeat ? (
-          <div className={["absolute right-full top-1/2 z-[2] -translate-y-1/2", isMobile ? "pr-1" : "pr-2"].join(" ")}>
-            {BetBox("left")}
-          </div>
-        ) : (
-          <div className={["absolute left-full top-1/2 z-[2] -translate-y-1/2", isMobile ? "pl-1" : "pl-2"].join(" ")}>
-            {BetBox("left")}
-          </div>
-        )}
-
-        {/* Cards */}
-        <div className="relative z-[1] flex flex-col items-center justify-center">
-          {primaryHand && (primaryHand.cards?.length ?? 0) > 0 && (
-            <>
-              <div className="flex flex-col items-center justify-center gap-1">
-                {handsToRender.map((hand, handIndex) => (
-                  <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="relative flex">
-                    <ResultPill result={hand.result} />
-                    {hand.cards.map((c, i) => {
-                      const overlap = hand.cards.length >= 4;
-                      const style: CSSProperties = overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
-                      return (
-                        <div key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`} style={style}>
-                          <BJCard card={c} small />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-
-              {value && (
-                <div className="mt-1 flex justify-center">
-                  <div
-                    className={[
-                      "rounded-full border px-3 py-[3px]",
-                      "text-[11px] md:text-xs font-mono font-bold",
-                      "shadow-[0_0_14px_rgba(16,185,129,0.25)]",
-                      isHero
-                        ? "bg-black/90 border-emerald-300/45 text-emerald-100"
-                        : "bg-black/80 border-white/25 text-white/90",
-                    ].join(" ")}
-                  >
-                    Total {value.total}
-                    {value.soft ? " (soft)" : ""}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+      {wrap}
     </div>
   );
 }
+
+
 
 
 
