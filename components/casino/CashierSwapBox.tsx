@@ -4,6 +4,19 @@ import { useEffect, useMemo, useState } from 'react'
 
 type Asset = 'bgld' | 'gld' | 'pgld'
 
+type Props = {
+  balances?: {
+    bgld?: number | null // optional UI-only (on-chain handled elsewhere)
+    gld?: number | null
+    pgld?: number | null
+  }
+  /**
+   * Optional hook: you can wire this later to a real swap endpoint.
+   * For now, Account can pass a stub (or omit).
+   */
+  onSwapPreview?: (args: { from: Asset; to: Asset; amountIn: number; amountOut: number | null; usdValue: number | null }) => void
+}
+
 /**
  * Chips pricing rule:
  * 100 chips = $1.00 USD
@@ -43,7 +56,13 @@ function formatUsd(n: number) {
   return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 }
 
-export default function CashierSwapBox() {
+function fmtBal(n: number | null | undefined) {
+  if (n === null || n === undefined) return '—'
+  if (!Number.isFinite(Number(n))) return '—'
+  return Math.floor(Number(n)).toLocaleString()
+}
+
+export default function CashierSwapBox({ balances, onSwapPreview }: Props) {
   const [from, setFrom] = useState<Asset>('bgld')
   const [to, setTo] = useState<Asset>('gld')
   const [amountIn, setAmountIn] = useState<string>('')
@@ -73,7 +92,6 @@ export default function CashierSwapBox() {
   // Keep pairs valid: disallow from===to
   useEffect(() => {
     if (from === to) {
-      // simple: if same, bump "to" to a sensible default
       setTo(from === 'bgld' ? 'gld' : 'bgld')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,16 +103,13 @@ export default function CashierSwapBox() {
   }, [amountIn])
 
   const quote = useMemo(() => {
-    // Return:
-    // { out: number, usd: number | null, note: string }
-    // usd is the USD value of the swap (chip USD or bgld USD), for display only.
-    if (!parsedIn) return { out: 0, usd: null, note: 'Enter an amount to preview.' }
+    if (!parsedIn) return { out: 0, usd: null as number | null, note: 'Enter an amount to preview.' }
 
     // Chip ↔ Chip (GLD <-> PGLD): 1:1
     if (isChip(from) && isChip(to)) {
       const usd = parsedIn / CHIPS_PER_USD
       return {
-        out: Math.floor(parsedIn), // chips integer
+        out: Math.floor(parsedIn),
         usd,
         note: `1:1 chip swap (USD parity).`,
       }
@@ -128,25 +143,31 @@ export default function CashierSwapBox() {
       }
     }
 
-    // Fallback (shouldn’t hit)
     return { out: 0, usd: null, note: 'Select a valid pair.' }
   }, [parsedIn, from, to, priceUsd, loadingPrice, priceErr])
 
-  const canFlip = true
+  useEffect(() => {
+    if (!onSwapPreview) return
+    onSwapPreview({
+      from,
+      to,
+      amountIn: parsedIn,
+      amountOut: parsedIn ? (Number.isFinite(Number(quote.out)) ? Number(quote.out) : null) : null,
+      usdValue: quote.usd,
+    })
+  }, [from, to, parsedIn, quote.out, quote.usd, onSwapPreview])
 
   const onFlip = () => {
-    if (!canFlip) return
     const prevFrom = from
     setFrom(to)
     setTo(prevFrom)
-    setAmountIn('') // like Uniswap: reset input on flip
+    setAmountIn('')
   }
 
-  // Display helpers
   const outDisplay = useMemo(() => {
     if (!parsedIn || !quote.out) return '—'
-    if (to === 'bgld') return quote.out.toFixed(6)
-    return Math.floor(quote.out).toLocaleString()
+    if (to === 'bgld') return Number(quote.out).toFixed(6)
+    return Math.floor(Number(quote.out)).toLocaleString()
   }, [parsedIn, quote.out, to])
 
   const usdLine = useMemo(() => {
@@ -156,17 +177,21 @@ export default function CashierSwapBox() {
     return `≈ ${formatUsd(quote.usd)}`
   }, [parsedIn, loadingPrice, from, to, quote.usd])
 
-  // Placeholder balances (wire later from wallet + supabase)
-  const balanceFor = (a: Asset) => '—'
+  const balanceFor = (a: Asset) => {
+    if (a === 'bgld') return balances?.bgld == null ? '—' : String(balances?.bgld)
+    if (a === 'gld') return fmtBal(balances?.gld)
+    return fmtBal(balances?.pgld)
+  }
+
+  const disableSwap =
+    !parsedIn || ((from === 'bgld' || to === 'bgld') && !priceUsd)
 
   return (
     <div className="rounded-3xl border border-white/10 bg-black/60 p-4 md:p-5 shadow-[0_0_50px_rgba(250,204,21,0.08)]">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.22em] text-white/50">
-            Swap
-          </div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-white/50">Swap</div>
           <div className="mt-1 text-base md:text-lg font-semibold text-[#FFD700]">
             Exchange BGLD ⇄ Chips
           </div>
@@ -175,12 +200,9 @@ export default function CashierSwapBox() {
           </div>
         </div>
 
-        {/* small status */}
         <div className="text-right text-[11px] text-white/55">
           <div className="uppercase tracking-[0.18em] text-white/45">Price</div>
-          <div className="font-mono">
-            {priceUsd ? `$${priceUsd.toFixed(6)}` : loadingPrice ? '…' : '—'}
-          </div>
+          <div className="font-mono">{priceUsd ? `$${priceUsd.toFixed(6)}` : loadingPrice ? '…' : '—'}</div>
         </div>
       </div>
 
@@ -190,9 +212,7 @@ export default function CashierSwapBox() {
         <div className="rounded-3xl border border-white/10 bg-black/70 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]">
           <div className="flex items-center justify-between text-xs text-white/55">
             <span>You pay</span>
-            <span className="font-mono text-white/45">
-              Balance: {balanceFor(from)}
-            </span>
+            <span className="font-mono text-white/45">Balance: {balanceFor(from)}</span>
           </div>
 
           <div className="mt-3 flex items-center gap-3">
@@ -232,8 +252,7 @@ export default function CashierSwapBox() {
             h-10 w-10 rounded-2xl border border-white/10 bg-black/90
             shadow-[0_0_22px_rgba(250,204,21,0.18)]
             hover:border-[#FFD700]/40 hover:shadow-[0_0_28px_rgba(250,204,21,0.25)]
-            transition
-            flex items-center justify-center
+            transition flex items-center justify-center
           "
         >
           <span className="text-[#FFD700] text-lg leading-none">↕</span>
@@ -243,9 +262,7 @@ export default function CashierSwapBox() {
         <div className="rounded-3xl border border-white/10 bg-black/70 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]">
           <div className="flex items-center justify-between text-xs text-white/55">
             <span>You receive</span>
-            <span className="font-mono text-white/45">
-              Balance: {balanceFor(to)}
-            </span>
+            <span className="font-mono text-white/45">Balance: {balanceFor(to)}</span>
           </div>
 
           <div className="mt-3 flex items-center gap-3">
@@ -254,7 +271,6 @@ export default function CashierSwapBox() {
               onChange={(e) => setTo(e.target.value as Asset)}
               className="min-w-[120px] rounded-2xl border border-white/10 bg-black/80 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-[#FFD700]/50"
             >
-              {/* prevent choosing same */}
               <option value="bgld" disabled={from === 'bgld'}>BGLD</option>
               <option value="gld" disabled={from === 'gld'}>GLD</option>
               <option value="pgld" disabled={from === 'pgld'}>PGLD</option>
@@ -266,9 +282,7 @@ export default function CashierSwapBox() {
               </div>
               <div className="mt-1 flex items-center justify-between text-[11px] text-white/45">
                 <span>{ASSET_SUB[to]}</span>
-                <span className="font-mono">
-                  {quote.usd ? `≈ ${formatUsd(quote.usd)}` : ''}
-                </span>
+                <span className="font-mono">{quote.usd ? `≈ ${formatUsd(quote.usd)}` : ''}</span>
               </div>
             </div>
           </div>
@@ -286,12 +300,10 @@ export default function CashierSwapBox() {
         {/* CTA */}
         <button
           type="button"
-          disabled={!parsedIn || (from === 'bgld' || to === 'bgld') ? !priceUsd && (from === 'bgld' || to === 'bgld') : false}
+          disabled={disableSwap}
           className={[
             'w-full rounded-2xl px-4 py-3 text-sm font-extrabold transition',
-            parsedIn
-              ? 'bg-[#FFD700] text-black hover:bg-yellow-400'
-              : 'bg-white/10 text-white/40 cursor-not-allowed',
+            disableSwap ? 'bg-white/10 text-white/40 cursor-not-allowed' : 'bg-[#FFD700] text-black hover:bg-yellow-400',
           ].join(' ')}
         >
           {parsedIn ? `Swap ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]} (Preview)` : 'Enter amount'}

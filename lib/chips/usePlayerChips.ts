@@ -32,9 +32,11 @@ export function usePlayerChips() {
       setError(null);
 
       const res = await fetch(
-        `/api/chips/balance?playerId=${encodeURIComponent(profile.id)}`,
-        { cache: "no-store" }
-      );
+  `/api/chips/balance?playerId=${encodeURIComponent(profile.id)}`,
+  { cache: "no-store" }
+);
+
+
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

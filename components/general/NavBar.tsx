@@ -5,10 +5,16 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState, MouseEvent } from 'react'
 import { Menu, X } from 'lucide-react'
 
+
+
+
 type NavItem = { href: string; label: string }
 
 // Top-level sections
 const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
+
+
+
 
 // Floors – poker first, blackjack second, casino third
 const sectionItems: NavItem[] = [
@@ -48,6 +54,7 @@ function NavLink(props: {
     </Link>
   )
 }
+
 
 export default function NavBar() {
   const pathname = usePathname()
@@ -179,14 +186,22 @@ export default function NavBar() {
           </button>
 
           <NavLink
-            href="/profile"
-            className={[
-              'px-3 py-1.5 rounded-full text-[11px] font-semibold border',
-              'border-white/25 text-white/80 bg-black/50 hover:bg-white/10 hover:text-white',
-            ].join(' ')}
-          >
-            Profile
-          </NavLink>
+  href="/account"
+  className={[
+    "px-3 py-1.5 rounded-full text-[11px] font-semibold border",
+    "border-white/25 text-white/80 bg-black/50 hover:bg-white/10 hover:text-white",
+  ].join(" ")}
+>
+  Account
+</NavLink>
+
+<NavLink
+  href="/profile"
+  className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/15 text-white/60 bg-black/40 hover:bg-white/10"
+>
+  Setup
+</NavLink>
+
 
           {/* ✅ Cashier now routes directly */}
           <NavLink
@@ -275,12 +290,22 @@ export default function NavBar() {
                 Player
               </div>
               <NavLink
-                href="/profile"
-                onClick={() => setOpen(false)}
-                className="block w-full px-4 py-2.5 text-sm font-semibold text-[#FFD700] bg-black hover:bg-[#0f0f0f] border-t border-white/10"
-              >
-                Profile &amp; Avatar
-              </NavLink>
+  href="/account"
+  onClick={() => setOpen(false)}
+  className="block w-full px-4 py-2.5 text-sm font-semibold text-[#FFD700] bg-black hover:bg-[#0f0f0f] border-t border-white/10"
+>
+  Account
+</NavLink>
+
+<NavLink
+  href="/profile"
+  onClick={() => setOpen(false)}
+  className="block w-full px-4 py-2.5 text-sm font-semibold text-white/80 bg-black hover:bg-[#0f0f0f]"
+>
+  Setup (Profile)
+</NavLink>
+
+
 
               {/* Share */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">

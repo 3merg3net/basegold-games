@@ -142,7 +142,7 @@ export default function CasinoProfilePage() {
         window.localStorage.removeItem(RETURN_TO_KEY);
       }
 
-      router.push(rt || "/");
+      router.push(rt || "/account");
     } catch (err: any) {
       console.error("[profile] save error", err);
       const msg = String(err?.message || "");
