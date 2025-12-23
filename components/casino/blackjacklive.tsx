@@ -39,11 +39,11 @@ const BET_STEP = 50;
 const BJ_SEAT_POSITIONS: CSSProperties[] = [
   { left: "76%", top: "24%" }, // 0 right
   { left: "74%", top: "40%" }, // 1
-  { left: "63%", top: "53%" }, // 2 bottom-right
-  { left: "44%", top: "57%" }, // 3 center
+  { left: "64%", top: "53%" }, // 2 bottom-right
+  { left: "44%", top: "59%" }, // 3 center
   { left: "24%", top: "53%" }, // 4 bottom-left
-  { left: "13%", top: "40%" }, // 5
-  { left: "10%", top: "24%" }, // 6 left
+  { left: "14%", top: "40%" }, // 5
+  { left: "12%", top: "24%" }, // 6 left
 ];
 
 /**
@@ -51,14 +51,25 @@ const BJ_SEAT_POSITIONS: CSSProperties[] = [
  * 0 = far right, 6 = far left.
  */
 const BJ_SEAT_POSITIONS_MOBILE: CSSProperties[] = [
-  { left: "80%", top: "40%" }, // 0 right
-  { left: "78%", top: "45%" }, // 1
-  { left: "67%", top: "40%" }, // 2 bottom-right
-  { left: "38%", top: "48%" }, // 3 bottom-center
-  { left: "18%", top: "44%" }, // 4 bottom-left
-  { left: "20%", top: "45%" }, // 5
-  { left: "19%", top: "34%" }, // 6 left
+  { left: "81%", top: "34%" }, // 0 right
+  { left: "78.5%", top: "43%" }, // 1
+  { left: "67%", top: "51%" }, // 2 bottom-right
+  { left: "43%", top: "54.5%" }, // 3 bottom-center
+  { left: "19%", top: "51%" }, // 4 bottom-left
+  { left: "8%", top: "43%" }, // 5
+  { left: "6%", top: "34%" }, // 6 left
 ];
+
+const BJ_SEAT_POSITIONS_MOBILE_PORTRAIT: CSSProperties[] = [
+  { left: "81%", top: "34%" },
+  { left: "78.5%", top: "43%" },
+  { left: "67%", top: "51%" },
+  { left: "43%", top: "54.5%" },
+  { left: "19%", top: "51%" },
+  { left: "8%", top: "43%" },
+  { left: "2%", top: "38%" },
+];
+
 
 /* ───────────── Card helpers ───────────── */
 
@@ -297,6 +308,29 @@ export default function BlackjackLive() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // Detect tall desktop (desktop width but portrait-ish window)
+const [isTallDesktop, setIsTallDesktop] = useState(false);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const check = () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    const mobile = w < 768;
+    // "Tall desktop" = not mobile, but aspect is tall (common when browser is narrow/portrait on PC)
+    const tall = !mobile && h / w > 1.15;
+
+    setIsTallDesktop(tall);
+  };
+
+  check();
+  window.addEventListener("resize", check);
+  return () => window.removeEventListener("resize", check);
+}, []);
+
+
   // Fullscreen + refs
   const [isFullscreen, setIsFullscreen] = useState(false);
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
@@ -396,6 +430,18 @@ const SEAT_OUTCOME_FLASH = new Map<string, SeatOutcome>(); // key = `${roomId}:$
       setFallbackLocalId("p-" + Math.random().toString(36).slice(2, 12));
     }
   }, []);
+
+  // landscape helper
+const [isLandscape, setIsLandscape] = useState(false);
+
+useEffect(() => {
+  const mq = window.matchMedia("(orientation: landscape)");
+  const onChange = () => setIsLandscape(mq.matches);
+  onChange();
+  mq.addEventListener?.("change", onChange);
+  return () => mq.removeEventListener?.("change", onChange);
+}, []);
+
 
   // ---- IMPORTANT: stablePlayerId prevents profile load flip causing double settle
   const [stablePlayerId, setStablePlayerId] = useState<string | null>(null);
@@ -1069,9 +1115,14 @@ optimisticExtraRef.current.set(optKey, (optimisticExtraRef.current.get(optKey) ?
 /* ───────────── Seat renderer ───────────── */
 
 function renderSeat(seat: BlackjackSeatState) {
-  const pos =
-    (isMobile ? BJ_SEAT_POSITIONS_MOBILE : BJ_SEAT_POSITIONS)[seat.seatIndex] ??
-    (isMobile ? BJ_SEAT_POSITIONS_MOBILE : BJ_SEAT_POSITIONS)[0];
+ const seatMap = isMobile
+  ? BJ_SEAT_POSITIONS_MOBILE
+  : isTallDesktop
+  ? BJ_SEAT_POSITIONS_MOBILE_PORTRAIT
+  : BJ_SEAT_POSITIONS;
+
+const pos = seatMap[seat.seatIndex] ?? seatMap[0];
+
 
   const isHero = heroSeatIndex === seat.seatIndex;
   const seatTaken = !!seat.playerId;
@@ -1086,7 +1137,12 @@ function renderSeat(seat: BlackjackSeatState) {
   // Dedupe hands (server sometimes repeats)
   const handsToRender = rawHands.filter((h, idx, arr) => {
     const key = `${h.bet}|${h.result}|${(h.cards ?? []).join(",")}`;
-    return idx === arr.findIndex((x) => `${x.bet}|${x.result}|${(x.cards ?? []).join(",")}` === key);
+    return (
+      idx ===
+      arr.findIndex(
+        (x) => `${x.bet}|${x.result}|${(x.cards ?? []).join(",")}` === key
+      )
+    );
   });
 
   const value =
@@ -1098,9 +1154,7 @@ function renderSeat(seat: BlackjackSeatState) {
   const isMySeat = !!playerId && seat.playerId === playerId;
 
   const showSitButton = !takenByOther && !seatTaken && phase === "waiting-bets";
-
   const isSitOnly = showSitButton && !seatTaken;
-
 
   const canShowBetControls =
     isMySeat && (phase === "waiting-bets" || phase === "round-complete") && canPlaceBet;
@@ -1133,9 +1187,9 @@ function renderSeat(seat: BlackjackSeatState) {
 
     const r = normalizeResult(hand?.result);
     if (r === "blackjack") return roundChip(bet * 1.5); // profit
-    if (r === "win") return roundChip(bet * 1.0);       // profit
+    if (r === "win") return roundChip(bet * 1.0); // profit
     if (r === "push") return 0;
-    if (r === "lose") return -bet;                      // loss display
+    if (r === "lose") return -bet; // loss display
     return 0;
   }
 
@@ -1168,16 +1222,17 @@ function renderSeat(seat: BlackjackSeatState) {
       if (!existingNow) {
         const pnl = handsToRender.reduce((sum, h) => sum + computePnlForHand(h), 0);
         const label = computeLabelForSeat(handsToRender);
-        const until = Date.now() + 350; // tight flash
+
+        // 🔥 shorter flash (faster game)
+        const until = Date.now() + 220;
 
         const entry: SeatOutcome = { key: outcomeKey, pnl, label, until };
         SEAT_OUTCOME_FLASH.set(outcomeKey, entry);
 
-        // schedule cleanup (no state needed)
         window.setTimeout(() => {
           const cur = SEAT_OUTCOME_FLASH.get(outcomeKey);
           if (cur && Date.now() > cur.until) SEAT_OUTCOME_FLASH.delete(outcomeKey);
-        }, 750);
+        }, 420);
       }
     }
 
@@ -1193,8 +1248,6 @@ function renderSeat(seat: BlackjackSeatState) {
       ? "side"
       : "bottom";
 
-  const isLeftSideSeat = seat.seatIndex >= 3;
-
   // ───────── compact seat UI (single contained box) ─────────
   const SeatBox = () => {
     const betMin = uiMinBet;
@@ -1208,27 +1261,20 @@ function renderSeat(seat: BlackjackSeatState) {
     let mainClass =
       "bg-emerald-400 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.30)]";
 
-    // ✅ Outcome flash override (WIN/LOSE/PUSH/BJ + amount)
+    // ✅ Outcome flash override (label + amount on button)
     if (seatTaken && isMySeat && flashedOutcome) {
-  const pnl = flashedOutcome.pnl ?? 0;
-  const sign = pnl > 0 ? "+" : pnl < 0 ? "-" : "";
-  const amt = pnl === 0 ? "0" : `${sign}${Math.abs(pnl).toLocaleString()}`;
+      const pnl = flashedOutcome.pnl ?? 0;
+      const sign = pnl > 0 ? "+" : pnl < 0 ? "-" : "";
+      const amt = pnl === 0 ? "0" : `${sign}${Math.abs(pnl).toLocaleString()}`;
 
-  const lbl =
-    flashedOutcome.label === "BJ"
-      ? "BJ"
-      : flashedOutcome.label;
+      const lbl = flashedOutcome.label === "BJ" ? "BJ" : flashedOutcome.label;
 
-  // ✅ show amount on the button itself
-  mainLabel = `${lbl} ${amt}`;
-
-  // keep sub optional (can remove if you want it even tighter)
-  mainSub = null;
-
+      mainLabel = lbl;
+      // show amount as sub-line for readability
+      mainSub = amt;
 
       // allow fast next bet tap if bet controls are available
-      mainOnClick =
-        canShowBetControls ? () => handlePlaceBet() : null;
+      mainOnClick = canShowBetControls ? () => handlePlaceBet() : null;
 
       mainClass =
         flashedOutcome.label === "LOSE"
@@ -1246,9 +1292,10 @@ function renderSeat(seat: BlackjackSeatState) {
       mainLabel = baseTotalBet > 0 ? "BET IN" : "BET";
       mainSub = betAmount.toLocaleString();
       mainOnClick = () => handlePlaceBet();
-      mainClass = baseTotalBet > 0
-        ? "bg-emerald-500/80 text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.35)]"
-        : "bg-emerald-400 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.30)]";
+      mainClass =
+        baseTotalBet > 0
+          ? "bg-emerald-500/80 text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.35)]"
+          : "bg-emerald-400 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.30)]";
     } else if (seatTaken && showActionButtons) {
       // main button = HIT, grid contains STAND/DOUBLE/SPLIT
       mainLabel = "HIT";
@@ -1265,97 +1312,106 @@ function renderSeat(seat: BlackjackSeatState) {
         "bg-black/55 text-white/80 border border-white/15 shadow-[0_0_14px_rgba(0,0,0,0.45)]";
     }
 
-    // compact sizing
-    const boxW = isMobile ? "w-[104px]" : "w-[112px]";
+    // compact sizing (tighter side-to-side)
+    const boxW = isMobile ? "w-[98px]" : "w-[104px]";
+    const pad = "p-[6px]";
+    const rounding = isSitOnly ? "rounded-full" : "rounded-xl";
 
-const pad = "p-[7px]";
-const rounding = isSitOnly ? "rounded-full" : "rounded-xl";
-
-// transparent shell for sit-only, normal shell otherwise
-const shell = isSitOnly
-  ? "bg-transparent border border-transparent shadow-none"
-  : "bg-black/55 backdrop-blur-md border border-white/15 shadow-[0_0_18px_rgba(0,0,0,0.55)]";
-
-
-    
+    // transparent shell for sit-only, normal shell otherwise
+    const shell = isSitOnly
+      ? "bg-transparent border border-transparent shadow-none"
+      : "bg-black/55 backdrop-blur-md border border-white/15 shadow-[0_0_18px_rgba(0,0,0,0.55)]";
 
     return (
       <div className={`${boxW} ${rounding} ${shell} ${pad}`}>
-        {/* Top: BET TOTAL + +/- */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-[10px] font-extrabold tracking-[0.22em] uppercase text-emerald-300/90">
-              Bet
+        {/* Top: BET TOTAL + +/- (hide entirely for sit-only to avoid blank) */}
+        {!isSitOnly && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[9px] font-extrabold tracking-[0.22em] uppercase text-emerald-300/90">
+                Bet
+              </div>
+              <div className="mt-[1px] text-[13px] font-extrabold text-white leading-none">
+                {Math.max(0, baseTotalBet).toLocaleString()}
+              </div>
             </div>
-            <div className="mt-[1px] text-[14px] font-extrabold text-white leading-none">
-              {Math.max(0, baseTotalBet).toLocaleString()}
-            </div>
-          </div>
 
-          {seatTaken && canShowBetControls ? (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  bumpBet(-BET_STEP);
-                }}
-                className="h-7 w-7 rounded-xl bg-black/60 border border-white/15 text-white font-extrabold active:scale-95"
-                aria-label="Decrease bet"
-                title={`Min ${betMin} / Max ${betMax}`}
-              >
-                –
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  bumpBet(+BET_STEP);
-                }}
-                className="h-7 w-7 rounded-xl bg-black/60 border border-white/15 text-white font-extrabold active:scale-95"
-                aria-label="Increase bet"
-                title={`Min ${betMin} / Max ${betMax}`}
-              >
-                +
-              </button>
-            </div>
-          ) : (
-            <div className="h-7 w-[58px]" />
-          )}
-        </div>
+            {seatTaken && canShowBetControls ? (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bumpBet(-BET_STEP);
+                  }}
+                  className="h-6 w-6 rounded-lg bg-black/60 border border-white/15 text-white font-extrabold active:scale-95"
+                  aria-label="Decrease bet"
+                  title={`Min ${betMin} / Max ${betMax}`}
+                >
+                  –
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bumpBet(+BET_STEP);
+                  }}
+                  className="h-6 w-6 rounded-lg bg-black/60 border border-white/15 text-white font-extrabold active:scale-95"
+                  aria-label="Increase bet"
+                  title={`Min ${betMin} / Max ${betMax}`}
+                >
+                  +
+                </button>
+              </div>
+            ) : (
+              <div className="h-6 w-[50px]" />
+            )}
+          </div>
+        )}
 
         {/* Main button */}
         <button
-          type="button"
-          disabled={!mainOnClick}
-          onClick={(e) => {
-            e.stopPropagation();
-            mainOnClick?.();
-          }}
-          className={[
-            "mt-2 w-full rounded-lg px-2 py-[7px]",
-,
-            "text-[13px] font-extrabold tracking-[0.18em] uppercase",
-            "active:scale-[0.99] transition",
-            mainClass,
-            !mainOnClick ? "opacity-90 cursor-default" : "",
-          ].join(" ")}
-        >
-          <div className="leading-none">{mainLabel}</div>
-          {mainSub && (
-            <div className="mt-1 text-[11px] font-mono font-extrabold tracking-normal leading-none opacity-90">
-              {mainSub}
-            </div>
-          )}
-        </button>
+  type="button"
+  disabled={!mainOnClick}
+  onClick={(e) => {
+    e.stopPropagation();
+    mainOnClick?.();
+  }}
+  className={[
+    // ✅ SIT = round + transparent, still loud
+    isSitOnly
+      ? [
+          "mt-0 w-full rounded-full px-2 py-[12px]",
+          "bg-transparent",
+          "border-2 border-sky-300/80",
+"text-sky-300",
+"shadow-[0_0_18px_rgba(56,189,248,0.35)]",
+"hover:border-sky-200 hover:shadow-[0_0_26px_rgba(56,189,248,0.55)]",
+
+        ].join(" ")
+      : "mt-2 w-full rounded-lg px-2 py-[7px]",
+    "text-[13px] font-extrabold tracking-[0.18em] uppercase",
+    "active:scale-[0.99] transition",
+    !isSitOnly ? mainClass : "",
+    !mainOnClick ? "opacity-90 cursor-default" : "",
+  ].join(" ")}
+>
+  <div className="leading-none">{mainLabel}</div>
+  {mainSub && (
+    <div className="mt-1 text-[11px] font-mono font-extrabold tracking-normal leading-none opacity-90">
+      {mainSub}
+    </div>
+  )}
+</button>
+
 
         {/* Action grid (inside box) */}
-        {seatTaken && showActionButtons && (
+        {seatTaken && showActionButtons && !isSitOnly && (
           <div className="mt-2 grid grid-cols-2 gap-1">
             <button
               type="button"
               onClick={() => handleAction("stand")}
-              className="h-9 rounded-xl bg-slate-900 text-white font-extrabold text-[12px] border border-white/15 active:scale-95"
+              className="h-8 rounded-lg bg-slate-900 text-white font-extrabold text-[11px] border border-white/15 active:scale-95"
             >
               STAND
             </button>
@@ -1365,7 +1421,7 @@ const shell = isSitOnly
               disabled={!canDouble}
               onClick={() => handleAction("double")}
               className={[
-                "h-9 rounded-xl font-extrabold text-[12px] active:scale-95",
+                "h-8 rounded-lg font-extrabold text-[11px] active:scale-95",
                 canDouble
                   ? "bg-amber-400 text-slate-950"
                   : "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed",
@@ -1379,7 +1435,7 @@ const shell = isSitOnly
               disabled={!canSplit}
               onClick={() => handleAction("split")}
               className={[
-                "col-span-2 h-9 rounded-xl font-extrabold text-[12px] active:scale-95",
+                "col-span-2 h-8 rounded-lg font-extrabold text-[11px] active:scale-95",
                 canSplit
                   ? "bg-purple-400 text-slate-950"
                   : "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed",
@@ -1393,20 +1449,26 @@ const shell = isSitOnly
     );
   };
 
-  // Cards block (keep your working version)
+  // Cards block (no ResultPill)
   const CardsBlock = () => (
     <div className="relative z-[1] flex flex-col items-center justify-center">
       {primaryHand && (primaryHand.cards?.length ?? 0) > 0 && (
         <>
           <div className="flex flex-col items-center justify-center gap-1">
             {handsToRender.map((hand, handIndex) => (
-              <div key={`seat-${seat.seatIndex}-hand-${handIndex}`} className="relative flex">
-                <ResultPill result={hand.result} />
-                {hand.cards.map((c, i) => {
-                  const overlap = hand.cards.length >= 4;
-                  const style: CSSProperties = overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+              <div
+                key={`seat-${seat.seatIndex}-hand-${handIndex}`}
+                className="relative flex"
+              >
+                {(hand.cards ?? []).map((c, i) => {
+                  const overlap = (hand.cards?.length ?? 0) >= 4;
+                  const style: CSSProperties =
+                    overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
                   return (
-                    <div key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`} style={style}>
+                    <div
+                      key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
+                      style={style}
+                    >
                       <BJCard card={c} small />
                     </div>
                   );
@@ -1451,14 +1513,12 @@ const shell = isSitOnly
       )}
 
       <div className="relative z-[1] flex flex-col items-center justify-center gap-2">
-        {/* Cards above, SeatBox below */}
         <CardsBlock />
         <SeatBox />
       </div>
     </div>
   );
 
-  // Bottom seats vs side seats
   if (layout === "bottom") {
     return (
       <div key={seat.seatIndex} {...seatWrapperProps} className="absolute" style={pos}>
@@ -1473,6 +1533,7 @@ const shell = isSitOnly
     </div>
   );
 }
+
 
 
 
@@ -1529,14 +1590,17 @@ const shell = isSitOnly
 
       {/* Table container */}
       <div
-        ref={tableWrapRef}
-        className={[
-          "relative rounded-3xl border border-[#FFD700]/40 bg-gradient-to-b from-black via-slate-950 to-black shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden",
-          isFullscreen
-            ? "fixed inset-0 z-[9999] rounded-none border-0 p-2 md:p-4 overflow-y-auto"
-            : "p-3 md:p-6",
-        ].join(" ")}
-      >
+  ref={tableWrapRef}
+  className={[
+    "relative rounded-3xl border border-[#FFD700]/40 bg-gradient-to-b from-black via-slate-950 to-black shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden",
+    isFullscreen
+      ? "fixed inset-0 z-[9999] rounded-none border-0 p-2 md:p-4"
+      : "p-3 md:p-6",
+    // ✅ give mobile fullscreen a real height
+    isFullscreen ? "h-[100dvh] w-[100vw]" : "",
+  ].join(" ")}
+>
+
         <style jsx>{`
           @keyframes dealerIn {
             0% {
@@ -1567,21 +1631,53 @@ const shell = isSitOnly
           {isFullscreen ? "Exit" : "Fullscreen"}
         </button>
 
+        {isMobile && !isLandscape && isHeroTurn && (
+  <div className="fixed inset-0 z-[10000] flex items-end justify-center p-4 pointer-events-none">
+    <div className="pointer-events-auto w-full max-w-[420px] rounded-2xl border border-white/15 bg-black/80 p-3 backdrop-blur">
+      <div className="text-xs font-extrabold tracking-[0.18em] text-white">
+        ROTATE FOR BEST PLAY
+      </div>
+      <div className="mt-1 text-[11px] text-white/70">
+        Landscape shows the whole table + all buttons.
+      </div>
+      <button
+        className="mt-3 w-full rounded-xl bg-emerald-400 py-2 text-[12px] font-extrabold text-black"
+        onClick={() => {/* optionally set a "dismissRotateHint" state */}}
+      >
+        CONTINUE IN PORTRAIT
+      </button>
+    </div>
+  </div>
+)}
+
+
         {/* Felt stage */}
-        <div
-          className={[
-            "relative z-[1] mx-auto flex w-full items-center justify-center",
-            isFullscreen ? "h-full" : "",
-          ].join(" ")}
-        >
-          <div
-            className={[
-              "relative",
-              isFullscreen ? "w-full h-full max-w-none" : "w-full max-w-[900px]",
-              "aspect-[9/10] sm:aspect-[10/11] md:aspect-[16/9]",
-              "-translate-x-[1%]",
-            ].join(" ")}
-          >
+       
+<div
+  className={[
+    "relative z-[1] mx-auto flex w-full items-center justify-center",
+    isFullscreen ? "h-full" : "",
+    // ✅ reserve space so bottom hero panel doesn't cover seats/controls in fullscreen mobile
+    isFullscreen && isMobile ? "pb-[160px]" : "",
+  ].join(" ")}
+>
+
+  <div
+  className={[
+    "relative",
+    "transition-transform duration-200 ease-out",
+    isFullscreen
+      ? "w-full h-full"
+      : "w-full max-w-[900px] aspect-[9/10] sm:aspect-[10/11] md:aspect-[16/9]",
+  ].join(" ")}
+  style={{
+    transform: isMobile && !isLandscape
+      ? "translateX(-1%) scale(1.18)"
+      : "translateX(-1%)",
+    transformOrigin: "center top",
+  }}
+>
+
             <Image
               src="/felt/bgr-blackjack-table.png"
               alt="Base Gold Rush Live Blackjack Table"
@@ -1662,7 +1758,7 @@ const shell = isSitOnly
                       : "bg-black/85 border-[#FFD700]/70 text-[#FFD700]",
                   ].join(" ")}
                 >
-                  Place your bets
+                  PLACE BETS
                 </div>
                 <div
                   className={[
@@ -1709,7 +1805,7 @@ const shell = isSitOnly
         </div>
 
         {/* Status strip under felt */}
-        <div className="mt-2 rounded-full border border-white/15 bg-gradient-to-r from-black via-slate-900 to-black px-3 py-1 text-[10px] md:text-[11px] text-white/80 shadow-[0_0_25px_rgba(0,0,0,0.7)]">
+        <div className="mt-1 rounded-full border border-white/15 bg-gradient-to-r from-black via-slate-900 to-black px-3 py-1 text-[10px] md:text-[11px] text-white/80 shadow-[0_0_25px_rgba(0,0,0,0.7)]">
           <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/40">
             Table Status&nbsp;&nbsp;
           </span>
@@ -1729,11 +1825,18 @@ const shell = isSitOnly
       </div>
 
       {/* MOBILE hero panel */}
-      {heroSeat && (
-        <div
-          ref={heroPanelRef}
-          className="mt-2 flex flex-col gap-2 rounded-2xl border border-white/15 bg-black/40 p-2 md:hidden"
-        >
+      
+{heroSeat && (
+  <div
+    ref={heroPanelRef}
+    className={[
+      "flex flex-col gap-2 rounded-2xl border border-white/15 backdrop-blur md:hidden",
+      isFullscreen
+        ? "fixed left-2 right-2 bottom-2 z-[10001] bg-black/75 p-2 pb-[calc(env(safe-area-inset-bottom)+8px)]"
+        : "mt-2 bg-black/40 p-2",
+    ].join(" ")}
+  >
+
           {/* Wallet strip */}
           <div className="flex items-center justify-between gap-2">
             <div className="rounded-full border border-[#FFD700]/40 bg-black/70 px-3 py-1 text-[11px] font-mono text-[#FFD700]">
