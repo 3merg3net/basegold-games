@@ -2,19 +2,33 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const sb = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const START_GLD = 5000;
+const START_PGLD = 5000;
 
 function int(n: any) {
   const v = Math.floor(Number(n ?? 0));
   return Number.isFinite(v) ? v : 0;
 }
 
+function getServiceSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Throwing here is OK — but now it happens only when the route is called,
+  // not during Vercel build/collect.
+  if (!url) throw new Error("supabaseUrl is required (set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL)");
+  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required");
+
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 export async function POST(req: Request) {
   try {
+    const sb = getServiceSupabase();
+
     const body = await req.json().catch(() => ({}));
     const playerId = String(body.playerId ?? "");
     const from = String(body.from ?? "");
@@ -30,48 +44,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid pair" }, { status: 400 });
     }
 
-    // 1) FK SAFE: ensure player exists (players.id must exist)
-    const { data: player, error: perr } = await sb
-      .from("players")
-      .select("id")
-      .eq("id", playerId)
-      .maybeSingle();
-
-    if (perr) {
-      return NextResponse.json({ ok: false, error: perr.message }, { status: 500 });
-    }
-    if (!player) {
-      return NextResponse.json(
-        { ok: false, error: "UNKNOWN_PLAYER" },
-        { status: 400 }
-      );
-    }
-
-    // 2) Ensure chip_balances row exists (will succeed now that FK is valid)
-    const { data: existingBal, error: berr } = await sb
+    // Ensure chip_balances row exists (WITH STARTING balances)
+    const { data: existing, error: exErr } = await sb
       .from("chip_balances")
       .select("player_id")
       .eq("player_id", playerId)
       .maybeSingle();
 
-    if (berr) {
-      return NextResponse.json({ ok: false, error: berr.message }, { status: 500 });
+    if (exErr) {
+      return NextResponse.json({ ok: false, error: exErr.message }, { status: 500 });
     }
 
-    if (!existingBal) {
+    if (!existing) {
       const { error: insErr } = await sb.from("chip_balances").insert({
         player_id: playerId,
-        balance_gld: 0,
+        balance_gld: START_GLD,
         reserved_gld: 0,
-        balance_pgld: 0,
+        balance_pgld: START_PGLD,
         reserved_pgld: 0,
       });
+
       if (insErr) {
         return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 });
       }
     }
 
-    // 3) Read current balances
     const { data: cur, error: rerr } = await sb
       .from("chip_balances")
       .select("balance_gld,balance_pgld,reserved_gld,reserved_pgld")
@@ -85,44 +82,27 @@ export async function POST(req: Request) {
     const rg = int(cur?.reserved_gld);
     const rp = int(cur?.reserved_pgld);
 
-    // ✅ IMPORTANT: available = balance - reserved
-    const availFrom = from === "gld" ? Math.max(0, bg - rg) : Math.max(0, bp - rp);
-    if (availFrom < amountIn) {
+    const have = from === "gld" ? bg : bp;
+    if (have < amountIn) {
       return NextResponse.json({ ok: false, error: "INSUFFICIENT_CHIPS" }, { status: 400 });
     }
 
     const nextBg = from === "gld" ? bg - amountIn : bg + amountIn;
     const nextBp = from === "pgld" ? bp - amountIn : bp + amountIn;
 
-    // 4) Atomic-ish guard: only update if still sufficient at write time
-    // (prevents some races without needing DB function)
-    const guardColumn = from === "gld" ? "balance_gld" : "balance_pgld";
-    const guardValue = from === "gld" ? bg : bp;
-
-    const { data: updated, error: uerr } = await sb
+    const { error: uerr } = await sb
       .from("chip_balances")
       .update({
         balance_gld: nextBg,
         balance_pgld: nextBp,
         updated_at: new Date().toISOString(),
       })
-      .eq("player_id", playerId)
-      .eq(guardColumn, guardValue) // optimistic concurrency guard
-      .select("balance_gld,balance_pgld,reserved_gld,reserved_pgld")
-      .maybeSingle();
+      .eq("player_id", playerId);
 
     if (uerr) return NextResponse.json({ ok: false, error: uerr.message }, { status: 500 });
 
-    if (!updated) {
-      // someone changed balances between read and write
-      return NextResponse.json(
-        { ok: false, error: "CONFLICT_RETRY" },
-        { status: 409 }
-      );
-    }
-
-    // 5) Ledger insert (best-effort; if you want it strict, wrap in DB function)
-    const { error: lerr } = await sb.from("chip_ledger").insert({
+    // optional ledger (don't fail swap if ledger insert fails)
+    const { error: ledErr } = await sb.from("chip_ledger").insert({
       player_id: playerId,
       tx_type: "chip_swap",
       delta_balance_gld: from === "gld" ? -amountIn : amountIn,
@@ -141,13 +121,16 @@ export async function POST(req: Request) {
       meta: { from, to, amountIn },
     });
 
-    if (lerr) {
-      // don't fail the swap if ledger fails in dev; you can tighten later
-      console.warn("[chip_swap] ledger insert failed:", lerr.message);
+    if (ledErr) {
+      // log but don't break swap
+      console.warn("[chips/swap] ledger insert failed:", ledErr.message);
     }
 
     return NextResponse.json({ ok: true, balance_gld: nextBg, balance_pgld: nextBp });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Unexpected error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "Unexpected swap error" },
+      { status: 500 }
+    );
   }
 }

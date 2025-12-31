@@ -15,6 +15,7 @@ import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 import { getHandHelper, HandHelper } from "@/lib/poker/handHelper";
 import PokerCard from "@/components/poker/PokerCard";
 import ConfettiBurst from "@/components/general/ConfettiBurst";
+import { IS_DEMO } from "@/config/env";
 
 
 /* ───────────────── Types ───────────────── */
@@ -900,36 +901,52 @@ return;
 
   /* ───────────────── Demo bankroll / refill ───────────────── */
 
-  function handleReloadDemoBankroll() {
+  /* ───────────────── Demo bankroll / refill ───────────────── */
+
+function handleReloadDemoBankroll() {
   const TARGET = 5000;
-  sendMessage({ type: "demo-topup", target: TARGET });
-  pushLog(`Requested demo bankroll top-up to ${TARGET.toLocaleString()} PGLD.`);
+
+  // DEMO mode: keep existing WS top-up behavior
+  if (IS_DEMO) {
+    sendMessage({ type: "demo-topup", target: TARGET });
+    pushLog(`Requested demo bankroll top-up to ${TARGET.toLocaleString()} PGLD.`);
+    return;
+  }
+
+  // LIVE: until poker bankroll is fully wired to Supabase, keep this as a no-op
+  // (prevents confusing "nothing happened" logs / wrong local state).
+  pushLog("Demo top-up is disabled in live mode (bankroll is server-backed).");
 }
 
+function handleRefillStack(amount: number) {
+  if (!heroSeat) return;
 
+  if (handInProgress) {
+    pushLog("You can only refill between hands.");
+    return;
+  }
 
+  const amt = Math.max(0, Math.floor(amount));
+  if (amt <= 0) return;
 
-
-
-  function handleRefillStack(amount: number) {
-    if (!heroSeat) return;
-    if (handInProgress) {
-      pushLog("You can only refill between hands.");
+  // DEMO: enforce bankroll check locally
+  if (IS_DEMO) {
+    if (heroBankroll < amt) {
+      pushLog(`Not enough bankroll to refill ${amt} PGLD.`);
       return;
     }
 
-    const amt = Math.max(0, Math.floor(amount));
-    if (amt <= 0) return;
+    pushLog(`${describeHero()} refills stack by ${amt} PGLD.`);
+    sendMessage({ type: "refill-stack", amount: amt });
+    return;
+  }
 
-    if (heroBankroll < amt) {
-  pushLog(`Not enough bankroll to refill ${amt} PGLD.`);
-  return;
+  // LIVE: don't block on heroBankroll until it's synced to Supabase/WS
+  // Let the server/coordinator validate.
+  pushLog(`${describeHero()} requests refill stack by ${amt} PGLD.`);
+  sendMessage({ type: "refill-stack", amount: amt });
 }
 
-pushLog(`${describeHero()} refills stack by ${amt} PGLD.`);
-sendMessage({ type: "refill-stack", amount: amt });
-
-  }
 
   /* ───────────────── Hero actions ───────────────── */
 
