@@ -1,9 +1,10 @@
 // app/poker/[roomId]/PokerRoomPageClient.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { POKER_ROOMS, PokerRoomConfig } from '@/config/pokerRooms';
 
 const PokerRoomArcade = dynamic(
@@ -31,14 +32,35 @@ function makeFallbackRoom(roomId: string): PokerRoomConfig {
   } as PokerRoomConfig;
 }
 
+function safeName(v: string) {
+  const s = (v || '').trim();
+  if (!s) return '';
+  // keep it tight + avoid weird URL garbage
+  return s.replace(/\s+/g, ' ').slice(0, 32);
+}
+
 export default function PokerRoomPageClient({ params }: ClientProps) {
   const [mounted, setMounted] = useState(false);
+  const searchParams = useSearchParams();
+
+  const roomId = params.roomId;
+  const roomMeta: PokerRoomConfig = POKER_ROOMS[roomId] ?? makeFallbackRoom(roomId);
+
+  // ✅ accepts lobby’s `?name=Gold+Table`
+  const tableName = safeName(searchParams?.get('name') || '');
+
+  // Optional: expose a single “display label” for UI/title
+  const displayLabel = useMemo(() => {
+    return tableName || roomMeta.label || 'Poker';
+  }, [tableName, roomMeta.label]);
 
   useEffect(() => setMounted(true), []);
 
-  const roomId = params.roomId;
-  const roomMeta: PokerRoomConfig =
-    POKER_ROOMS[roomId] ?? makeFallbackRoom(roomId);
+  useEffect(() => {
+    // Title should feel like: "Gold Table • No Limit Texas Gold Hold’em"
+    const base = roomMeta.label || 'Poker';
+    document.title = tableName ? `${tableName} • ${base}` : base;
+  }, [tableName, roomMeta.label]);
 
   if (!mounted) {
     return (
@@ -48,9 +70,9 @@ export default function PokerRoomPageClient({ params }: ClientProps) {
     );
   }
 
-  // If a configured room is not live, still respect that
-  // (but all unknown rooms are treated as live public tables)
   const configured = Boolean(POKER_ROOMS[roomId]);
+
+  // If configured room is not live, block it
   if (configured && roomMeta.status !== 'live') {
     return (
       <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4">
@@ -71,7 +93,6 @@ export default function PokerRoomPageClient({ params }: ClientProps) {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
-      {/* Tiny back pill overlay (clean exit without footer/header dependency) */}
       <div className="fixed left-3 top-[72px] z-[60]">
         <Link
           href="/poker"
@@ -81,7 +102,12 @@ export default function PokerRoomPageClient({ params }: ClientProps) {
         </Link>
       </div>
 
-      <PokerRoomArcade roomId={roomId} />
+      {/* ✅ roomId is still the actual room socket id
+          ✅ tableName is the friendly display name */}
+      <PokerRoomArcade
+        roomId={roomId}
+        tableName={displayLabel} // pass the label you want shown
+      />
     </main>
   );
 }

@@ -30,6 +30,16 @@ export default function CasinoProfilePage() {
   const [walletLinkError, setWalletLinkError] = useState<string | null>(null);
   const [walletLinkSuccess, setWalletLinkSuccess] = useState<string | null>(null);
 
+  const DEFAULT_AVATAR_OPTIONS = [
+  "/avatars/av-1.png",
+  "/avatars/av-2.png",
+  "/avatars/av-3.png",
+  "/avatars/av-4.png",
+  "/avatars/av-5.png",
+  "/avatars/av-6.png",
+];
+
+
   // local form state
   const [localHandle, setLocalHandle] = useState("");
   const [localNickname, setLocalNickname] = useState(""); // stored in DB "name"
@@ -58,6 +68,8 @@ export default function CasinoProfilePage() {
   const profileId = (profile as any)?.id as string | undefined;
   const linkedWallet = (profile as any)?.walletAddress as string | undefined;
   const profileComplete = (profile as any)?.isProfileComplete as boolean | undefined;
+
+  
 
   // a few basic stats from existing fields (safe)
   const wins = Number(profile?.wins ?? 0);
@@ -155,6 +167,24 @@ export default function CasinoProfilePage() {
       setSaving(false);
     }
   }
+
+  async function selectDefaultAvatar(path: string) {
+  if (!profile?.id) {
+    setAvatarError("Save your profile first, then choose a default avatar.");
+    return;
+  }
+  try {
+    setAvatarError(null);
+    setAvatarUploading(true);
+    await updateProfile({ avatarUrl: path } as any);
+  } catch (err) {
+    console.error(err);
+    setAvatarError("Failed to set default avatar.");
+  } finally {
+    setAvatarUploading(false);
+  }
+}
+
 
   async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     setAvatarError(null);
@@ -334,6 +364,49 @@ export default function CasinoProfilePage() {
                     onChange={handleAvatarChange}
                     className="text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-[#FFD700] file:px-2 file:py-1 file:text-xs file:font-semibold file:text-black file:hover:bg-yellow-400"
                   />
+                  <div className="pt-2">
+  <div className="text-[11px] text-white/70 font-semibold mb-2">
+    Or pick a default avatar
+  </div>
+
+  <div className="grid grid-cols-6 gap-2">
+    {DEFAULT_AVATAR_OPTIONS.map((src) => {
+      const active = avatarUrl === src;
+      return (
+        <button
+          key={src}
+          type="button"
+          onClick={() => selectDefaultAvatar(src)}
+          className={[
+            "relative aspect-square rounded-xl overflow-hidden border transition",
+            active
+              ? "border-[#FFD700]/80 ring-2 ring-[#FFD700]/40"
+              : "border-white/15 hover:border-white/30",
+          ].join(" ")}
+          title="Use this avatar"
+        >
+          <Image
+            src={src}
+            alt="Default avatar"
+            fill
+            sizes="64px"
+            className="object-cover"
+          />
+          {active && (
+            <div className="absolute bottom-1 right-1 rounded-full bg-[#FFD700] text-black text-[10px] font-extrabold px-2 py-[1px]">
+              ✓
+            </div>
+          )}
+        </button>
+      );
+    })}
+  </div>
+
+  <div className="mt-2 text-[10px] text-white/45">
+    Default avatars are stored locally (no upload). Upload overrides anytime.
+  </div>
+</div>
+
                   {avatarUploading && (
                     <div className="text-[11px] text-amber-300">Uploading avatar…</div>
                   )}

@@ -19,6 +19,24 @@ type StyleOption = "tight" | "loose" | "aggro" | "balanced";
 type PreferredStake = "Low" | "Medium" | "High";
 type FavoriteGame = "Poker" | "Blackjack" | "Slots" | "Roulette" | "Other";
 
+const DEFAULT_AVATARS = [
+  "/avatars/av-1.png",
+  "/avatars/av-2.png",
+  "/avatars/av-3.png",
+  "/avatars/av-4.png",
+  "/avatars/av-5.png",
+  "/avatars/av-6.png",
+];
+
+function pickDefaultAvatar(profileId?: string) {
+  // deterministic pick so it doesn't change each refresh
+  const s = String(profileId || "player");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return DEFAULT_AVATARS[hash % DEFAULT_AVATARS.length];
+}
+
+
 function Pill({
   label,
   tone = "neutral",
@@ -139,6 +157,14 @@ export default function AccountDashboardPage() {
   enabled: Boolean(address && BGLD_TOKEN_ADDRESS),
   watch: true,
 });
+
+useEffect(() => {
+  if (!profile?.id) return;
+  // Force the app-wide "playerId" to be the real DB id.
+  // This prevents FK failures on chip_balances insert/update.
+  localStorage.setItem("playerId", profile.id);
+}, [profile?.id]);
+
 
 
   useEffect(() => {
@@ -320,6 +346,17 @@ React.useEffect(() => {
     }
   }
 
+  useEffect(() => {
+  if (loading) return;
+  if (!profile?.id) return;
+
+  // If user has no avatarUrl yet, set a default once
+  if (!profile.avatarUrl) {
+    void updateProfile({ avatarUrl: pickDefaultAvatar(profile.id) } as any);
+  }
+}, [loading, profile?.id, profile?.avatarUrl, updateProfile]);
+
+
   async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     setAvatarError(null);
     const file = e.target.files?.[0];
@@ -424,6 +461,15 @@ useEffect(() => {
   }
 }, [loading, profile, router]);
 
+useEffect(() => {
+  if (!profile?.id) return
+  console.log("[ACCOUNT] profile.id:", profile.id)
+  try {
+    console.log("[ACCOUNT] localStorage playerId:", localStorage.getItem("playerId"))
+  } catch {}
+}, [profile?.id])
+
+
 
   // Uniswap link (you can swap this to your exact pool / token URL later)
   const uniswapBgldUrl = "https://app.uniswap.org/swap?chain=base&outputCurrency=0x0bbcaa0921da25ef216739e8dbbfd988875e81b4"; // placeholder
@@ -461,6 +507,24 @@ useEffect(() => {
     Syncing your account state…
   </div>
 )}
+<div className="flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => router.push("/profile")}
+    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
+  >
+    Edit Profile
+  </button>
+
+  <button
+    type="button"
+    onClick={() => router.push("/poker")}
+    className="rounded-xl border border-[#FFD700]/35 bg-[#FFD700]/10 px-3 py-2 text-xs font-extrabold text-[#FFE58A] hover:bg-[#FFD700]/15"
+  >
+    Poker Lobby →
+  </button>
+</div>
+
 
           </div>
 
@@ -696,11 +760,17 @@ useEffect(() => {
             right={<Pill label="Preview" tone="warn" />}
           >
             <CashierSwapBox
-              balances={{
-                gld: gldBal,
-                pgld: pgldBal,
-              }}
-            />
+  playerId={profile?.id}
+  balances={{ gld: gldBal, pgld: pgldBal }}
+  onBalances={(next) => {
+    // optional immediate UI optimism; real truth comes from refreshChips()
+    // you can also just call refreshChips() here if you prefer
+    refreshChips();
+  }}
+/>
+
+
+
             <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3 text-[11px] text-white/60">
               GLD is the main casino currency for all non-poker games. PGLD is poker-only.
               Reserved balances represent chips locked in active games/sessions.

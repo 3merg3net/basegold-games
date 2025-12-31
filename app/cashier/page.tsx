@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
 import Link from 'next/link'
 import { CashierPanel, ChipKind } from '@/components/casino/CashierPanel'
 import CashierSwapBox from '@/components/casino/CashierSwapBox'
@@ -22,6 +23,46 @@ export default function CashierPage() {
       ? 'GLD chips are used for slots, arcade games, and table games (including Blackjack).'
       : 'PGLD chips are used for live poker table stacks and poker gameplay.'
   }, [chip])
+
+      const [playerId, setPlayerId] = useState<string | null>(null)
+  const [balances, setBalances] = useState<{ gld: number; pgld: number } | null>(null)
+  const [balLoading, setBalLoading] = useState(false)
+  const [balErr, setBalErr] = useState<string | null>(null)
+
+  // TEMP: derive Casino ID from localStorage (replace with your ProfileProvider later)
+  useEffect(() => {
+    const id = window.localStorage.getItem('casino_player_id')
+    if (id) setPlayerId(id)
+  }, [])
+
+  const loadBalances = useCallback(async () => {
+    if (!playerId) return
+    setBalLoading(true)
+    setBalErr(null)
+    try {
+      const res = await fetch(
+        `/api/chips/balance?playerId=${encodeURIComponent(playerId)}`,
+        { cache: 'no-store' }
+      )
+      const j = await res.json()
+      if (j?.error) throw new Error(j.error)
+      setBalances({
+        gld: Math.floor(Number(j.balance_gld ?? 0)),
+        pgld: Math.floor(Number(j.balance_pgld ?? 0)),
+      })
+    } catch (e: any) {
+      setBalErr(e?.message ?? 'Unable to load balances')
+    } finally {
+      setBalLoading(false)
+    }
+  }, [playerId])
+
+  useEffect(() => {
+    if (!playerId) return
+    void loadBalances()
+  }, [playerId, loadBalances])
+
+
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
@@ -81,7 +122,17 @@ export default function CashierPage() {
 
         <div className="grid gap-6 md:grid-cols-[320px_1fr]">
           {/* Left panel */}
-          <CashierPanel chip={chip} />
+          {balErr && (
+  <div className="mt-2 rounded-lg border border-red-500/20 bg-red-950/20 p-2 text-[11px] text-red-200">
+    {balErr}
+  </div>
+)}
+{balLoading && (
+  <div className="mt-2 text-[11px] text-white/50">Loading balances…</div>
+)}
+
+          <CashierPanel chip={chip} playerId={playerId ?? undefined} />
+
           
 
           {/* Right info card */}
@@ -89,7 +140,18 @@ export default function CashierPage() {
             <div className="text-[11px] uppercase tracking-[0.22em] text-white/50">
               Selected
             </div>
-            <CashierSwapBox/>
+            <CashierSwapBox
+  playerId={playerId ?? undefined}
+  balances={{
+    bgld: null,
+    gld: balances?.gld ?? null,
+    pgld: balances?.pgld ?? null,
+  }}
+  onBalances={(next) => setBalances(next)}
+  onSwapPreview={() => {}}
+/>
+
+
 
 
             <div className="mt-2 text-base md:text-lg font-semibold text-[#FFD700]">

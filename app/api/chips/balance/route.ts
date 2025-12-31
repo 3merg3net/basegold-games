@@ -22,6 +22,19 @@ export async function GET(req: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    // ensure player exists in players table (FK requirement)
+const { error: upsertPlayerErr } = await supabaseService
+  .from("players")
+  .upsert(
+    { id: playerId },              // adjust column names if your PK differs
+    { onConflict: "id" }
+  );
+
+if (upsertPlayerErr) {
+  return NextResponse.json({ error: upsertPlayerErr.message }, { status: 500 });
+}
+
+
     if (!data) {
       const { error: insErr } = await supabaseService.from("chip_balances").insert({
         player_id: playerId,

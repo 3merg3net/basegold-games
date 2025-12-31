@@ -1,21 +1,30 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { IS_DEMO } from '@/config/env'
+import { getDemoBalances, setDemoBalances } from '@/lib/demoChips'
+
 
 type Asset = 'bgld' | 'gld' | 'pgld'
 
 type Props = {
+  playerId?: string // optional in demo; required for live swap calls
   balances?: {
     bgld?: number | null // optional UI-only (on-chain handled elsewhere)
     gld?: number | null
     pgld?: number | null
   }
-  /**
-   * Optional hook: you can wire this later to a real swap endpoint.
-   * For now, Account can pass a stub (or omit).
-   */
-  onSwapPreview?: (args: { from: Asset; to: Asset; amountIn: number; amountOut: number | null; usdValue: number | null }) => void
+  onBalances?: (next: { gld: number; pgld: number }) => void
+
+  onSwapPreview?: (args: {
+    from: Asset
+    to: Asset
+    amountIn: number
+    amountOut: number | null
+    usdValue: number | null
+  }) => void
 }
+
 
 /**
  * Chips pricing rule:
@@ -62,7 +71,13 @@ function fmtBal(n: number | null | undefined) {
   return Math.floor(Number(n)).toLocaleString()
 }
 
-export default function CashierSwapBox({ balances, onSwapPreview }: Props) {
+export default function CashierSwapBox({
+  playerId,
+  balances,
+  onBalances,
+  onSwapPreview,
+}: Props) {
+
   const [from, setFrom] = useState<Asset>('bgld')
   const [to, setTo] = useState<Asset>('gld')
   const [amountIn, setAmountIn] = useState<string>('')
@@ -70,6 +85,11 @@ export default function CashierSwapBox({ balances, onSwapPreview }: Props) {
   const [priceUsd, setPriceUsd] = useState<number | null>(null)
   const [loadingPrice, setLoadingPrice] = useState(false)
   const [priceErr, setPriceErr] = useState<string | null>(null)
+
+    const [swapping, setSwapping] = useState(false)
+  const [swapErr, setSwapErr] = useState<string | null>(null)
+  const [swapOk, setSwapOk] = useState<string | null>(null)
+
 
   // Fetch BGLD/USD once
   useEffect(() => {
@@ -183,8 +203,121 @@ export default function CashierSwapBox({ balances, onSwapPreview }: Props) {
     return fmtBal(balances?.pgld)
   }
 
-  const disableSwap =
-    !parsedIn || ((from === 'bgld' || to === 'bgld') && !priceUsd)
+    const doSwap = useCallback(async () => {
+    setSwapErr(null)
+    setSwapOk(null)
+
+    if (!parsedIn) return
+    if (!(isChip(from) && isChip(to)) || from === to) {
+      setSwapErr('Only GLD ⇄ PGLD swaps are enabled right now.')
+      return
+    }
+
+    const amt = Math.floor(parsedIn)
+    if (amt <= 0) return
+
+    // DEMO only when we don't have a real casino playerId yet.
+// If a real playerId exists, treat it as "live" even in demo builds.
+// Chip↔Chip swaps should be live as soon as playerId exists.
+// Demo mode is only for BGLD settlement UX.
+const canLiveSwap = Boolean(playerId);
+
+// If no playerId, fall back to demo (so dev still works)
+if (!canLiveSwap) {
+  const cur = getDemoBalances();
+  const have = from === "gld" ? cur.gld : cur.pgld;
+  if (have < amt) { setSwapErr("INSUFFICIENT_CHIPS"); return; }
+
+  const next = {
+    gld: from === "gld" ? cur.gld - amt : cur.gld + amt,
+    pgld: from === "pgld" ? cur.pgld - amt : cur.pgld + amt,
+  };
+
+  setDemoBalances(next);
+  onBalances?.(next);
+  setAmountIn("");
+  setSwapOk(`Swapped ${amt.toLocaleString()} ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]}`);
+  return;
+}
+
+// LIVE swap (Supabase)
+setSwapping(true);
+try {
+  const res = await fetch("/api/chips/swap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ playerId, from, to, amountIn: amt }),
+  });
+
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j?.ok) throw new Error(j?.error || "Swap failed");
+
+  const next = {
+    gld: Math.floor(Number(j.balance_gld ?? 0)),
+    pgld: Math.floor(Number(j.balance_pgld ?? 0)),
+  };
+
+  onBalances?.(next);
+  setAmountIn("");
+  setSwapOk(`Swapped ${amt.toLocaleString()} ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]}`);
+} catch (e: any) {
+  setSwapErr(e?.message ?? "Swap failed");
+} finally {
+  setSwapping(false);
+}
+
+
+
+    setSwapping(true)
+    try {
+      const res = await fetch('/api/chips/swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          playerId,
+          from,
+          to,
+          amountIn: amt,
+        }),
+      })
+
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || 'Swap failed')
+      }
+
+      const next = {
+        gld: Math.floor(Number(j.balance_gld ?? 0)),
+        pgld: Math.floor(Number(j.balance_pgld ?? 0)),
+      }
+
+      onBalances?.(next)
+      setAmountIn('')
+      setSwapOk(`Swapped ${amt.toLocaleString()} ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]}`)
+    } catch (e: any) {
+      setSwapErr(e?.message ?? 'Swap failed')
+    } finally {
+      setSwapping(false)
+    }
+  }, [parsedIn, from, to, playerId, onBalances])
+
+  const DEMO_ACTIVE = IS_DEMO && !playerId;
+
+
+    const disableSwap =
+  !parsedIn ||
+  swapping ||
+  !(isChip(from) && isChip(to)) ||
+  from === to ||
+  (!DEMO_ACTIVE && !playerId);
+
+
+    
+
+
+
 
   return (
     <div className="rounded-3xl border border-white/10 bg-black/60 p-4 md:p-5 shadow-[0_0_50px_rgba(250,204,21,0.08)]">
@@ -196,7 +329,7 @@ export default function CashierSwapBox({ balances, onSwapPreview }: Props) {
             Exchange BGLD ⇄ Chips
           </div>
           <div className="mt-1 text-xs text-white/60">
-            GLD / PGLD are in-house credits (not ERC-20). Chips are priced at 100 chips = $1.
+            GLD / PGLD Chips are priced at 100 chips = $1.
           </div>
         </div>
 
@@ -297,17 +430,37 @@ export default function CashierSwapBox({ balances, onSwapPreview }: Props) {
           </div>
         </div>
 
+                {swapErr && (
+          <div className="rounded-2xl border border-red-500/20 bg-red-950/20 p-3 text-[12px] text-red-200">
+            {swapErr}
+          </div>
+        )}
+        {swapOk && (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+            {swapOk}
+          </div>
+        )}
+
+
         {/* CTA */}
-        <button
+                <button
           type="button"
+          onClick={doSwap}
           disabled={disableSwap}
           className={[
             'w-full rounded-2xl px-4 py-3 text-sm font-extrabold transition',
-            disableSwap ? 'bg-white/10 text-white/40 cursor-not-allowed' : 'bg-[#FFD700] text-black hover:bg-yellow-400',
+            disableSwap
+              ? 'bg-white/10 text-white/40 cursor-not-allowed'
+              : 'bg-[#FFD700] text-black hover:bg-yellow-400',
           ].join(' ')}
         >
-          {parsedIn ? `Swap ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]} (Preview)` : 'Enter amount'}
+          {swapping
+            ? 'Swapping…'
+            : parsedIn
+            ? `Swap ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]}`
+            : 'Enter amount'}
         </button>
+
       </div>
     </div>
   )

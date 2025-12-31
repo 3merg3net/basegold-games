@@ -81,26 +81,58 @@ const defaultProfile: PlayerProfile = {
 type Ctx = {
   profile: PlayerProfile | null;
   updateProfile: (patch: Partial<PlayerProfile>) => Promise<void>;
+
+  // legacy demo chips (keep for now)
   chips: number;
   setChips: (fn: (c: number) => number) => void;
+
   loading: boolean;
   error: unknown;
 };
 
+const DEFAULT_AVATARS = [
+  "/avatars/av-1.png",
+  "/avatars/av-2.png",
+  "/avatars/av-3.png",
+  "/avatars/av-4.png",
+  "/avatars/av-5.png",
+  "/avatars/av-6.png",
+];
+
+function pickDefaultAvatar(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return DEFAULT_AVATARS[h % DEFAULT_AVATARS.length];
+}
+
 const PlayerProfileContext = createContext<Ctx | undefined>(undefined);
 
-// Legacy key name kept for now to avoid breaking existing users/devices.
-// You can migrate to "bgrc_player_id" later if you want.
-const PLAYER_ID_KEY = "bgld_player_id";
+/**
+ * ✅ Canonical ID key used across the app (poker + account + chips)
+ */
+const PLAYER_ID_KEY = "playerId";
 
-// Legacy key name kept for now; it represents BGRC demo chips.
+/**
+ * ✅ Legacy key kept for migration only (your old provider used this).
+ * We’ll read it once and then write canonical key back so everything converges.
+ */
+const LEGACY_PLAYER_ID_KEY = "bgld_player_id";
+
+/**
+ * Legacy demo chips key (UI-only)
+ */
 const DEMO_CHIPS_KEY = "bgld_demo_chips";
 
-export function PlayerProfileProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function makeStablePlayerId() {
+  const uid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  return `p_${uid.replace(/-/g, "")}`;
+}
+
+export function PlayerProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<unknown>(null);
@@ -128,14 +160,21 @@ export function PlayerProfileProvider({
       setLoading(true);
       setError(null);
 
+      // 1) Resolve canonical id (migrate legacy key → canonical key)
+      let id =
+        window.localStorage.getItem(PLAYER_ID_KEY) ||
+        window.localStorage.getItem(LEGACY_PLAYER_ID_KEY);
+
+      if (!id) id = makeStablePlayerId();
+
+      // write canonical + backfill legacy so any old code stops drifting
+      window.localStorage.setItem(PLAYER_ID_KEY, id);
+      window.localStorage.setItem(LEGACY_PLAYER_ID_KEY, id);
+
+      // optional: make debugging easy
+      (window as any).__profileId = id;
+
       try {
-        let id = window.localStorage.getItem(PLAYER_ID_KEY);
-
-        if (!id) {
-          id = "player-" + Math.random().toString(36).slice(2, 10);
-          window.localStorage.setItem(PLAYER_ID_KEY, id);
-        }
-
         const { data, error: loadError } = await supabase
           .from("players")
           .select("*")
@@ -149,8 +188,13 @@ export function PlayerProfileProvider({
           return;
         }
 
+        // 2) Create player row if missing
         if (!data) {
-          const newProfile: PlayerProfile = { ...defaultProfile, id };
+          const newProfile: PlayerProfile = {
+            ...defaultProfile,
+            id,
+            avatarUrl: pickDefaultAvatar(id),
+          };
 
           const { error: insertError } = await supabase.from("players").insert({
             id,
@@ -194,6 +238,7 @@ export function PlayerProfileProvider({
           return;
         }
 
+        // 3) Map DB → client shape
         const mapped: PlayerProfile = {
           id: data.id,
 
@@ -233,11 +278,21 @@ export function PlayerProfileProvider({
           lastSeenAt: data.last_seen_at ?? null,
         };
 
+        // Ensure avatarUrl exists (one-time backfill)
+        if (!mapped.avatarUrl) {
+          const fallback = pickDefaultAvatar(id);
+          mapped.avatarUrl = fallback;
+          void supabase
+            .from("players")
+            .update({ avatar_url: fallback, updated_at: new Date().toISOString() })
+            .eq("id", id);
+        }
+
         setProfile(mapped);
       } catch (err) {
         console.error("[profile] unexpected error", err);
         setError(err);
-        setProfile({ ...defaultProfile, id: "unknown" });
+        setProfile({ ...defaultProfile, id });
       } finally {
         setLoading(false);
       }
@@ -250,6 +305,7 @@ export function PlayerProfileProvider({
     if (!profile?.id) return;
 
     // optimistic local update
+    const prev = profile;
     const next: PlayerProfile = { ...profile, ...patch };
     setProfile(next);
 
@@ -257,7 +313,7 @@ export function PlayerProfileProvider({
     const payload: Record<string, any> = {};
 
     if (patch.handle !== undefined) payload.handle = patch.handle;
-    if (patch.nickname !== undefined) payload.name = patch.nickname; // nickname stored in "name"
+    if (patch.nickname !== undefined) payload.name = patch.nickname;
     if (patch.isProfileComplete !== undefined)
       payload.is_profile_complete = patch.isProfileComplete;
 
@@ -289,19 +345,14 @@ export function PlayerProfileProvider({
     if (patch.walletAddress !== undefined) payload.wallet_address = patch.walletAddress;
     if (patch.recoveryEmail !== undefined) payload.recovery_email = patch.recoveryEmail;
 
-    // Always bump updated_at (optional if you add a DB trigger later)
     payload.updated_at = new Date().toISOString();
 
-    const { error: upErr } = await supabase
-      .from("players")
-      .update(payload)
-      .eq("id", profile.id);
+    const { error: upErr } = await supabase.from("players").update(payload).eq("id", profile.id);
 
     if (upErr) {
       console.error("[profile] update error", upErr);
       setError(upErr);
-      // revert local optimistic update (best-effort)
-      setProfile(profile);
+      setProfile(prev); // revert optimistic update
       throw upErr;
     }
   };
@@ -315,11 +366,7 @@ export function PlayerProfileProvider({
     error,
   };
 
-  return (
-    <PlayerProfileContext.Provider value={value}>
-      {children}
-    </PlayerProfileContext.Provider>
-  );
+  return <PlayerProfileContext.Provider value={value}>{children}</PlayerProfileContext.Provider>;
 }
 
 export function usePlayerProfileContext() {

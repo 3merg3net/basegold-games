@@ -9,12 +9,19 @@ type SendPayload =
   | { type: "chat"; text: string }
   | { type: "sit"; name?: string; seatIndex?: number; buyIn?: number }
   | { type: "stand" }
-  | { type: "start-hand" }
+  | { type: "start-hand" | "start-game" }
+  | { type: "refill-stack"; amount: number }
+  | { type: "demo-topup"; target: number }
+  | { type: "show-cards" }
+  | { type: "reset-table" }
+  | { type: "close-room" }
   | {
       type: "action";
       action: "fold" | "check" | "call" | "bet";
       amount?: number;
     };
+    
+
 
 /**
  * SUPER SIMPLE URL RESOLVER
@@ -24,31 +31,42 @@ type SendPayload =
 function resolveWsUrl(): string {
   const raw = process.env.NEXT_PUBLIC_POKER_WS;
 
-  // Local default: coordinator on :8080
+  // If env not set, default to same host as the page, port 8080.
+  // Fixes mobile/LAN testing (phone hitting http://10.0.0.159:3000 should WS to ws://10.0.0.159:8080).
   if (!raw || raw.trim() === "") {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname; // e.g. 10.0.0.159
+      const isHttps = window.location.protocol === "https:";
+      return `${isHttps ? "wss" : "ws"}://${host}:8080`;
+    }
     return "ws://localhost:8080";
   }
 
   const v = raw.trim();
 
-  // Already a ws:// or wss:// URL → use as-is
-  if (v.startsWith("ws://") || v.startsWith("wss://")) {
-    return v;
-  }
+  if (v.startsWith("ws://") || v.startsWith("wss://")) return v;
 
-  // Convert http(s) → ws(s)
-  if (v.startsWith("https://")) {
-    return v.replace(/^https:\/\//, "wss://");
-  }
-  if (v.startsWith("http://")) {
-    return v.replace(/^http:\/\//, "ws://");
-  }
+  if (v.startsWith("https://")) return v.replace(/^https:\/\//, "wss://");
+  if (v.startsWith("http://")) return v.replace(/^http:\/\//, "ws://");
 
-  // Bare host like "bgld-poker-coordinator-production.up.railway.app"
   return `wss://${v}`;
 }
 
-export function usePokerRoom(roomId: string, playerId: string) {
+type UsePokerRoomOpts = {
+  roomId: string;
+  playerId: string;
+
+  // Player display name (handle/nickname) — OPTIONAL but recommended
+  playerName?: string;
+
+  // Table meta — OPTIONAL
+  tableName?: string;
+  isPrivate?: boolean;
+};
+
+export function usePokerRoom(opts: UsePokerRoomOpts) {
+  const { roomId, playerId } = opts;
+
   const [ready, setReady] = useState(false);
   const [messages, setMessages] = useState<IncomingMessage[]>([]);
 
@@ -80,6 +98,7 @@ export function usePokerRoom(roomId: string, playerId: string) {
 
     function startHeartbeat() {
       clearHeartbeat();
+
       // Light heartbeat every ~25s to keep Railway / proxies from idling us out
       heartbeatIntervalRef.current = window.setInterval(() => {
         const ws = wsRef.current;
@@ -92,12 +111,13 @@ export function usePokerRoom(roomId: string, playerId: string) {
           type: "ping" as const,
           payload: "hb",
         };
+
         try {
           ws.send(JSON.stringify(ping));
         } catch (err) {
           console.warn("[poker] heartbeat send failed:", err);
         }
-      }, 25000) as unknown as number;
+      }, 25_000) as unknown as number;
     }
 
     function connect() {
@@ -113,11 +133,29 @@ export function usePokerRoom(roomId: string, playerId: string) {
         setReady(true);
         attemptsRef.current = 0; // reset backoff on success
 
+        // Prefer opts.tableName / opts.isPrivate if passed.
+        // Fallback to URL query params if not provided.
+        let tableName = (opts.tableName ?? "").trim();
+        let isPrivate = Boolean(opts.isPrivate);
+
+        if (typeof window !== "undefined") {
+          const qs = new URLSearchParams(window.location.search);
+          if (!tableName) tableName = (qs.get("name") || "").trim();
+          if (!opts.isPrivate) isPrivate = qs.get("private") === "1";
+        }
+
         const join = {
           kind: "poker" as const,
           roomId,
           playerId,
           type: "join-room" as const,
+
+          // ✅ Player display name
+          name: (opts.playerName ?? "").trim() || undefined,
+
+          // ✅ Table meta for lobby display
+          tableName: tableName || undefined,
+          private: isPrivate ? "1" : "0",
         };
 
         try {
@@ -132,7 +170,6 @@ export function usePokerRoom(roomId: string, playerId: string) {
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
-          // console.log("[poker] incoming:", data);
           setMessages((prev) => [...prev, data]);
         } catch (err) {
           console.error("[poker] bad message:", err);
@@ -146,33 +183,23 @@ export function usePokerRoom(roomId: string, playerId: string) {
       ws.onclose = (event) => {
         if (didUnmount) return;
 
-        console.log(
-          "[poker] WS closed",
-          "code:",
-          event.code,
-          "reason:",
-          event.reason
-        );
+        console.log("[poker] WS closed", "code:", event.code, "reason:", event.reason);
         setReady(false);
         clearHeartbeat();
 
         // If we intentionally closed (unmount / route change), don't reconnect
-        if (manualCloseRef.current) {
-          return;
-        }
+        if (manualCloseRef.current) return;
 
         // Auto-reconnect with backoff
         const attempt = attemptsRef.current + 1;
         attemptsRef.current = attempt;
-        const delay = Math.min(1000 * Math.pow(2, attempt), 15000); // 1s → 2s → 4s … max 15s
+        const delay = Math.min(1000 * Math.pow(2, attempt), 15_000);
 
         console.log(`[poker] Scheduling reconnect in ${delay}ms (attempt ${attempt})`);
 
         clearReconnectTimer();
         reconnectTimeoutRef.current = window.setTimeout(() => {
-          if (!didUnmount && !manualCloseRef.current) {
-            connect();
-          }
+          if (!didUnmount && !manualCloseRef.current) connect();
         }, delay) as unknown as number;
       };
     }
@@ -192,14 +219,9 @@ export function usePokerRoom(roomId: string, playerId: string) {
 
       if (ws) {
         try {
+          // NOTE: server.ts ignores leave-room currently; safe to send anyway
           if (ws.readyState === WebSocket.OPEN) {
-            const leave = {
-              kind: "poker" as const,
-              roomId,
-              playerId,
-              type: "leave-room" as const,
-            };
-            ws.send(JSON.stringify(leave));
+            ws.send(JSON.stringify({ kind: "poker", roomId, playerId, type: "leave-room" }));
           }
           ws.close();
         } catch (err) {
@@ -207,7 +229,8 @@ export function usePokerRoom(roomId: string, playerId: string) {
         }
       }
     };
-  }, [roomId, playerId]);
+    // include meta in deps so reconnect uses latest values
+  }, [roomId, playerId, opts.playerName, opts.tableName, opts.isPrivate]);
 
   function send(msg: SendPayload) {
     const ws = wsRef.current;
@@ -226,7 +249,6 @@ export function usePokerRoom(roomId: string, playerId: string) {
       ...msg,
     };
 
-    // console.log("[poker] outgoing:", full);
     try {
       ws.send(JSON.stringify(full));
     } catch (err) {

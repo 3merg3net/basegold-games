@@ -11,7 +11,7 @@ const CASINO_GAMES = [
   { title: "Roulette", subtitle: "Coming soon", href: "/arcade", icon: "/icons/game-roulette.png" },
   { title: "Slots", subtitle: "Progressives", href: "/arcade", icon: "/icons/game-slots.png" },
   // Keep only icons/routes that actually exist in /public
-  // { title: "Keno", subtitle: "Fast draws", href: "/keno", icon: "/icons/game-keno.png" },
+ 
 ];
 
 export default function HomePage() {

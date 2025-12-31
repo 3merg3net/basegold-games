@@ -1,26 +1,70 @@
 // components/casino/CashierPanel.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getDemoBalances, setDemoBalances } from "@/lib/demoChips";
 import { IS_DEMO } from "@/config/env";
 
 export type ChipKind = "gld" | "pgld";
 
 type Props = {
-  chip: ChipKind; // controlled by parent
-  onChipChange?: (chip: ChipKind) => void; // optional if you want to show toggle inside panel later
+  chip: ChipKind;
+  playerId?: string; // optional for demo; required later for live
+  onChipChange?: (chip: ChipKind) => void;
 };
 
-export function CashierPanel({ chip }: Props) {
+
+export function CashierPanel({ chip, playerId }: Props) 
+{
   const [gld, setGld] = useState(0);
   const [pgld, setPgld] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    const { gld, pgld } = getDemoBalances();
-    setGld(gld);
-    setPgld(pgld);
-  }, []);
+   const loadLive = useCallback(async () => {
+    if (!playerId) {
+      setErr("Missing playerId (Casino ID).");
+      return;
+    }
+
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(
+        `/api/chips/balance?playerId=${encodeURIComponent(playerId)}`,
+        { cache: "no-store" }
+      );
+      const j = await res.json();
+
+      // if your route returns { balance_gld... } without ok:true, handle both:
+      if (j?.error) throw new Error(j.error);
+
+      setGld(Math.floor(Number(j.balance_gld ?? 0)));
+      setPgld(Math.floor(Number(j.balance_pgld ?? 0)));
+    } catch (e: any) {
+      setErr(e?.message ?? "Unable to load balances");
+    } finally {
+      setLoading(false);
+    }
+  }, [playerId]);
+
+
+   useEffect(() => {
+    if (IS_DEMO) {
+      const { gld, pgld } = getDemoBalances();
+      setGld(gld);
+      setPgld(pgld);
+      return;
+    }
+
+    if (!playerId) {
+      setErr("Missing playerId (Casino ID).");
+      return;
+    }
+
+    void loadLive();
+  }, [loadLive, playerId]);
+
 
   const current = chip === "gld" ? gld : pgld;
   const label = chip === "gld" ? "GLD" : "PGLD";
@@ -48,29 +92,30 @@ export function CashierPanel({ chip }: Props) {
           <h2 className="text-base md:text-lg font-semibold text-yellow-100">
             Cashier Window
           </h2>
-          <span className="text-[10px] px-2 py-1 rounded-full border border-yellow-500/40 text-yellow-200 uppercase tracking-[0.12em]">
-            {IS_DEMO ? "Demo" : "Live"}
-          </span>
+
+          <div className="flex items-center gap-2">
+            {!IS_DEMO && (
+              <button
+  onClick={loadLive}
+  disabled={loading || !playerId}
+  className="text-[10px] px-2 py-1 rounded-full border border-yellow-500/30 text-yellow-200/90 hover:bg-yellow-500/10 transition disabled:opacity-40"
+>
+  {loading ? "Reload…" : "Reload"}
+</button>
+
+            )}
+
+            <span className="text-[10px] px-2 py-1 rounded-full border border-yellow-500/40 text-yellow-200 uppercase tracking-[0.12em]">
+              {IS_DEMO ? "Demo" : "Live"}
+            </span>
+          </div>
         </div>
 
-        <p className="text-[11px] md:text-xs text-neutral-400 mb-3">
-          {IS_DEMO ? (
-            <>
-              You&apos;re using{" "}
-              <span className="font-semibold text-yellow-200">
-                demo {label} chips
-              </span>{" "}
-              for early access testing.
-            </>
-          ) : (
-            <>
-              Load <span className="font-semibold text-yellow-200">GLD</span> for
-              the casino floor and{" "}
-              <span className="font-semibold text-yellow-200">PGLD</span> for live
-              poker tables. Play responsibly.
-            </>
-          )}
-        </p>
+        {err && (
+          <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/30 p-2 text-[11px] text-red-200">
+            {err}
+          </div>
+        )}
 
         <div className="bg-neutral-950/80 rounded-xl border border-yellow-500/25 px-4 py-3 mb-3 flex items-center justify-between">
           <div className="text-[11px] text-neutral-400">
@@ -113,8 +158,7 @@ export function CashierPanel({ chip }: Props) {
               Withdraw chips (Cashier)
             </button>
             <p className="text-[10px] text-neutral-500">
-              Cashier actions will be clearly shown when live. Demo mode uses
-              local balances for testing.
+              Live mode shows your Supabase chip balances. On-chain settlement comes next.
             </p>
           </div>
         )}

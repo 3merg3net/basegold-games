@@ -11,14 +11,33 @@ type RoomsListMsg = {
   type: 'rooms-list'
   rooms: Array<{
     roomId: string
+    tableName?: string | null
+    hostPlayerId?: string | null
     onlineCount: number
     seatedCount: number
+    minBet?: number
+    maxBet?: number
   }>
   game?: string
+  displayName?: string
+}
+
+type RoomCreatedMsg = {
+  kind: 'blackjack'
+  type: 'bj-room-created'
+  roomId: string
+}
+
+type DeleteRoomResultMsg = {
+  kind: 'blackjack'
+  type: 'bj-delete-room-result'
+  ok: boolean
+  roomId: string
+  error?: string
 }
 
 function resolveWsUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_BLACKJACK_WS // ✅ blackjack env
+  const raw = process.env.NEXT_PUBLIC_BLACKJACK_WS
   if (!raw || raw.trim() === '') return 'ws://localhost:8080'
   const v = raw.trim()
   if (v.startsWith('ws://') || v.startsWith('wss://')) return v
@@ -32,10 +51,17 @@ function safeRoomLabel(id: string) {
   return `${id.slice(0, 10)}…${id.slice(-6)}`
 }
 
-function makeTierRoomId(min: number, max: number) {
-  const suffix = Math.random().toString(36).slice(2, 6).toLowerCase()
-  // ✅ encode min/max into the roomId so server can infer if it wants
-  return `bj-${min}-${max}-${suffix}`
+function getOrCreatePlayerId(): string {
+  if (typeof window === 'undefined') return 'anon'
+  try {
+    const existing = window.localStorage.getItem('playerId')
+    if (existing) return existing
+    const id = `p_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`
+    window.localStorage.setItem('playerId', id)
+    return id
+  } catch {
+    return `p_${Math.random().toString(36).slice(2)}`
+  }
 }
 
 export default function BlackjackLobbyPage() {
@@ -45,8 +71,11 @@ export default function BlackjackLobbyPage() {
   const [rooms, setRooms] = useState<RoomsListMsg['rooms']>([])
   const [openSeatsOnly, setOpenSeatsOnly] = useState(false)
 
-  // ✅ optional tier selector (if you still want a single Create button)
+  // ✅ tier buttons still drive min/max, but server creates roomId
   const [tier, setTier] = useState<'100-500' | '500-2500'>('100-500')
+
+  // ✅ table name input (same idea as poker)
+  const [tableName, setTableName] = useState('Big Nugget 21')
 
   // ✅ admin mode (simple)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -61,45 +90,57 @@ export default function BlackjackLobbyPage() {
   const wsRef = useRef<WebSocket | null>(null)
   const pollRef = useRef<number | null>(null)
 
-  const GAME_NAME = `Big Nugget 21`
+  const playerId = useMemo(() => getOrCreatePlayerId(), [])
 
-  // ✅ create tiered table (push to dynamic route)
-  const createTableTier = (min: number, max: number) => {
-    const id = makeTierRoomId(min, max)
-    // You can include query params if you want the UI to *display* them,
-    // but the BJ component should rely on server table.minBet/maxBet once connected.
-    router.push(`/blackjack-live/${id}?name=${encodeURIComponent(GAME_NAME)}&min=${min}&max=${max}&seats=7`)
+  const requestList = () => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify({ kind: 'blackjack', type: 'list-rooms' }))
   }
 
-  const createTable = () => {
-    const [minStr, maxStr] = tier.split('-')
-    const min = Number(minStr)
-    const max = Number(maxStr)
-    createTableTier(min, max)
+  const createRoom = (minBet: number, maxBet: number) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+
+    const cleanName = (tableName || 'Big Nugget 21').trim().slice(0, 48)
+
+    ws.send(
+      JSON.stringify({
+        kind: 'blackjack',
+        type: 'bj-create-room',
+        playerId,
+        tableName: cleanName,
+        minBet,
+        maxBet,
+        seats: 7,
+      })
+    )
   }
 
-  // ✅ send delete-room (server must support this)
   const deleteRoom = (roomId: string) => {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
-    // OPTIONAL: include an admin key if your server expects it
+
     const adminKey =
       (typeof window !== 'undefined' && window.localStorage.getItem('bj-admin-key')) ||
       process.env.NEXT_PUBLIC_BLACKJACK_ADMIN_KEY ||
       undefined
 
-    ws.send(JSON.stringify({ kind: 'blackjack', type: 'delete-room', roomId, adminKey }))
+    ws.send(
+      JSON.stringify({
+        kind: 'blackjack',
+        type: 'bj-delete-room',
+        playerId,
+        roomId,
+        adminKey: isAdmin ? adminKey : undefined,
+      })
+    )
   }
 
   useEffect(() => {
     const url = resolveWsUrl()
     const ws = new WebSocket(url)
     wsRef.current = ws
-
-    const requestList = () => {
-      if (ws.readyState !== WebSocket.OPEN) return
-      ws.send(JSON.stringify({ kind: 'blackjack', type: 'list-rooms' }))
-    }
 
     ws.onopen = () => {
       setConnected(true)
@@ -109,9 +150,39 @@ export default function BlackjackLobbyPage() {
 
     ws.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data) as RoomsListMsg
-        if (msg?.type === 'rooms-list' && Array.isArray(msg.rooms)) {
-          setRooms(msg.rooms)
+        const msg = JSON.parse(ev.data) as RoomsListMsg | RoomCreatedMsg | DeleteRoomResultMsg
+
+        if (msg?.kind !== 'blackjack') return
+
+        if (msg.type === 'rooms-list' && Array.isArray((msg as RoomsListMsg).rooms)) {
+          setRooms((msg as RoomsListMsg).rooms)
+          return
+        }
+
+        if (msg.type === 'bj-room-created') {
+  const roomId = (msg as RoomCreatedMsg).roomId
+
+  const cleanName = (tableName || "Big Nugget 21").trim().slice(0, 48)
+  const [minStr, maxStr] = tier.split("-")
+
+  router.push(
+    `/blackjack-live/${roomId}` +
+      `?name=${encodeURIComponent(cleanName)}` +
+      `&min=${encodeURIComponent(minStr)}` +
+      `&max=${encodeURIComponent(maxStr)}` +
+      `&seats=7`
+  )
+  return
+}
+
+
+        if (msg.type === 'bj-delete-room-result') {
+          const res = msg as DeleteRoomResultMsg
+          if (!res.ok) {
+            window.alert(res.error || 'Delete failed')
+          }
+          requestList()
+          return
         }
       } catch {}
     }
@@ -129,7 +200,7 @@ export default function BlackjackLobbyPage() {
       } catch {}
       wsRef.current = null
     }
-  }, [])
+  }, [router, playerId, tableName, isAdmin])
 
   const filtered = useMemo(() => {
     const list = [...rooms]
@@ -210,44 +281,55 @@ export default function BlackjackLobbyPage() {
                 </span>
               </div>
 
-              {/* ✅ tier buttons (working) */}
-              <div className="pt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="text-white/55">Table limits:</span>
+              {/* ✅ table name + tier + create */}
+              <div className="pt-3 flex flex-col gap-2">
+                <div className="text-[11px] text-white/55">Table name</div>
+                <input
+                  value={tableName}
+                  onChange={(e) => setTableName(e.target.value)}
+                  placeholder="Big Nugget 21"
+                  className="w-full rounded-2xl border border-white/15 bg-black/60 px-3 py-2 text-[13px] text-white/90 outline-none focus:border-emerald-300/40"
+                />
 
-                <button
-                  type="button"
-                  onClick={() => createTableTier(100, 500)}
-                  className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-white/80 hover:bg-white/10"
-                >
-                  Create 100 / 500
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                  <select
+                    value={tier}
+                    onChange={(e) => setTier(e.target.value as any)}
+                    className="rounded-xl border border-white/15 bg-black/60 px-3 py-2 text-[11px] text-white/80"
+                  >
+                    <option value="100-500">100 / 500</option>
+                    <option value="500-2500">500 / 2500</option>
+                  </select>
 
-                <button
-                  type="button"
-                  onClick={() => createTableTier(500, 2500)}
-                  className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-white/80 hover:bg-white/10"
-                >
-                  Create 500 / 2500
-                </button>
-              </div>
+                  <button
+                    onClick={() => {
+                      const [minStr, maxStr] = tier.split('-')
+                      createRoom(Number(minStr), Number(maxStr))
+                    }}
+                    className="rounded-full bg-emerald-400 px-6 py-2.5 text-sm font-extrabold text-black shadow-[0_20px_55px_rgba(34,197,94,0.35)] hover:bg-emerald-300 transition"
+                  >
+                    Create Table →
+                  </button>
+                </div>
 
-              {/* Optional single Create button w/ selector */}
-              <div className="pt-2 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                <select
-                  value={tier}
-                  onChange={(e) => setTier(e.target.value as any)}
-                  className="rounded-xl border border-white/15 bg-black/60 px-3 py-2 text-[11px] text-white/80"
-                >
-                  <option value="100-500">100 / 500</option>
-                  <option value="500-2500">500 / 2500</option>
-                </select>
-
-                <button
-                  onClick={createTable}
-                  className="rounded-full bg-emerald-400 px-6 py-2.5 text-sm font-extrabold text-black shadow-[0_20px_55px_rgba(34,197,94,0.35)] hover:bg-emerald-300 transition"
-                >
-                  Create Table →
-                </button>
+                {/* quick buttons */}
+                <div className="flex flex-wrap items-center gap-2 text-[11px] pt-1">
+                  <span className="text-white/55">Quick:</span>
+                  <button
+                    type="button"
+                    onClick={() => createRoom(100, 500)}
+                    className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-white/80 hover:bg-white/10"
+                  >
+                    100 / 500
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => createRoom(500, 2500)}
+                    className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-white/80 hover:bg-white/10"
+                  >
+                    500 / 2500
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -313,26 +395,49 @@ export default function BlackjackLobbyPage() {
             const seats = `${r.seatedCount}/${maxSeats}`
             const open = r.seatedCount < maxSeats
 
+            const name = (r.tableName && String(r.tableName).trim()) || 'Big Nugget 21'
+            const min = r.minBet ?? null
+            const max = r.maxBet ?? null
+
+            const isHost = !!r.hostPlayerId && r.hostPlayerId === playerId
+
             return (
               <div
                 key={r.roomId}
                 className="rounded-2xl border border-white/10 bg-[#0b1220]/70 hover:bg-[#0b1220]/90 hover:border-white/15 transition shadow-[0_12px_40px_rgba(0,0,0,0.7)]"
               >
                 <Link
-                  href={`/blackjack-live/${r.roomId}`}
-                  className="block"
-                >
+  href={`/blackjack-live/${r.roomId}?name=${encodeURIComponent(
+    name
+  )}&min=${encodeURIComponent(String(min ?? ""))}&max=${encodeURIComponent(
+    String(max ?? "")
+  )}&seats=7`}
+  className="block"
+>
+
+
                   <div className="px-4 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-white/90 truncate">
-                        {GAME_NAME}
+                        {name}
                       </div>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-white/55">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/55">
                         <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5 font-mono">
                           {safeRoomLabel(r.roomId)}
                         </span>
+                        {min !== null && max !== null && (
+                          <span className="rounded-full border border-[#FFD700]/20 bg-black/50 px-2 py-0.5 text-[#FFD700]/85 font-mono">
+                            {min}–{max}
+                          </span>
+                        )}
                         <span className="text-white/45">•</span>
                         <span className="text-white/60">{r.onlineCount} online</span>
+                        {isHost && (
+                          <>
+                            <span className="text-white/45">•</span>
+                            <span className="text-emerald-200/90 font-semibold">HOST</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -355,8 +460,8 @@ export default function BlackjackLobbyPage() {
                   </div>
                 </Link>
 
-                {/* ✅ admin delete */}
-                {isAdmin && (
+                {/* ✅ Host delete OR Admin delete */}
+                {(isHost || isAdmin) && (
                   <div className="px-4 pb-3">
                     <button
                       type="button"
@@ -385,7 +490,7 @@ export default function BlackjackLobbyPage() {
         </div>
 
         <div className="mt-5 text-center text-[11px] text-white/45">
-          Tables appear here as soon as someone opens the room link (and joins the WS).
+          Tables appear here as soon as someone creates a room (server-side).
         </div>
       </section>
     </main>
