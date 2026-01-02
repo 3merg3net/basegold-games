@@ -12,6 +12,17 @@ import {
 const PROFILE_KEY = "bgld_profile_v2";
 const CHIPS_KEY = "bgld_profile_chips_v2";
 
+
+function ensureId(p: any) {
+  if (p?.id) return p;
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? (crypto as any).randomUUID()
+      : `player-${Math.random().toString(36).slice(2, 10)}`;
+  return { ...(p ?? {}), id };
+}
+
+
 export function usePlayerProfile() {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [chips, setChips] = useState<number>(10000); // demo bankroll
@@ -41,6 +52,19 @@ export function usePlayerProfile() {
       // ignore
     }
   }, []);
+
+  try {
+  const raw = window.localStorage.getItem(PROFILE_KEY);
+  if (raw) {
+    const parsed = ensureId(JSON.parse(raw));
+    setProfile(parsed);
+  } else {
+    setProfile(ensureId(createDefaultPlayerProfile()));
+  }
+} catch {
+  setProfile(ensureId(createDefaultPlayerProfile()));
+}
+
 
   // persist profile
   useEffect(() => {
