@@ -234,13 +234,13 @@ const SEAT_GEOMETRY_PC: React.CSSProperties[] = [
 ];
 
 const SEAT_GEOMETRY_MOBILE: React.CSSProperties[] = [
-  { bottom: "6%", left: "46%", transform: "translate(-50%, 0)" }, // 0
+  { bottom: "6%", left: "51%", transform: "translate(-50%, 0)" }, // 0
   { bottom: "12%", left: "20%", transform: "translate(-50%, 0)" }, // 1
   { bottom: "12%", left: "81%", transform: "translate(-50%, 0)" }, // 2
 
   { top: "63%", left: "10%", transform: "translate(-50%, -50%)" }, // 3
   { top: "40%", left: "9%", transform: "translate(-50%, -50%)" }, // 4
-  { top: "16%", left: "7%", transform: "translate(-50%, -50%)" }, // 5
+  { top: "16%", left: "15%", transform: "translate(-50%, -50%)" }, // 5
 
   { top: "63%", right: "10%", transform: "translate(50%, -50%)" }, // 6
   { top: "40%", right: "9%", transform: "translate(50%, -50%)" }, // 7
