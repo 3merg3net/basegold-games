@@ -41,13 +41,18 @@ export default function PokerCard({
   tilt = 0,
   isBack = false,
 }: PokerCardProps) {
-  const { rankLabel, suitLabel, suitColor } = parseCard(card);
+  
+  const { rankLabel, suitLabel, suitColor } = isBack
+  ? { rankLabel: "", suitLabel: "", suitColor: "text-slate-900" }
+  : parseCard(card);
+
 
   // card size presets
-  const baseSize =
+    const dims =
     size === "small"
-      ? "w-9 h-12 text-[11px] md:w-10 md:h-14 md:text-[12px]"
-      : "w-12 h-18 text-sm md:w-14 md:h-20 md:text-base";
+      ? { w: 40, h: 56, text: "text-[12px]" }
+      : { w: 56, h: 80, text: "text-sm md:text-base" };
+
 
   const delay = `${0.05 * delayIndex}s`;
 
@@ -58,22 +63,23 @@ export default function PokerCard({
 
   return (
     <div
-      className={[
+            className={[
         "card-deal relative flex flex-col justify-between px-1.5 py-1",
         "rounded-xl border shadow-[0_4px_14px_rgba(0,0,0,0.7)]",
-        baseSize,
+        dims.text,
         bgClass,
         highlight
           ? "border-[#FFD700] shadow-[0_0_18px_rgba(250,204,21,0.95)]"
           : "border-slate-300",
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      ].join(" ")}
       style={{
+        width: dims.w,
+        height: dims.h,
         animationDelay: delay,
         transform: `rotate(${tilt}deg)`,
         transformOrigin: "50% 60%",
       }}
+
     >
       {/* subtle inner border to make the edge feel real */}
       <div className="pointer-events-none absolute inset-[2px] rounded-[10px] border border-slate-200" />
@@ -109,17 +115,26 @@ export default function PokerCard({
         </>
       ) : (
         // Card back: simple logo on metallic gradient
-        <div className="relative z-10 flex flex-1 items-center justify-center">
-          <div className="h-8 w-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/60">
-            <Image
-              src="/felt/bgrc-logo.png"
-              alt="Card back"
-              width={24}
-              height={24}
-              className="object-contain opacity-80"
-            />
-          </div>
-        </div>
+       <div className="relative z-10 flex flex-1 items-center justify-center">
+  {/* back pattern */}
+  <div className="absolute inset-0 opacity-70">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.25),transparent_55%)]" />
+    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.15)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.15)_50%,rgba(0,0,0,0.15)_75%,transparent_75%,transparent)] bg-[length:10px_10px]" />
+  </div>
+
+  <div className="relative flex items-center justify-center">
+    <div className="h-10 w-10 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center border border-white/70 shadow-[0_0_10px_rgba(0,0,0,0.6)]">
+      <Image
+        src="/felt/bgrc-logo.png"
+        alt="Card back"
+        width={28}
+        height={28}
+        className="object-contain opacity-90 drop-shadow-[0_0_8px_rgba(250,204,21,0.35)]"
+      />
+    </div>
+  </div>
+</div>
+
       )}
     </div>
   );

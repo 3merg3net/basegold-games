@@ -15,11 +15,29 @@ type SendPayload =
   | { type: "show-cards" }
   | { type: "reset-table" }
   | { type: "close-room" }
+
+  // ✅ tournaments
+  | {
+      type: "tournament-create";
+      playerId: string;
+      tournamentName?: string;
+      buyIn: number;
+      startingStack: number;
+      seatsPerTable?: number;
+      isPrivate?: boolean;
+      minPlayers?: number;
+      maxTables?: number;
+    }
+  | { type: "tournament-join"; playerId: string; tournamentId: string; name?: string }
+  | { type: "tournament-start"; playerId: string; tournamentId: string }
+  | { type: "tournament-list" }
+
   | {
       type: "action";
       action: "fold" | "check" | "call" | "bet";
       amount?: number;
     };
+
     
 
 
@@ -75,10 +93,19 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
   const heartbeatIntervalRef = useRef<number | null>(null);
   const manualCloseRef = useRef(false);
   const attemptsRef = useRef(0);
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [lastTournamentStart, setLastTournamentStart] = useState<any | null>(null);
+  const [lastTournamentJoin, setLastTournamentJoin] = useState<any | null>(null);
+  const [lastTournamentCreate, setLastTournamentCreate] = useState<any | null>(null);
 
   useEffect(() => {
     manualCloseRef.current = false;
     attemptsRef.current = 0;
+
+    setLastTournamentStart(null);
+setLastTournamentJoin(null);
+setLastTournamentCreate(null);
+
 
     let didUnmount = false;
 
@@ -95,6 +122,7 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
         heartbeatIntervalRef.current = null;
       }
     }
+    
 
     function startHeartbeat() {
       clearHeartbeat();
@@ -167,14 +195,39 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
         startHeartbeat();
       };
 
-      ws.onmessage = (ev) => {
+           ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
-          setMessages((prev) => [...prev, data]);
+
+          // Keep raw stream (your existing behavior)
+          setMessages((prev) => {
+  const next = [...prev, data];
+  if (next.length > 250) next.splice(0, next.length - 250);
+  return next;
+});
+
+
+          // ✅ Tournament responses (coordinator-level)
+          if (data?.type === "tournament-list-result") {
+            setTournaments(Array.isArray(data.tournaments) ? data.tournaments : []);
+          }
+
+          if (data?.type === "tournament-created") {
+            setLastTournamentCreate(data);
+          }
+
+          if (data?.type === "tournament-join-result") {
+            setLastTournamentJoin(data);
+          }
+
+          if (data?.type === "tournament-start-result") {
+            setLastTournamentStart(data);
+          }
         } catch (err) {
           console.error("[poker] bad message:", err);
         }
       };
+
 
       ws.onerror = (err) => {
         console.error("[poker] WS ERROR:", err);
@@ -230,7 +283,8 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       }
     };
     // include meta in deps so reconnect uses latest values
-  }, [roomId, playerId, opts.playerName, opts.tableName, opts.isPrivate]);
+  }, [roomId, playerId]);
+
 
   function send(msg: SendPayload) {
     const ws = wsRef.current;
@@ -255,6 +309,48 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       console.error("[poker] send failed:", err);
     }
   }
+    function tournamentList() {
+    send({ type: "tournament-list" });
+  }
 
-  return { ready, messages, send };
+  function tournamentCreate(args: {
+    playerId: string;
+    tournamentName?: string;
+    buyIn: number;
+    startingStack: number;
+    seatsPerTable?: number;
+    isPrivate?: boolean;
+    minPlayers?: number;
+    maxTables?: number;
+  }) {
+    send({ type: "tournament-create", ...args });
+  }
+
+  function tournamentJoin(args: { playerId: string; tournamentId: string; name?: string }) {
+    send({ type: "tournament-join", ...args });
+  }
+
+  function tournamentStart(args: { playerId: string; tournamentId: string }) {
+    send({ type: "tournament-start", ...args });
+  }
+
+
+    return {
+    ready,
+    messages,
+    send,
+
+    // ✅ tournaments
+    tournaments,
+    tournamentList,
+    tournamentCreate,
+    tournamentJoin,
+    tournamentStart,
+
+    // optional last results if you want them
+    lastTournamentCreate,
+    lastTournamentJoin,
+    lastTournamentStart,
+  };
+
 }

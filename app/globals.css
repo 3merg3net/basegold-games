@@ -356,3 +356,31 @@ body { font-feature-settings: "tnum"; }
     animation: none !important;
   }
 }
+
+/* thin vertical range */
+.vrange {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;   /* becomes height after rotate */
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  outline: none;
+}
+.vrange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  border: 2px solid rgba(0,0,0,0.6);
+}
+.vrange::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  border: 2px solid rgba(0,0,0,0.6);
+}
+

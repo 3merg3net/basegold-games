@@ -241,34 +241,6 @@ if (!canLiveSwap) {
 }
 
 // LIVE swap (Supabase)
-setSwapping(true);
-try {
-  const res = await fetch("/api/chips/swap", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    body: JSON.stringify({ playerId, from, to, amountIn: amt }),
-  });
-
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || !j?.ok) throw new Error(j?.error || "Swap failed");
-
-  const next = {
-    gld: Math.floor(Number(j.balance_gld ?? 0)),
-    pgld: Math.floor(Number(j.balance_pgld ?? 0)),
-  };
-
-  onBalances?.(next);
-  setAmountIn("");
-  setSwapOk(`Swapped ${amt.toLocaleString()} ${ASSET_LABEL[from]} → ${ASSET_LABEL[to]}`);
-} catch (e: any) {
-  setSwapErr(e?.message ?? "Swap failed");
-} finally {
-  setSwapping(false);
-}
-
-
-
     setSwapping(true)
     try {
       const res = await fetch('/api/chips/swap', {

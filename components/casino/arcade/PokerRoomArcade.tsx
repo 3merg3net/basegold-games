@@ -18,6 +18,8 @@ import ConfettiBurst from "@/components/general/ConfettiBurst";
 import { IS_DEMO } from "@/config/env";
 
 
+
+
 /* ───────────────── Types ───────────────── */
 
 type SeatView = {
@@ -112,6 +114,11 @@ type WinnerEntry = {
 
 type ActionPhase = "base" | "extra" | null;
 
+type PauseStateMessage =
+  | { type: "game-paused"; until: number; by?: string }
+  | { type: "game-resumed" };
+
+
 /* ───────────────── Chips ───────────────── */
 
 const CHIP_SOURCES: Record<number, string> = {
@@ -126,54 +133,106 @@ const CHIP_SOURCES: Record<number, string> = {
 
 const CHIP_DENOMS = [500, 100, 25, 5, 1] as const;
 
-function breakdownChips(amount: number): number[] {
-  const chips: number[] = [];
-  let remaining = Math.max(0, Math.floor(amount));
-  const maxChips = 6;
+// Turn an amount into a list of chip denominations (largest → smallest)
+function makeChipList(amount: number, maxChips = 14): number[] {
+  let remaining = Math.max(0, Math.floor(amount || 0));
+  const out: number[] = [];
 
   for (const d of CHIP_DENOMS) {
-    while (remaining >= d && chips.length < maxChips) {
-      chips.push(d);
+    while (remaining >= d && out.length < maxChips) {
+      out.push(d);
       remaining -= d;
     }
-    if (chips.length >= maxChips) break;
+    if (out.length >= maxChips) break;
   }
 
-  if (chips.length === 0 && amount > 0) chips.push(1);
-  return chips;
+  // If we hit maxChips but still have remainder, cap it with one top chip
+  // (keeps stack readable instead of generating 80 chips)
+  if (remaining > 0 && out.length > 0) {
+    // keep as-is; badge shows exact number anyway
+  } else if (remaining > 0 && out.length === 0) {
+    // amount was tiny but >0; show at least one chip
+    out.push(1);
+  }
+
+  return out;
 }
 
-function ChipStack({ amount, size = 32 }: { amount: number; size?: number }) {
-  if (!amount || amount <= 0) return null;
+type LocalChipStackProps = {
+  amount: number;
+  size?: number; // px width/height per chip image
+  maxChips?: number;
+  // stacked look tuning
+  stepY?: number; // px offset per chip
+  blurTailFrom?: number; // chips deeper in stack can be slightly faded
+};
 
-  const chips = breakdownChips(amount);
-  if (chips.length === 0) return null;
+function ChipStack({
+  amount,
+  size = 28,
+  maxChips = 14,
+  stepY,
+  blurTailFrom = 9,
+}: LocalChipStackProps) {
+  const chips = useMemo(() => makeChipList(amount, maxChips), [amount, maxChips]);
 
-  const scale = 0.9;
+  // Default vertical spacing based on chip size (smaller chips = tighter stack)
+  const dy = stepY ?? Math.max(3, Math.round(size * 0.18)); // e.g. 28px -> ~5px
+
+  if (!chips.length) return null;
+
+  // Total height so container fits the absolute-positioned stack
+  const height = size + (chips.length - 1) * dy;
 
   return (
-    <div className="flex flex-col-reverse items-center -space-y-1">
-      {chips.map((d, i) => {
-        const src = CHIP_SOURCES[d];
-        if (!src) return null;
+    <div
+      className="relative"
+      style={{
+        width: size,
+        height,
+        // keep it crisp and centered
+        transform: "translateZ(0)",
+      }}
+    >
+      {chips.map((denom, i) => {
+        const src = CHIP_SOURCES[denom] ?? CHIP_SOURCES[1];
 
-        const w = size * scale;
-        const h = size * scale;
+        // Stack bottom-up: last chip sits on top visually
+        // We render in order and use zIndex to ensure top chips are above.
+        const y = (chips.length - 1 - i) * dy;
+
+        // Slight fade/blur for deep chips so it reads like a stack
+        const tailIndex = chips.length - 1 - i; // 0 = top chip
+        const isTail = tailIndex >= blurTailFrom;
+        const opacity = isTail ? 0.75 : 1;
 
         return (
           <Image
-            key={`${d}-${i}`}
+            key={`${denom}-${i}`}
             src={src}
-            alt={`PGLD ${d}`}
-            width={w}
-            height={h}
-            className="rounded-full drop-shadow-[0_0_6px_rgba(0,0,0,0.8)]"
+            alt={`${denom} chip`}
+            width={size}
+            height={size}
+            draggable={false}
+            className="absolute left-0 select-none"
+            style={{
+              top: y,
+              zIndex: i + 1,
+              opacity,
+              // NO rotate / fan
+              transform: "translateZ(0)",
+              // tiny shadow for separation
+              filter: isTail ? "drop-shadow(0 1px 2px rgba(0,0,0,0.35))" : "drop-shadow(0 2px 3px rgba(0,0,0,0.45))",
+            }}
           />
         );
       })}
     </div>
   );
 }
+
+
+
 
 export function formatChips(amount: number): string {
   if (!Number.isFinite(amount) || amount <= 0) return "0";
@@ -326,6 +385,9 @@ const effectivePlayerId =
   profile?.id ||
   (playerId ?? "player-pending"); // keep your fallback if profile not ready yet
 
+  const myId = String(effectivePlayerId);
+
+
 
 const { ready, messages, send } = usePokerRoom({
   roomId,
@@ -406,9 +468,10 @@ const bankrolls = useMemo<Record<string, number>>(
 );
 
 const heroBankroll = useMemo(() => {
-  if (!playerId) return 0;
-  return Number(bankrolls[playerId] ?? 0);
-}, [bankrolls, playerId]);
+  if (!myId) return 0;
+  return Number(bankrolls[myId] ?? 0);
+}, [bankrolls, myId]);
+
 
   // Auto-topup demo bankroll once on connect (dev/demo mode)
   useEffect(() => {
@@ -464,9 +527,10 @@ const heroBankroll = useMemo(() => {
   );
 
   const heroSeat = useMemo(() => {
-    if (!seats || seats.length === 0) return null;
-    return seats.find((s) => s.playerId === playerId) || null;
-  }, [seats, playerId]);
+  if (!seats || seats.length === 0) return null;
+  return seats.find((s) => s.playerId === myId) || null;
+}, [seats, myId]);
+
 
   const seatedCount = useMemo(
     () => seats.filter((s) => s.playerId).length,
@@ -493,7 +557,8 @@ const heroBankroll = useMemo(() => {
 
   const rawHeroBetting = useMemo(() => {
     if (!betting) return null;
-    return betting.players.find((p) => p.playerId === playerId) ?? null;
+    return betting.players.find((p) => p.playerId === myId) ?? null;
+
   }, [betting, playerId]);
 
   const [joinedMidHand, setJoinedMidHand] = useState(false);
@@ -502,7 +567,8 @@ const heroBankroll = useMemo(() => {
   const heroHand = useMemo(() => {
     if (!table) return null;
     if (joinedMidHand && handInProgress) return null;
-    const hero = table.players.find((p) => p.playerId === playerId);
+    const hero = table.players.find((p) => p.playerId === myId);
+
     return hero?.holeCards ?? null;
   }, [table, playerId, joinedMidHand, handInProgress]);
 
@@ -549,6 +615,8 @@ const heroBankroll = useMemo(() => {
     if (heroSeat?.name) return heroSeat.name;
     return "You";
   }, [profile?.name, heroSeat?.name]);
+
+  
 
   /* ───────────────── Winners / revealed cards / seat tags (declare BEFORE effects) ───────────────── */
 
@@ -611,6 +679,10 @@ const potPulseTimerRef = useRef<number | null>(null);
       setJoinedMidHand(false);
       setRevealedHoles({});
 
+      setRecentActions([]);
+      setSeatActionMap({});
+
+
       pushLog(`New hand #${table.handId} in the PGLD room.`);
       playDeal();
       return;
@@ -635,8 +707,14 @@ const potPulseTimerRef = useRef<number | null>(null);
     lastPotRef.current = 0;
 
     setResetNonce((n) => n + 1);
+    setRecentActions([]);
+    setSeatActionMap({});
     pushLog("Table was reset by host.");
   }, [messages, pushLog]);
+
+  const [paused, setPaused] = useState(false)
+
+  
 
   /* ───────────────── Pot change sound + street logging ───────────────── */
 
@@ -877,6 +955,32 @@ try {
     prevSeatsRef.current = next;
   }, [seats, handInProgress]);
 
+  /* ───────────────── Cleanup seat action pills when seats empty ───────────────── */
+useEffect(() => {
+  // Build a set of currently occupied seatIndexes
+  const occupied = new Set<number>();
+  for (const s of seats) {
+    if (s.playerId) occupied.add(s.seatIndex);
+  }
+
+  // Remove any lingering per-seat action badges for empty seats
+  setSeatActionMap((prev) => {
+    let changed = false;
+    const next: Record<number, TableAction> = { ...prev };
+
+    for (const k of Object.keys(next)) {
+      const seatIdx = Number(k);
+      if (!occupied.has(seatIdx)) {
+        delete next[seatIdx];
+        changed = true;
+      }
+    }
+
+    return changed ? next : prev;
+  });
+}, [seats]);
+
+
   /* ───────────────── Chat ───────────────── */
 
   const [chatInput, setChatInput] = useState("");
@@ -1095,7 +1199,11 @@ function handleRefillStack(amount: number) {
   /* ───────────────── Timer system ───────────────── */
 
   const ACTION_BASE_MS = 30_000;
-  const ACTION_EXTRA_MS = 30_000;
+  const ACTION_EXTRA_MS = 20_000;
+  const PAUSE_MS = 60_000; // pick 10s / 15s / 60s
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+
+  
 
   const [actionPhase, setActionPhase] = useState<ActionPhase>(null);
   const [actionDeadline, setActionDeadline] = useState<number | null>(null);
@@ -1124,20 +1232,21 @@ function handleRefillStack(amount: number) {
   }, [betting?.handId, betting?.street, betting?.currentSeatIndex]);
 
   useEffect(() => {
-    if (!betting) {
-      setActionDeadline(null);
-      setActionPhase(null);
-      lastActionKeyRef.current = null;
-      return;
-    }
+  if (!betting || betting.street === "done" || betting.currentSeatIndex == null) {
+    setActionDeadline(null);
+    setActionPhase(null);
+    lastActionKeyRef.current = null;
+    return;
+  }
 
-    const key = `${betting.handId}-${betting.street}-${betting.currentSeatIndex}`;
-    if (lastActionKeyRef.current !== key) {
-      lastActionKeyRef.current = key;
-      setActionPhase("base");
-      setActionDeadline(Date.now() + ACTION_BASE_MS);
-    }
-  }, [betting?.handId, betting?.street, betting?.currentSeatIndex]);
+  const key = `${betting.handId}-${betting.street}-${betting.currentSeatIndex}`;
+  if (lastActionKeyRef.current !== key) {
+    lastActionKeyRef.current = key;
+    setActionPhase("base");
+    setActionDeadline(Date.now() + ACTION_BASE_MS);
+  }
+}, [betting?.handId, betting?.street, betting?.currentSeatIndex]);
+
 
   useEffect(() => {
     if (!actionDeadline || !actionPhase) return;
@@ -1175,6 +1284,22 @@ function handleRefillStack(amount: number) {
     ? Math.max(0, Math.min(100, (actionRemainingMs / totalWindowMs) * 100))
     : 0;
 
+const [pauseUntil, setPauseUntil] = useState<number | null>(null);
+const isPaused = pauseUntil != null && now < pauseUntil;
+const pauseRemainingSec = isPaused ? Math.max(0, Math.ceil((pauseUntil! - now) / 1000)) : 0;
+
+useEffect(() => {
+  const m = (messages as any[]).slice(-1)[0];
+  if (!m) return;
+
+  if (m.type === "game-paused" && typeof m.until === "number") {
+    setPauseUntil(m.until);
+  }
+  if (m.type === "game-resumed") {
+    setPauseUntil(null);
+  }
+}, [messages]);
+
 
     // ───────────────── Action display state ─────────────────
 
@@ -1194,7 +1319,9 @@ const [seatActionMap, setSeatActionMap] = useState<Record<number, TableAction>>(
   {}
 );
 
-const ACTION_FADE_MS = 1800;
+const ACTION_TICKER_MS = 3800; // top-center ticker
+const ACTION_SEAT_MS = 3800;   // per-seat badge lifespan
+
 
 // Track previous betting to infer actions when turn advances
 const prevBettingRef = useRef<BettingState | null>(null);
@@ -1287,16 +1414,23 @@ useEffect(() => {
     [actedSeatIndex]: action,
   }));
 
-  const t = window.setTimeout(() => {
-    setRecentActions((arr) => arr.filter((a) => a.id !== action.id));
-    setSeatActionMap((map) => {
-      const copy = { ...map };
-      if (copy[actedSeatIndex]?.id === action.id) delete copy[actedSeatIndex];
-      return copy;
-    });
-  }, ACTION_FADE_MS);
+  const t1 = window.setTimeout(() => {
+  setRecentActions((arr) => arr.filter((a) => a.id !== action.id));
+}, ACTION_TICKER_MS);
 
-  return () => window.clearTimeout(t);
+const t2 = window.setTimeout(() => {
+  setSeatActionMap((map) => {
+    const copy = { ...map };
+    if (copy[actedSeatIndex]?.id === action.id) delete copy[actedSeatIndex];
+    return copy;
+  });
+}, ACTION_SEAT_MS);
+
+return () => {
+  window.clearTimeout(t1);
+  window.clearTimeout(t2);
+};
+
 }, [betting]);
 
 
@@ -1638,56 +1772,93 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
                     </div>
 
                     {pot > 0 && (
-  <div className="pointer-events-none absolute left-1/2 top-[3%] -translate-x-1/2 z-[60]">
-    <div
-  className={[
-    "rounded-full bg-black/85 border border-[#FFD700]/50 px-5 py-1.5",
-    "text-[12px] md:text-base font-extrabold text-[#FFD700]",
-    "shadow-[0_0_18px_rgba(0,0,0,0.9)]",
-    potPulse ? "pot-pulse" : "",
-  ].join(" ")}
->
+  <div className="pointer-events-none absolute left-1/2 top-[12%] -translate-x-1/2 z-[60] flex flex-col items-center">
+    {/* chips */}
+    <div className="mb-2">
+      <ChipStack amount={pot} size={34} maxChips={16} />
 
+    </div>
+
+    {isPaused && (
+  <div className="absolute inset-0 z-[90] flex items-center justify-center pointer-events-none">
+    <div className="rounded-2xl border border-red-400/40 bg-black/70 px-4 py-3 backdrop-blur shadow-[0_0_30px_rgba(0,0,0,0.85)]">
+      <div className="text-[12px] md:text-[14px] font-black tracking-[0.22em] uppercase text-red-200 text-center">
+        GAME PAUSED
+      </div>
+      <div className="mt-1 text-center font-mono text-[18px] md:text-[22px] font-extrabold text-white/90">
+        {pauseRemainingSec}s
+      </div>
+      <div className="mt-1 text-center text-[10px] md:text-[11px] text-white/60">
+        Resuming automatically…
+      </div>
+    </div>
+  </div>
+)}
+
+
+    {/* badge */}
+    <div
+      className={[
+        "rounded-full bg-black/85 border border-[#FFD700]/50 px-5 py-1.5",
+        "text-[12px] md:text-base font-extrabold text-[#FFD700]",
+        "shadow-[0_0_18px_rgba(0,0,0,0.9)]",
+        potPulse ? "pot-pulse" : "",
+      ].join(" ")}
+    >
       Pot {formatChips(pot)} <span className="opacity-70">PGLD</span>
     </div>
   </div>
 )}
+
+
+
 {/* GLOBAL ACTION TICKER (last 3) */}
-{recentActions.map((a) => {
-  const seatMeta = seats.find((s) => s.seatIndex === a.seatIndex);
-  const name =
-    seatMeta?.name?.trim() ||
-    (seatMeta?.playerId ? `Seat ${a.seatIndex + 1}` : `Seat ${a.seatIndex + 1}`);
+{recentActions.length > 0 && (
+  <div className="pointer-events-none absolute left-1/2 top-[5%] z-[65] w-[92%] max-w-[520px] -translate-x-1/2">
+    <div className="flex flex-col items-center gap-1">
+      {recentActions.map((a) => {
+        const seatMeta = seats.find((s) => s.seatIndex === a.seatIndex);
+        const name =
+          seatMeta?.name?.trim() ||
+          (seatMeta?.playerId ? `Seat ${a.seatIndex + 1}` : `Seat ${a.seatIndex + 1}`);
 
-  const pill = getActionPillClasses(a.label); // you already have this helper
+        const pill = getActionPillClasses(a.label);
 
-  return (
-    <div
-      key={a.id}
-      className={[
-        "action-pill",
-        "rounded-full border backdrop-blur",
-        pill.bg,
-        pill.border,
-        pill.glow,
-        // ✅ bigger size
-        "px-4 py-[6px] md:px-5 md:py-[7px]",
-        "text-[12px] md:text-[14px]",
-        "font-black tracking-[0.10em] uppercase whitespace-nowrap",
-      ].join(" ")}
-    >
-      <span className="text-white/65">{name}</span>{" "}
-      <span className={pill.text}>{a.label}</span>
+        return (
+          <div
+            key={a.id}
+            className={[
+              "action-pill",
+              "inline-flex items-center justify-center gap-2",
+              "rounded-full border backdrop-blur",
+              pill.bg,
+              pill.border,
+              pill.glow,
+              // ✅ match pot class density (small + bold, mobile friendly)
+              "px-3 py-[4px] md:px-4 md:py-[5px]",
+              "text-[10px] md:text-[11px]",
+              "font-black tracking-[0.08em] uppercase leading-none",
+              "whitespace-nowrap",
+              "max-w-full",
+            ].join(" ")}
+          >
+            <span className="text-white/65 truncate max-w-[220px]">{name}</span>
+            <span className={[pill.text, "truncate max-w-[240px]"].join(" ")}>
+              {a.label}
+            </span>
+          </div>
+        );
+      })}
     </div>
-  );
-})}
+  </div>
+)}
 
 
 
-                    <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-2 z-20">
-                      <div className="flex gap-1.5 md:gap-2">
+
+                   <div className="pointer-events-none absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 px-2 z-[40]">                      <div className="flex gap-1.5 md:gap-2">
                         {boardCards.map((c, i) => {
-                          const tilts = [-6, -3, 0, 3, 6];
+                          const tilts = [-3, 0, 0, 0, 3];
                           return (
                             <PokerCard
                               key={`${table?.handId ?? 0}-board-${i}-${c}`}
@@ -1709,8 +1880,7 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
 
 
                     {showdown && table && showdown.handId === table.handId && (
-                      <div className="pointer-events-none absolute left-1/2 top-[16%] z-40 flex -translate-x-1/2 flex-col items-center gap-1.5 text-[11px] md:text-sm">
-                        <div
+                     <div className="pointer-events-none absolute left-1/2 top-[3%] z-[75] flex -translate-x-1/2 flex-col items-center gap-1.5 text-[11px] md:text-sm">                <div
                           className={[
                             "rounded-full bg-black/90 px-4 py-1.5 font-semibold",
                             "text-emerald-300 shadow-[0_0_18px_rgba(0,0,0,0.9)]",
@@ -1904,12 +2074,16 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
           </div>
 
           {isOccupied && committed > 0 && (
-            <div className="pointer-events-none rounded-full bg-black/85 border border-amber-300/60 px-3 py-[2px] text-[11px] md:text-[12px] font-extrabold text-amber-200 shadow shadow-black/80">
-              BET {formatChips(committed)}
-            </div>
-          )}
+  <div className="pointer-events-none flex flex-col items-center gap-1">
+    <ChipStack amount={committed} size={30} maxChips={12} />
+    <div className="rounded-full bg-black/85 border border-amber-300/60 px-3 py-[2px] text-[11px] md:text-[12px] font-extrabold text-amber-200 shadow shadow-black/80">
+      BET {formatChips(committed)}
+    </div>
+  </div>
+)}
 
-          <div className="relative flex flex-col items-center">
+
+          <div className="relative z-[10] flex flex-col items-center">
             {isOccupied && isWinnerSeat && (
               <div
                 className="pointer-events-none absolute left-1/2 z-50 flex -translate-x-1/2 flex-col items-center winner-anim"
@@ -1983,20 +2157,63 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 
 
 
-             {/* AVATAR + TIMER RING (mobile uses bottom panel only) */}
+            {/* AVATAR (ring ONLY for non-hero seats so hero cards never get covered) */}
 <div className="relative">
-  {isOccupied && isCurrentTurn && actionSeconds !== null && (
+  {isOccupied && isCurrentTurn && actionSeconds !== null && !isHeroSeat && (
+  <div className="pointer-events-none absolute inset-[-7px] z-[90]">
+    {/* OUTER SPICED DONUT RING */}
     <div
-      className="hero-timer-ring pointer-events-none absolute inset-[-5px] rounded-full"
+      className="absolute inset-0 rounded-full hero-timer-ring hero-timer-ring-spice"
       style={{
         backgroundImage: `conic-gradient(${
-          actionPhase === "extra" ? "#f97373" : "#FACC15"
-        } ${actionPct}%, transparent 0)`,
+          actionPhase === "extra"
+            ? "rgba(248,113,113,0.95)"
+            : "rgba(250,204,21,0.95)"
+        } ${actionPct}%, rgba(255,255,255,0) 0)`,
+
+        // donut thickness (bigger than before)
+        WebkitMask:
+          "radial-gradient(closest-side, transparent calc(100% - 9px), #000 calc(100% - 8px))",
+        mask:
+          "radial-gradient(closest-side, transparent calc(100% - 9px), #000 calc(100% - 8px))",
+
+        filter:
+          actionPhase === "extra"
+            ? "drop-shadow(0 0 10px rgba(248,113,113,0.55)) drop-shadow(0 0 20px rgba(0,0,0,0.9))"
+            : "drop-shadow(0 0 10px rgba(250,204,21,0.55)) drop-shadow(0 0 20px rgba(0,0,0,0.9))",
       }}
-    >
-      <div className="absolute inset-[4px] rounded-full bg-transparent" />
+    />
+
+    {/* INNER RAIL */}
+    <div
+      className="absolute inset-[6px] rounded-full hero-timer-ring-spice-inner"
+      style={{
+        WebkitMask:
+          "radial-gradient(closest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))",
+        mask:
+          "radial-gradient(closest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))",
+      }}
+    />
+
+    {/* ACT PILL INSIDE RING (bottom so it never covers cards) */}
+    <div className="absolute left-1/2 bottom-[1px] -translate-x-1/2">
+      <div
+        className={[
+          "rounded-full border px-2.5 py-[2px]",
+          "text-[9px] md:text-[10px] font-black tracking-[0.18em] uppercase leading-none",
+          "bg-black/75 backdrop-blur",
+          actionPhase === "extra"
+            ? "border-red-400/65 text-red-200"
+            : "border-[#FACC15]/65 text-[#FACC15]",
+          "shadow-[0_0_16px_rgba(0,0,0,0.9)]",
+        ].join(" ")}
+      >
+        {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
+      </div>
     </div>
-  )}
+  </div>
+)}
+
 
   <button
     type="button"
@@ -2014,7 +2231,6 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       .join(" ")}
   >
     {isOccupied ? (
-      // HERO: use uploaded avatar if available, otherwise fallback character
       isHeroSeat && (profile as any)?.avatarUrl ? (
         <Image
           src={(profile as any).avatarUrl}
@@ -2041,55 +2257,70 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 </div>
 
 
-            {isOccupied && (
-              <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-between">
-                <div className="mt-[6px] flex justify-center">
-                  {visibleCards && visibleCards.length === 2 ? (
-                    <div className="relative flex -space-x-5 md:-space-x-6">
-                      {visibleCards.map((c, i) => (
-                        <div
-                          key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
-                          className="relative"
-                          style={{
-                            transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
-                            transformOrigin: "50% 80%",
-                          }}
-                        >
-                          <PokerCard card={c} highlight={isWinnerSeat} />
-                        </div>
-                      ))}
-                    </div>
-                  ) : isInHand && handInProgress ? (
-                    <div className="relative flex -space-x-5 md:-space-x-6">
-                      {[0, 1].map((i) => (
-                        <div
-                          key={i}
-                          className={`h-9 w-7 md:h-10 md:w-8 rounded-[4px] border border-white/25 bg-gradient-to-br from-slate-200 to-slate-400 shadow shadow-black/80 ${
-                            i === 1 ? "rotate-[10deg]" : "rotate-[-10deg]"
-                          } ${isOut ? "opacity-30" : "opacity-90"}`}
-                          style={{
-                            transformOrigin: "50% 80%",
-                            transform: "translateY(0px)",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
 
-                <div className="mb-[4px] flex w-full justify-center">
-                  <div className="pointer-events-auto flex w-[104px] md:w-auto md:min-w-[112px] md:max-w-[150px] flex-col items-center rounded-2xl bg-gradient-to-r from-black/85 via-[#111827]/90 to-black/85 border border-[#FACC15]/60 px-2 py-[2px] shadow-[0_0_10px_rgba(0,0,0,0.9)]">
-                    <div className="rounded-full bg-black/70 px-2 py-[1px] text-[12px] md:text-[15px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-                      {formatChips(stackAmount)} PGLD
-                    </div>
+           {isOccupied && (
+  <div className="pointer-events-none absolute inset-0 z-20">
+    {/* HOLE CARDS (top) */}
+    <div className="absolute left-1/2 top-[6px] -translate-x-1/2 flex justify-center">
+      {visibleCards && visibleCards.length === 2 ? (
+        <div className="relative flex -space-x-5 md:-space-x-6">
+          {visibleCards.map((c, i) => (
+            <div
+              key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
+              className="relative"
+              style={{
+                transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
+                transformOrigin: "50% 80%",
+              }}
+            >
+              <PokerCard card={c} highlight={isWinnerSeat} />
+            </div>
+          ))}
+        </div>
+      ) : isInHand && handInProgress ? (
+        <div className="relative flex -space-x-5 md:-space-x-6">
+          {[0, 1].map((i) => (
+            <div
+              key={i}
+              className="relative"
+              style={{
+                transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
+                transformOrigin: "50% 80%",
+              }}
+            >
+              <PokerCard card={"As"} isBack={true} highlight={false} size="normal" tilt={0} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
 
-                    <div className="mt-[1px] max-w-[96px] md:max-w-[118px] truncate text-[10px] md:text-[12px] text-white/85 leading-tight">
-                      {label}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+    {/* STACK + NAME PILL (bottom) — tighter + raised so it doesn’t collide with hero bar */}
+   <div className="absolute left-1/2 bottom-[3px] -translate-x-1/2 flex justify-center">
+         <div
+        className={[
+          "pointer-events-auto flex flex-col items-center",
+          "rounded-xl md:rounded-2xl",
+          "bg-gradient-to-r from-black/82 via-[#0b1220]/88 to-black/82",
+          "border border-[#FACC15]/55",
+          "shadow-[0_0_10px_rgba(0,0,0,0.9)]",
+          // tighter sizing
+          "px-2 py-[2px]",
+          "w-[96px] md:w-auto md:min-w-[108px] md:max-w-[140px]",
+        ].join(" ")}
+      >
+        <div className="rounded-full bg-black/65 px-2 py-[1px] text-[11px] md:text-[13px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+          {formatChips(stackAmount)} PGLD
+        </div>
+
+        <div className="mt-[1px] max-w-[90px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
+          {label}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 
             {isOccupied &&
               !isInHand &&
@@ -2110,11 +2341,10 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
                 </div>
               </div>
             </div>
-
-           {/* HERO ACTION BAR */}
+{/* HERO ACTION BAR */}
 <div
   className={[
-    "mt-3 mb-4 flex w-full justify-center",
+    "mt-2 mb-2 flex w-full justify-center",
     isFullscreen ? "max-w-[1100px] mx-auto" : "",
   ]
     .filter(Boolean)
@@ -2122,7 +2352,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 >
   <div
     className={[
-      "antialiased w-full max-w-[660px] rounded-2xl border border-white/15 bg-black/85 px-4 py-2 md:px-5 md:py-2",
+     "antialiased w-full max-w-[660px] rounded-2xl border border-white/15 bg-black/85 px-4 py-2 md:px-5 md:py-2",
       "text-[12px] text-white/85 font-semibold shadow-[0_0_18px_rgba(0,0,0,0.75)]",
       "transition-all duration-300 ease-out transform hero-bar-slide",
       heroHasAction && isHeroTurn
@@ -2132,38 +2362,161 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       .filter(Boolean)
       .join(" ")}
   >
-    {/* Top row: name + bankroll + (mobile) timer + tools */}
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0 flex-1 truncate">
-        <div className="truncate text-white text-[14px] font-semibold leading-tight">
-          {describeHero()}
+    {/* ───────────────── TOP ACTIONS (closest to table) ───────────────── */}
+    {isHeroTurn && betting && heroBetting && (
+      <div className="mt-0 mb-1.5">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handlePrimaryAction}
+            disabled={!isHeroTurn}
+            className="rounded-xl bg-slate-800 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.25)] disabled:opacity-40"
+          >
+            {primaryActionLabel}
+          </button>
+
+          <button
+            onClick={handleBet}
+            disabled={!isHeroTurn || !betting || !heroBetting}
+            className="rounded-xl bg-emerald-500 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.35)] disabled:opacity-40"
+          >
+            {(() => {
+              if (!betting || !heroBetting) return "Bet";
+              const callNeeded = Math.max(0, betting.maxCommitted - heroBetting.committed);
+              const minRaise = betting.bigBlind * 2;
+              const rawRaise =
+                manualBet.trim().length > 0
+                  ? Number(manualBet)
+                  : raiseSize > 0
+                  ? raiseSize
+                  : minRaise;
+
+              const raiseDelta = Math.max(
+                minRaise,
+                Number.isFinite(rawRaise) && rawRaise > 0 ? Math.floor(rawRaise) : minRaise
+              );
+
+              const total = callNeeded + raiseDelta;
+              return `Bet ${total}`;
+            })()}{" "}
+            <span className="opacity-70">PGLD</span>
+          </button>
         </div>
 
-        <div className="mt-[2px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
-          {heroBetting && (
-            <span className="rounded-full bg-black/50 px-2 py-[1px] border border-white/15">
-              Stack{" "}
-              <span className="font-mono text-[#FFD700]">
-                {heroBetting.stack} PGLD
-              </span>
-            </span>
-          )}
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            onClick={handleFold}
+            disabled={!isHeroTurn}
+            className="rounded-lg bg-red-500/75 px-3 py-1.5 text-[12px] font-semibold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.35)] disabled:opacity-40"
+          >
+            Fold
+          </button>
 
-          <span className="ml-2 font-mono font-extrabold text-[#FFD700]">
-            {heroBankroll.toLocaleString()}
-          </span>
-          <span className="ml-1 text-white/55">PGLD</span>
-          <span className="ml-2 text-emerald-200/90 font-mono">
-            {formatUsdFromPgld(heroBankroll)}
-          </span>
-
-          {isSittingOut && (
-            <span className="rounded-full bg-amber-500/10 px-2 py-[1px] border border-amber-400/50 text-amber-200">
-              Sitting out
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={handleAllIn}
+            disabled={!isHeroTurn || !heroBetting}
+            className="rounded-lg bg-slate-900/80 px-3 py-1.5 text-[12px] font-semibold text-red-200 border border-red-400/40 hover:bg-slate-800 disabled:opacity-40"
+          >
+            All-in
+          </button>
         </div>
       </div>
+    )}
+
+    {/* ──────────────── QUICK ROW (sit/stand + show cards) ─────────────── */}
+    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+      <button
+        onClick={handleSitOrStand}
+        disabled={!ready || (!!heroSeat && handInProgress)}
+        className="rounded-xl bg-emerald-500 px-3 py-1.5 text-[12px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+      >
+        {heroSeat ? "Stand up" : "Sit at table"}
+      </button>
+
+      {(() => {
+        const canShowCards =
+          !!heroSeat &&
+          !!heroHand &&
+          heroHand.length === 2 &&
+          !!betting &&
+          betting.street === "done" &&
+          !!showdown &&
+          !!table &&
+          showdown.handId === table.handId;
+
+        if (!canShowCards) return null;
+
+        return (
+          <button
+            type="button"
+            onClick={() => sendMessage({ type: "show-cards" })}
+            className="rounded-xl border border-[#FFD700]/45 bg-black/55 px-3 py-2 text-[12px] font-semibold text-[#FFD700] hover:bg-black/70"
+          >
+            Show cards
+          </button>
+        );
+      })()}
+    </div>
+
+    {/* ───────────────── EXISTING TOP ROW (name/bankroll/tools) ───────────────── */}
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1 truncate">
+  <div className="truncate text-white text-[14px] font-semibold leading-tight">
+    {describeHero()}
+  </div>
+
+  {/* Hand helper ABOVE bankroll (desktop only; keeps mobile tight) */}
+  {!isMobile &&
+    heroHandHelper &&
+    betting &&
+    betting.street !== "preflop" &&
+    table &&
+    table.board.length >= 3 && (
+      <div className="mt-1 flex items-center gap-2 text-[13px] md:text-[14px]">
+        <span
+          className={[
+            "font-semibold truncate",
+            heroHandHelper.category >= 6
+              ? "text-emerald-300"
+              : heroHandHelper.category >= 4
+              ? "text-sky-300"
+              : heroHandHelper.category >= 2
+              ? "text-amber-200"
+              : "text-white/70",
+          ].join(" ")}
+        >
+          {heroHandHelper.label}
+        </span>
+      </div>
+    )}
+
+  {/* Bankroll row */}
+  <div className="mt-[2px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
+    {heroBetting && (
+      <span className="rounded-full bg-black/50 px-2 py-[1px] border border-white/15">
+        Stack{" "}
+        <span className="font-mono text-[#FFD700]">
+          {heroBetting.stack} PGLD
+        </span>
+      </span>
+    )}
+
+    <span className="ml-2 font-mono font-extrabold text-[#FFD700]">
+      {heroBankroll.toLocaleString()}
+    </span>
+    <span className="ml-1 text-white/55">PGLD</span>
+    <span className="ml-2 text-emerald-200/90 font-mono">
+      {formatUsdFromPgld(heroBankroll)}
+    </span>
+
+    {isSittingOut && (
+      <span className="rounded-full bg-amber-500/10 px-2 py-[1px] border border-amber-400/50 text-amber-200">
+        Sitting out
+      </span>
+    )}
+  </div>
+</div>
+
 
       {/* Right side */}
       {isMobile ? (
@@ -2265,7 +2618,6 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
           : "Your turn."}
       </span>
 
-      {/* Desktop keeps Sit out here; mobile moves it into Tools */}
       {!isMobile && (
         <button
           type="button"
@@ -2353,9 +2705,9 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
             step={betting.bigBlind}
             value={raiseSize || betting.bigBlind * 2}
             onChange={(e) => {
-              const v = Number(e.target.value);
-              setRaiseSize(v);
-              setManualBet("");
+              const v = Number(e.target.value)
+              setRaiseSize(v)
+              setManualBet("")
             }}
             className="w-full accent-[#FFD700]"
           />
@@ -2380,8 +2732,8 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
           <button
             type="button"
             onClick={() => {
-              setRaiseSize(betting.bigBlind * 2);
-              setManualBet("");
+              setRaiseSize(betting.bigBlind * 2)
+              setManualBet("")
             }}
             className="rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:border-[#FFD700]/60"
           >
@@ -2391,30 +2743,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       </div>
     )}
 
-    {/* Hand helper: desktop only (keeps panel shorter on mobile) */}
-    {!isMobile &&
-      heroHandHelper &&
-      betting &&
-      betting.street !== "preflop" &&
-      table &&
-      table.board.length >= 3 && (
-        <div className="mt-2 flex items-center justify-between gap-2 text-[14px] md:text-[15px]">
-          <span
-            className={[
-              "font-semibold",
-              heroHandHelper.category >= 6
-                ? "text-emerald-300"
-                : heroHandHelper.category >= 4
-                ? "text-sky-300"
-                : heroHandHelper.category >= 2
-                ? "text-amber-200"
-                : "text-white/70",
-            ].join(" ")}
-          >
-            {heroHandHelper.label}
-          </span>
-        </div>
-      )}
+   
 
     {/* Timer bar stays (thin) */}
     {isHeroTurn && (
@@ -2430,139 +2759,87 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       </div>
     )}
 
-    <div className="mt-2 flex flex-wrap items-center gap-2">
+    
+    {/* Host tools (updated) */}
+{isHostClient && (
+  <div className="mt-2 rounded-xl border border-white/10 bg-black/50 px-2 py-1.5">
+    <div className="flex flex-wrap items-center justify-between gap-2">
       <button
-        onClick={handleSitOrStand}
-        disabled={!ready || (!!heroSeat && handInProgress)}
-        className="rounded-xl bg-emerald-500 px-3 py-2 text-[12px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+        type="button"
+        onClick={() => setShowHostPanel((v: boolean) => !v)}
+        className="rounded-lg border border-amber-300/35 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/70"
       >
-        {heroSeat ? "Stand up" : "Sit at table"}
+        Host tools {showHostPanel ? "▾" : "▸"}
       </button>
 
-      {(() => {
-        const canShowCards =
-          !!heroSeat &&
-          !!heroHand &&
-          heroHand.length === 2 &&
-          !!betting &&
-          betting.street === "done" &&
-          !!showdown &&
-          !!table &&
-          showdown.handId === table.handId;
-
-        if (!canShowCards) return null;
-
-        return (
-          <button
-            type="button"
-            onClick={() => sendMessage({ type: "show-cards" })}
-            className="rounded-xl border border-[#FFD700]/45 bg-black/55 px-3 py-2 text-[12px] font-semibold text-[#FFD700] hover:bg-black/70"
-          >
-            Show cards
-          </button>
-        );
-      })()}
+      <span className="text-[10px] text-white/45">Host-only controls</span>
     </div>
 
-    {/* Main action buttons */}
-    {isHeroTurn && betting && heroBetting && (
-      <div className="mt-2">
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={handlePrimaryAction}
-            className="rounded-xl bg-slate-800 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-white hover:bg-slate-600 hover:shadow-[0_0_10px_rgba(255,255,255,0.25)]"
-          >
-            {primaryActionLabel}
-          </button>
+    {showHostPanel && (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {/* Pause / Resume */}
+        <button
+          type="button"
+          onClick={() => {
+  if (isPaused) {
+    sendMessage({ type: "resume-game" });
+  } else {
+    sendMessage({ type: "pause-game", ms: PAUSE_MS });
+  }
+}}
+          className={[
+            "rounded-lg px-2.5 py-1 text-[10px] font-semibold",
+            paused
+              ? "bg-emerald-500/85 text-black hover:bg-emerald-400"
+              : "bg-red-500/80 text-black hover:bg-red-400",
+          ].join(" ")}
+        >
+          {isPaused ? "Resume" : `Pause (${PAUSE_MS / 1000}s)`}
 
-          <button
-            onClick={handleBet}
-            disabled={!betting || !heroBetting}
-            className="rounded-xl bg-emerald-500 px-4 py-2.5 md:py-3 text-[13px] font-semibold text-black hover:bg-emerald-400 hover:shadow-[0_0_10px_rgba(0,255,100,0.35)] disabled:opacity-40"
-          >
-            {(() => {
-              if (!betting || !heroBetting) return "Bet";
-              const callNeeded = Math.max(0, betting.maxCommitted - heroBetting.committed);
-              const minRaise = betting.bigBlind * 2;
-              const rawRaise =
-                manualBet.trim().length > 0
-                  ? Number(manualBet)
-                  : raiseSize > 0
-                  ? raiseSize
-                  : minRaise;
+        </button>
 
-              const raiseDelta = Math.max(
-                minRaise,
-                Number.isFinite(rawRaise) && rawRaise > 0 ? Math.floor(rawRaise) : minRaise
-              );
-
-              const total = callNeeded + raiseDelta;
-              return `Bet ${total}`;
-            })()}{" "}
-            <span className="opacity-70">PGLD</span>
-          </button>
-        </div>
-
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            onClick={handleFold}
-            className="rounded-lg bg-red-500/75 px-3 py-2 text-[12px] font-semibold text-black hover:bg-red-400 hover:shadow-[0_0_10px_rgba(255,80,80,0.35)]"
-          >
-            Fold
-          </button>
-
+        {/* Start game (only when idle + enough players) */}
+        {seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
           <button
             type="button"
-            onClick={handleAllIn}
-            disabled={!heroBetting}
-            className="rounded-lg bg-slate-900/80 px-3 py-2 text-[12px] font-semibold text-red-200 border border-red-400/40 hover:bg-slate-800 disabled:opacity-40"
+            onClick={handleManualDeal}
+            className="rounded-lg bg-[#FFD700] px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-yellow-400"
           >
-            All-in
+            Start game
           </button>
-        </div>
-      </div>
-    )}
+        )}
 
-    {/* Host tools (unchanged) */}
-    {isHostClient && (
-      <div className="mt-2 rounded-xl border border-white/10 bg-black/50 px-2 py-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => setShowHostPanel((v: boolean) => !v)}
-            className="rounded-lg border border-amber-300/35 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/70"
-          >
-            Host tools {showHostPanel ? "▾" : "▸"}
-          </button>
+        {/* Reset */}
+        <button
+          type="button"
+          onClick={() => setConfirmResetOpen(true)}
+          className="rounded-lg border border-red-400/45 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-red-200 hover:bg-black/70"
+        >
+          Reset
+        </button>
 
-          {showHostPanel && (
-            <div className="flex flex-wrap items-center gap-2">
-              {seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
-                <button
-                  type="button"
-                  onClick={handleManualDeal}
-                  className="rounded-lg bg-[#FFD700] px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-yellow-400"
-                >
-                  Start game
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => sendMessage({ type: "reset-table" })}
-                className="rounded-lg border border-red-400/45 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-red-200 hover:bg-black/70"
-              >
-                Reset
-              </button>
-
-              <span className="text-[10px] text-white/45">Host-only controls</span>
-            </div>
+        {/* Tiny status readout */}
+        <div className="ml-auto flex items-center gap-2 text-[10px] text-white/55">
+          <span className="font-mono">hand {table?.handId ?? "-"}</span>
+          <span className="opacity-50">•</span>
+          <span className="font-mono">{betting?.street ?? "idle"}</span>
+          {paused && (
+            <>
+              <span className="opacity-50">•</span>
+              <span className="rounded-full border border-red-400/50 bg-red-500/15 px-2 py-[1px] font-bold text-red-200">
+                PAUSED
+              </span>
+            </>
           )}
         </div>
       </div>
     )}
   </div>
+)}
+
+  </div>
 </div>
+
 
 
             {/* Dealer area – hidden in fullscreen */}
@@ -2695,6 +2972,42 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
           )}
         </section>
       </div>
+
+      {confirmResetOpen && (
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70">
+    <div className="w-full max-w-sm rounded-2xl border border-red-400/40 bg-gradient-to-b from-black via-[#020617] to-black p-4 shadow-[0_0_40px_rgba(0,0,0,0.9)]">
+      <div className="text-[10px] uppercase tracking-[0.25em] text-red-200/80">
+        Host action
+      </div>
+      <div className="mt-1 text-lg font-extrabold text-white/90">Reset table?</div>
+      <div className="mt-1 text-[11px] text-white/60">
+        Use only if the game freezes. This will clear the current hand state for everyone.
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2 text-[11px]">
+        <button
+          type="button"
+          onClick={() => setConfirmResetOpen(false)}
+          className="rounded-lg border border-white/25 px-3 py-1.5 text-white/80 hover:border-white/50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setConfirmResetOpen(false);
+            sendMessage({ type: "reset-table" });
+            pushLog("Host requested a table reset.");
+          }}
+          className="rounded-lg bg-red-500/85 px-3 py-1.5 font-semibold text-black hover:bg-red-400"
+        >
+          Yes, reset
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
       {/* BUY-IN MODAL */}
       {showBuyIn && (
@@ -2882,6 +3195,25 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
         .hero-timer-ring {
           animation: heroRingPulse 1s ease-in-out infinite;
         }
+          .hero-timer-ring-spice {
+  opacity: 0.98;
+}
+
+.hero-timer-ring-spice-inner {
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.65);
+  opacity: 0.75;
+}
+
+@keyframes ringFlicker {
+  0% { opacity: 0.92; }
+  50% { opacity: 1; }
+  100% { opacity: 0.92; }
+}
+.hero-timer-ring-spice {
+  animation: ringFlicker 1.05s ease-in-out infinite;
+}
+
 
       @keyframes railSweep {
   0% { transform: translateX(-60%) rotate(12deg); opacity: 0; }
@@ -2939,10 +3271,14 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 
 @keyframes actionBadgePop {
   0%   { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.96); }
-  18%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  10%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  85%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
   100% { opacity: 0; transform: translateX(-50%) translateY(-2px) scale(0.995); }
 }
-.action-badge { animation: actionBadgePop 1.8s ease-out both; }
+
+.action-badge { animation: actionBadgePop 3.8s ease-out both; }
+
+
 
 
       `}</style>
