@@ -21,12 +21,16 @@ export default function WalletBar() {
   // ───────────────── Skeleton: server + first client render ─────────────────
   // This MUST match exactly between SSR and the first client pass.
   if (!mounted) {
+      // After mount: if not connected, don't show the big bar (avoids "2 connect buttons" feeling)
+  if (!address) return null
+
     return (
       <div className="w-full rounded-full border border-white/15 bg-black/70 px-3 py-1.5 flex items-center gap-3 text-[11px] text-white/80">
         {/* Network pill (stable "Not connected") */}
         <span className="rounded-full px-2 py-0.5 text-[10px] border border-emerald-400/40 text-emerald-300 bg-emerald-400/10">
           Not connected
         </span>
+        
 
         {/* Address placeholder */}
         <div className="flex-1 min-w-0">

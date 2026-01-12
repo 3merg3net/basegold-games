@@ -16,12 +16,12 @@ const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
 
 
 
-// Floors – poker first, blackjack second, casino third
+// Floors – poker first, blackjack second (casino removed for now)
 const sectionItems: NavItem[] = [
   { href: '/poker', label: 'Poker' },
   { href: '/blackjack-live', label: 'Blackjack' },
-  { href: '/arcade', label: 'Casino' },
 ]
+
 
 /**
  * Helper that falls back to a plain <a> (hard nav) on poker room detail routes.
@@ -97,7 +97,7 @@ export default function NavBar() {
       // send people straight to poker lobby now
       const url = `${base}/poker`
       const text =
-        'Join me at Base Gold Rush Poker — live tables, free early-access chips, and Vegas vibes on Base. 🃏'
+  'Join me at Base Gold Rush Live Tables — peer-to-peer poker on Base with real-time action. 🃏'
 
       if (typeof navigator !== 'undefined' && (navigator as any).share) {
         await (navigator as any).share({ title: 'Base Gold Rush Poker', text, url })

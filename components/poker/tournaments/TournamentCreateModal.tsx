@@ -26,7 +26,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
   const [isPrivate, setIsPrivate] = useState(false);
 
   const disabled = useMemo(() => {
-    return !buyIn || buyIn <= 0 || !startingStack || startingStack <= 0;
+    return !Number.isFinite(buyIn) || buyIn <= 0 || !Number.isFinite(startingStack) || startingStack <= 0;
   }, [buyIn, startingStack]);
 
   if (!open) return null;
@@ -36,12 +36,11 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
       <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#05060a] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.75)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">
-              Tournament Setup
-            </div>
+            <div className="text-[10px] uppercase tracking-[0.25em] text-white/40">Tournament Setup</div>
             <div className="text-xl font-extrabold text-white">Create Tournament</div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-extrabold text-white/70 hover:bg-white/10"
           >
@@ -65,7 +64,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
               <input
                 type="number"
                 value={buyIn}
-                onChange={(e) => setBuyIn(Math.max(0, Number(e.target.value)))}
+                onChange={(e) => setBuyIn(Number(e.target.value) || 0)}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
               />
             </Field>
@@ -74,7 +73,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
               <input
                 type="number"
                 value={startingStack}
-                onChange={(e) => setStartingStack(Math.max(0, Number(e.target.value)))}
+                onChange={(e) => setStartingStack(Number(e.target.value) || 0)}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
               />
             </Field>
@@ -83,7 +82,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
               <input
                 type="number"
                 value={seatsPerTable}
-                onChange={(e) => setSeatsPerTable(Math.max(2, Math.min(9, Number(e.target.value))))}
+                onChange={(e) => setSeatsPerTable(Math.max(2, Math.min(9, Number(e.target.value) || 0)))}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
               />
             </Field>
@@ -92,7 +91,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
               <input
                 type="number"
                 value={minPlayers}
-                onChange={(e) => setMinPlayers(Math.max(2, Math.min(45, Number(e.target.value))))}
+                onChange={(e) => setMinPlayers(Math.max(2, Math.min(45, Number(e.target.value) || 0)))}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
               />
             </Field>
@@ -101,7 +100,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
               <input
                 type="number"
                 value={maxTables}
-                onChange={(e) => setMaxTables(Math.max(1, Math.min(5, Number(e.target.value))))}
+                onChange={(e) => setMaxTables(Math.max(1, Math.min(5, Number(e.target.value) || 0)))}
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
               />
             </Field>
@@ -125,18 +124,24 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
 
         <div className="mt-5 flex gap-2">
           <button
+            type="button"
             disabled={disabled}
-            onClick={() =>
-              onCreate({
-                tournamentName,
-                buyIn,
-                startingStack,
-                seatsPerTable,
-                isPrivate,
-                minPlayers,
-                maxTables,
-              })
-            }
+            onClick={async () => {
+              console.log("[ui] Create tournament clicked");
+              try {
+                await onCreate({
+                  tournamentName,
+                  buyIn,
+                  startingStack,
+                  seatsPerTable,
+                  isPrivate,
+                  minPlayers,
+                  maxTables,
+                });
+              } catch (e) {
+                console.error("[ui] onCreate error", e);
+              }
+            }}
             className={[
               "flex-1 rounded-2xl px-4 py-3 text-sm font-extrabold transition",
               disabled
@@ -148,6 +153,7 @@ export default function TournamentCreateModal({ open, onClose, onCreate }: Props
           </button>
 
           <button
+            type="button"
             onClick={onClose}
             className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-extrabold text-white/70 hover:bg-white/10"
           >

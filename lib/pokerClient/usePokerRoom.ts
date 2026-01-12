@@ -15,7 +15,6 @@ type SendPayload =
   | { type: "show-cards" }
   | { type: "reset-table" }
   | { type: "close-room" }
-
   // ✅ tournaments
   | {
       type: "tournament-create";
@@ -31,15 +30,11 @@ type SendPayload =
   | { type: "tournament-join"; playerId: string; tournamentId: string; name?: string }
   | { type: "tournament-start"; playerId: string; tournamentId: string }
   | { type: "tournament-list" }
-
   | {
       type: "action";
       action: "fold" | "check" | "call" | "bet";
       amount?: number;
     };
-
-    
-
 
 /**
  * SUPER SIMPLE URL RESOLVER
@@ -49,11 +44,9 @@ type SendPayload =
 function resolveWsUrl(): string {
   const raw = process.env.NEXT_PUBLIC_POKER_WS;
 
-  // If env not set, default to same host as the page, port 8080.
-  // Fixes mobile/LAN testing (phone hitting http://10.0.0.159:3000 should WS to ws://10.0.0.159:8080).
   if (!raw || raw.trim() === "") {
     if (typeof window !== "undefined") {
-      const host = window.location.hostname; // e.g. 10.0.0.159
+      const host = window.location.hostname;
       const isHttps = window.location.protocol === "https:";
       return `${isHttps ? "wss" : "ws"}://${host}:8080`;
     }
@@ -61,12 +54,9 @@ function resolveWsUrl(): string {
   }
 
   const v = raw.trim();
-
   if (v.startsWith("ws://") || v.startsWith("wss://")) return v;
-
   if (v.startsWith("https://")) return v.replace(/^https:\/\//, "wss://");
   if (v.startsWith("http://")) return v.replace(/^http:\/\//, "ws://");
-
   return `wss://${v}`;
 }
 
@@ -88,65 +78,127 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
   const [ready, setReady] = useState(false);
   const [messages, setMessages] = useState<IncomingMessage[]>([]);
 
+  // ✅ tournaments state
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [lastTournamentStart, setLastTournamentStart] = useState<any | null>(null);
+  const [lastTournamentJoin, setLastTournamentJoin] = useState<any | null>(null);
+  const [lastTournamentCreate, setLastTournamentCreate] = useState<any | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
   const manualCloseRef = useRef(false);
   const attemptsRef = useRef(0);
-  const [tournaments, setTournaments] = useState<any[]>([]);
-  const [lastTournamentStart, setLastTournamentStart] = useState<any | null>(null);
-  const [lastTournamentJoin, setLastTournamentJoin] = useState<any | null>(null);
-  const [lastTournamentCreate, setLastTournamentCreate] = useState<any | null>(null);
+
+  function clearReconnectTimer() {
+    if (reconnectTimeoutRef.current !== null) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }
+
+  function clearHeartbeat() {
+    if (heartbeatIntervalRef.current !== null) {
+      window.clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+  }
+
+  // Low-level send (no readiness assumptions besides OPEN)
+  function wsSend(payload: any) {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify(payload));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function startHeartbeat() {
+    clearHeartbeat();
+
+    heartbeatIntervalRef.current = window.setInterval(() => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      wsSend({
+        kind: "poker",
+        roomId,
+        playerId,
+        type: "ping",
+        payload: "hb",
+      });
+    }, 25_000) as unknown as number;
+  }
+
+  // ✅ public send() wrapper
+  function send(msg: SendPayload) {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn("[poker] Tried to send but WS not open", {
+        hasWs: !!ws,
+        readyState: ws?.readyState,
+        msg,
+      });
+      return;
+    }
+    
+
+    const full = {
+      kind: "poker" as const,
+      roomId,
+      playerId,
+      ...msg,
+    };
+
+    console.log("[poker] SEND", full);
+
+
+    try {
+      ws.send(JSON.stringify(full));
+    } catch (err) {
+      console.error("[poker] send failed:", err);
+    }
+  }
+
+
+  // ✅ tournaments API
+  function tournamentList() {
+    send({ type: "tournament-list" });
+  }
+
+  function tournamentCreate(args: {
+    playerId: string;
+    tournamentName?: string;
+    buyIn: number;
+    startingStack: number;
+    seatsPerTable?: number;
+    isPrivate?: boolean;
+    minPlayers?: number;
+    maxTables?: number;
+  }) {
+    send({ type: "tournament-create", ...args });
+  }
+
+  function tournamentJoin(args: { playerId: string; tournamentId: string; name?: string }) {
+    send({ type: "tournament-join", ...args });
+  }
+
+  function tournamentStart(args: { playerId: string; tournamentId: string }) {
+    send({ type: "tournament-start", ...args });
+  }
 
   useEffect(() => {
     manualCloseRef.current = false;
     attemptsRef.current = 0;
 
     setLastTournamentStart(null);
-setLastTournamentJoin(null);
-setLastTournamentCreate(null);
-
+    setLastTournamentJoin(null);
+    setLastTournamentCreate(null);
 
     let didUnmount = false;
-
-    function clearReconnectTimer() {
-      if (reconnectTimeoutRef.current !== null) {
-        window.clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-    }
-
-    function clearHeartbeat() {
-      if (heartbeatIntervalRef.current !== null) {
-        window.clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
-      }
-    }
-    
-
-    function startHeartbeat() {
-      clearHeartbeat();
-
-      // Light heartbeat every ~25s to keep Railway / proxies from idling us out
-      heartbeatIntervalRef.current = window.setInterval(() => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-        const ping = {
-          kind: "poker" as const,
-          roomId,
-          playerId,
-          type: "ping" as const,
-          payload: "hb",
-        };
-
-        try {
-          ws.send(JSON.stringify(ping));
-        } catch (err) {
-          console.warn("[poker] heartbeat send failed:", err);
-        }
-      }, 25_000) as unknown as number;
-    }
 
     function connect() {
       const url = resolveWsUrl();
@@ -157,12 +209,12 @@ setLastTournamentCreate(null);
 
       ws.onopen = () => {
         if (didUnmount) return;
+
         console.log("[poker] WS OPEN:", url);
         setReady(true);
-        attemptsRef.current = 0; // reset backoff on success
+        attemptsRef.current = 0;
 
-        // Prefer opts.tableName / opts.isPrivate if passed.
-        // Fallback to URL query params if not provided.
+        // Table meta (for lobby)
         let tableName = (opts.tableName ?? "").trim();
         let isPrivate = Boolean(opts.isPrivate);
 
@@ -171,63 +223,67 @@ setLastTournamentCreate(null);
           if (!tableName) tableName = (qs.get("name") || "").trim();
           if (!opts.isPrivate) isPrivate = qs.get("private") === "1";
         }
+        
 
-        const join = {
-          kind: "poker" as const,
+        // Join-room (required for actual room gameplay; harmless for __lobby__)
+        wsSend({
+          kind: "poker",
           roomId,
           playerId,
-          type: "join-room" as const,
-
-          // ✅ Player display name
+          type: "join-room",
           name: (opts.playerName ?? "").trim() || undefined,
-
-          // ✅ Table meta for lobby display
           tableName: tableName || undefined,
           private: isPrivate ? "1" : "0",
-        };
-
-        try {
-          ws.send(JSON.stringify(join));
-        } catch (err) {
-          console.error("[poker] failed to send join-room:", err);
-        }
+        });
 
         startHeartbeat();
+
+        // ✅ if this socket is a lobby socket, immediately ask for tournaments
+        // (harmless for cash rooms too; coordinator will answer)
+        wsSend({ kind: "poker", roomId, playerId, type: "tournament-list" });
       };
 
-           ws.onmessage = (ev) => {
+      ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
 
-          // Keep raw stream (your existing behavior)
+          // Keep raw stream (cap)
           setMessages((prev) => {
-  const next = [...prev, data];
-  if (next.length > 250) next.splice(0, next.length - 250);
-  return next;
-});
+            const next = [...prev, data];
+            if (next.length > 250) next.splice(0, next.length - 250);
+            return next;
+          });
 
+          // ✅ only treat tournament messages as coordinator-level
+          if (data?.kind === "poker") {
+            if (data?.type === "tournament-list-result") {
+              setTournaments(Array.isArray(data.tournaments) ? data.tournaments : []);
+              return;
+            }
 
-          // ✅ Tournament responses (coordinator-level)
-          if (data?.type === "tournament-list-result") {
-            setTournaments(Array.isArray(data.tournaments) ? data.tournaments : []);
-          }
+            if (data?.type === "tournament-created") {
+              setLastTournamentCreate(data);
+              // ✅ force refresh so card appears immediately
+              wsSend({ kind: "poker", roomId, playerId, type: "tournament-list" });
+              return;
+            }
 
-          if (data?.type === "tournament-created") {
-            setLastTournamentCreate(data);
-          }
+            if (data?.type === "tournament-join-result") {
+              setLastTournamentJoin(data);
+              // ✅ refresh counts
+              wsSend({ kind: "poker", roomId, playerId, type: "tournament-list" });
+              return;
+            }
 
-          if (data?.type === "tournament-join-result") {
-            setLastTournamentJoin(data);
-          }
-
-          if (data?.type === "tournament-start-result") {
-            setLastTournamentStart(data);
+            if (data?.type === "tournament-start-result") {
+              setLastTournamentStart(data);
+              return;
+            }
           }
         } catch (err) {
           console.error("[poker] bad message:", err);
         }
       };
-
 
       ws.onerror = (err) => {
         console.error("[poker] WS ERROR:", err);
@@ -240,10 +296,8 @@ setLastTournamentCreate(null);
         setReady(false);
         clearHeartbeat();
 
-        // If we intentionally closed (unmount / route change), don't reconnect
         if (manualCloseRef.current) return;
 
-        // Auto-reconnect with backoff
         const attempt = attemptsRef.current + 1;
         attemptsRef.current = attempt;
         const delay = Math.min(1000 * Math.pow(2, attempt), 15_000);
@@ -272,7 +326,6 @@ setLastTournamentCreate(null);
 
       if (ws) {
         try {
-          // NOTE: server.ts ignores leave-room currently; safe to send anyway
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ kind: "poker", roomId, playerId, type: "leave-room" }));
           }
@@ -282,60 +335,10 @@ setLastTournamentCreate(null);
         }
       }
     };
-    // include meta in deps so reconnect uses latest values
+    // ✅ include roomId/playerId (core). We intentionally do NOT depend on opts.* to avoid reconnect spam.
   }, [roomId, playerId]);
 
-
-  function send(msg: SendPayload) {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      console.warn("[poker] Tried to send but WS not open", {
-        hasWs: !!ws,
-        readyState: ws?.readyState,
-      });
-      return;
-    }
-
-    const full = {
-      kind: "poker" as const,
-      roomId,
-      playerId,
-      ...msg,
-    };
-
-    try {
-      ws.send(JSON.stringify(full));
-    } catch (err) {
-      console.error("[poker] send failed:", err);
-    }
-  }
-    function tournamentList() {
-    send({ type: "tournament-list" });
-  }
-
-  function tournamentCreate(args: {
-    playerId: string;
-    tournamentName?: string;
-    buyIn: number;
-    startingStack: number;
-    seatsPerTable?: number;
-    isPrivate?: boolean;
-    minPlayers?: number;
-    maxTables?: number;
-  }) {
-    send({ type: "tournament-create", ...args });
-  }
-
-  function tournamentJoin(args: { playerId: string; tournamentId: string; name?: string }) {
-    send({ type: "tournament-join", ...args });
-  }
-
-  function tournamentStart(args: { playerId: string; tournamentId: string }) {
-    send({ type: "tournament-start", ...args });
-  }
-
-
-    return {
+  return {
     ready,
     messages,
     send,
@@ -347,10 +350,9 @@ setLastTournamentCreate(null);
     tournamentJoin,
     tournamentStart,
 
-    // optional last results if you want them
+    // last results
     lastTournamentCreate,
     lastTournamentJoin,
     lastTournamentStart,
   };
-
 }

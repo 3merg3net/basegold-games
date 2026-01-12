@@ -1,3 +1,4 @@
+// app/poker/tournaments/[id]/TournamentPageClient.tsx  (CLEAN GREEN + ROUTES INTO /poker/[roomId])
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -15,12 +16,16 @@ function safeName(v: string) {
   return s.replace(/\s+/g, " ").slice(0, 48);
 }
 
-function getLocal(key: string, fallback: string) {
-  if (typeof window === "undefined") return fallback;
+function getOrCreateLocal(key: string, fallbackPrefix: string) {
+  if (typeof window === "undefined") return `${fallbackPrefix}-ssr`;
   try {
-    return localStorage.getItem(key) || fallback;
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const v = `${fallbackPrefix}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(key, v);
+    return v;
   } catch {
-    return fallback;
+    return `${fallbackPrefix}-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
 
@@ -36,15 +41,13 @@ export default function TournamentPageClient({ params }: ClientProps) {
   const [playerName, setPlayerName] = useState("Player");
 
   useEffect(() => {
-    // ✅ match your other pages
-    const id = getLocal("pgld-poker-player-id", "player-demo");
-    const name = getLocal("pgld-poker-player-name", "Player");
+    const id = getOrCreateLocal("pgld-poker-player-id", "player");
+    const name = getOrCreateLocal("pgld-poker-player-name", "Player");
     setPlayerId(id);
-    setPlayerName(name);
+    setPlayerName(name || "Player");
   }, []);
 
-  // ✅ IMPORTANT: keep the WS on the coordinator lobby channel
-  // (tournament messages are coordinator-level + routed by tournamentId)
+  // keep WS on coordinator lobby channel
   const poker = usePokerRoom({
     roomId: "__lobby__",
     playerId,
@@ -59,7 +62,6 @@ export default function TournamentPageClient({ params }: ClientProps) {
     document.title = incomingName ? `${incomingName} • Tournament` : "Tournament";
   }, [incomingName]);
 
-  // ---- derive join/start state from messages ----
   const joinRes = useMemo(() => {
     const arr = Array.isArray(messages) ? messages : [];
     for (let i = arr.length - 1; i >= 0; i--) {
@@ -82,7 +84,6 @@ export default function TournamentPageClient({ params }: ClientProps) {
     return null;
   }, [messages, tournamentId]);
 
-  // Prefer config snapshot if server provided it
   const cfg = (joinRes?.config || startRes?.config || null) as any;
 
   const status: "waiting" | "ready" | "running" | "finished" | "cancelled" = useMemo(() => {
@@ -100,7 +101,6 @@ export default function TournamentPageClient({ params }: ClientProps) {
   const isRegistered = Boolean(joinRes?.ok);
   const isHost = Boolean(cfg?.hostPlayerId && String(cfg.hostPlayerId) === String(playerId));
 
-  // ✅ route when tournament starts (from the coordinator broadcast)
   useEffect(() => {
     const msg: any = startRes;
     if (!msg?.ok || !Array.isArray(msg.assignments)) return;
@@ -112,7 +112,9 @@ export default function TournamentPageClient({ params }: ClientProps) {
 
     const name = encodeURIComponent(displayName);
     router.push(
-      `/poker/${my.tableRoomId}?mode=tournament&tournamentId=${tournamentId}&name=${name}`
+      `/poker/${my.tableRoomId}?mode=tournament&tournamentId=${encodeURIComponent(
+        tournamentId
+      )}&name=${name}`
     );
   }, [startRes, tournamentId, playerId, router, displayName]);
 
@@ -136,13 +138,9 @@ export default function TournamentPageClient({ params }: ClientProps) {
   const needs = Math.max(0, minPlayers - registeredCount);
 
   const statusPill =
-    status === "running"
+    status === "running" || status === "ready"
       ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-200"
-      : status === "ready"
-      ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-200"
-      : status === "cancelled"
-      ? "border-white/15 bg-white/5 text-white/70"
-      : status === "finished"
+      : status === "cancelled" || status === "finished"
       ? "border-white/15 bg-white/5 text-white/70"
       : "border-amber-300/25 bg-amber-500/10 text-amber-200";
 
@@ -158,11 +156,11 @@ export default function TournamentPageClient({ params }: ClientProps) {
       </div>
 
       <div className="mx-auto max-w-3xl px-4 pt-24 pb-28">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="rounded-3xl border border-emerald-300/12 bg-emerald-500/5 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.7)]">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.28em] text-white/50">
-                Base Gold Poker • Tournament Lobby
+                Base Gold Poker • Tournament
               </div>
               <div className="mt-2 text-2xl font-extrabold text-white/90 truncate">
                 {displayName}
@@ -180,7 +178,7 @@ export default function TournamentPageClient({ params }: ClientProps) {
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="mt-5 rounded-2xl border border-emerald-300/12 bg-black/30 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">

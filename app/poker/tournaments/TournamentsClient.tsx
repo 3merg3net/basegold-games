@@ -1,331 +1,414 @@
-"use client";
+// app/poker/tournaments/TournamentsClient.tsx  (TOURNAMENT LOBBY ONLY)
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { usePokerRoom } from "@/lib/pokerClient/usePokerRoom";
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import TournamentCreateModal from '@/components/poker/tournaments/TournamentCreateModal'
 
-import TournamentCreateModal from "@/components/poker/tournaments/TournamentCreateModal";
-import TournamentCard from "@/components/poker/tournaments/TournamentCard";
-import TournamentDetailModal from "@/components/poker/tournaments/TournamentDetailModal";
-
-function fmtChips(n: number) {
-  const v = Math.max(0, Math.floor(Number(n) || 0));
-  return v.toLocaleString();
-}
-function getOrCreateLocal(key: string, make: () => string) {
-  if (typeof window === "undefined") return make();
-  const existing = window.localStorage.getItem(key);
-  if (existing && existing.trim()) return existing.trim();
-  const v = make();
-  window.localStorage.setItem(key, v);
-  return v;
+type RoomRow = {
+  roomId: string
+  onlineCount: number
+  seatedCount: number
+  tableName?: string | null
+  isPrivate?: boolean
 }
 
-function makeId(prefix = "bgp") {
+type RoomsListMsg = {
+  kind: 'poker'
+  type: 'rooms-list'
+  rooms: RoomRow[] // cash rooms
+  tournamentTables?: RoomRow[]
+}
+
+type TournamentListResultMsg = {
+  kind: 'poker'
+  type: 'tournament-list-result'
+  tournaments: Array<{
+    tournamentId: string
+    tournamentName: string
+    buyIn: number
+    startingStack: number
+    seatsPerTable: number
+    isPrivate: boolean
+    status: 'waiting' | 'ready' | 'running' | 'finished' | 'cancelled' | 'complete'
+    minPlayers: number
+    registeredCount: number
+    hostPlayerId: string
+    createdAt: number
+  }>
+}
+
+function resolveWsUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_POKER_WS
+
+  if (!raw || raw.trim() === '') {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname
+      const isHttps = window.location.protocol === 'https:'
+      return `${isHttps ? 'wss' : 'ws'}://${host}:8080`
+    }
+    return 'ws://localhost:8080'
+  }
+
+  const v = raw.trim()
+  if (v.startsWith('ws://') || v.startsWith('wss://')) return v
+  if (v.startsWith('https://')) return v.replace(/^https:\/\//, 'wss://')
+  if (v.startsWith('http://')) return v.replace(/^http:\/\//, 'ws://')
+  return `wss://${v}`
+}
+
+function safeRoomLabel(id: string) {
+  if (id.length <= 18) return id
+  return `${id.slice(0, 10)}…${id.slice(-6)}`
+}
+
+function formatNum(n: number) {
+  const v = Math.max(0, Math.floor(Number(n || 0)))
+  return v.toLocaleString()
+}
+
+function tournamentIdFromTableRoomId(roomId: string) {
+  const id = String(roomId || '')
+  const m = id.match(/^(tourn-[a-z0-9]+)-t\d+$/)
+  return m?.[1] ?? null
+}
+
+function getLocal(key: string, fallback: string) {
+  if (typeof window === 'undefined') return fallback
   try {
-    // best
-    // @ts-ignore
-    const u = (crypto?.randomUUID?.() || "").slice(0, 10);
-    if (u) return `${prefix}-${u}`;
-  } catch {}
-  // fallback
-  return `${prefix}-${Math.random().toString(36).slice(2, 12)}`;
+    return localStorage.getItem(key) || fallback
+  } catch {
+    return fallback
+  }
 }
 
-
-export default function TournamentsClient() {
-  const router = useRouter();
-
-  // keep same storage keys you used earlier
- function getStablePokerId() {
-  if (typeof window === "undefined") return "player-pending";
+function ensurePlayerId() {
+  if (typeof window === 'undefined') return 'player-pending'
   try {
-    let id = window.localStorage.getItem("pgld-poker-player-id");
+    let id = localStorage.getItem('pgld-poker-player-id')
     if (!id) {
       const rand =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? ((crypto as any).randomUUID?.() || "").slice(0, 8)
-          : Math.random().toString(36).slice(2, 10);
-      id = `player-${rand}`;
-      window.localStorage.setItem("pgld-poker-player-id", id);
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? ((crypto as any).randomUUID?.() || '').slice(0, 8)
+          : Math.random().toString(36).slice(2, 10)
+      id = `player-${rand}`
+      localStorage.setItem('pgld-poker-player-id', id)
     }
-    return id;
+    return id
   } catch {
-    return `player-${Math.random().toString(36).slice(2, 10)}`;
+    return `player-${Math.random().toString(36).slice(2, 10)}`
   }
 }
 
-function getStablePokerName() {
-  if (typeof window === "undefined") return "Player";
-  try {
-    const n = (window.localStorage.getItem("pgld-poker-player-name") || "").trim();
-    return n || "Player";
-  } catch {
-    return "Player";
-  }
-}
+export default function TournamentsClient() {
+  const [connected, setConnected] = useState(false)
+  const [tournaments, setTournaments] = useState<TournamentListResultMsg['tournaments']>([])
+  const [tournamentTables, setTournamentTables] = useState<RoomRow[]>([])
+  const [openCreateTournament, setOpenCreateTournament] = useState(false)
 
-const playerId = getStablePokerId();
-const playerName = getStablePokerName();
+  const [playerId, setPlayerId] = useState('player-pending')
+  const [playerName, setPlayerName] = useState('Player')
 
-
-
-
-
-  // Keep a lobby WS open so server can push tournament-start-result to everyone
-  const poker = usePokerRoom({
-    roomId: "__lobby__",
-    playerId,
-    playerName,
-  });
-
-  const [openCreate, setOpenCreate] = useState(false);
-  const [active, setActive] = useState<any | null>(null); // currently selected tournament
-
-  // poll list every 2s (simple + reliable)
   useEffect(() => {
-    poker.tournamentList();
-    const t = setInterval(() => poker.tournamentList(), 2000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setPlayerId(ensurePlayerId())
+    setPlayerName(getLocal('pgld-poker-player-name', 'Player'))
+  }, [])
 
-  const startMsg = useMemo(() => {
-  const arr = Array.isArray((poker as any).messages) ? (poker as any).messages : [];
-  // support multiple server naming styles
-  const startTypes = new Set([
-    "tournament-start-result",
-    "tournament-started",
-    "tournament-start",
-  ]);
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const m = arr[i];
-    if (m && startTypes.has(String(m.type)) && m.ok && m.tournamentId && Array.isArray(m.assignments)) {
-      return m;
+  const wsRef = useRef<WebSocket | null>(null)
+  const pollRef = useRef<number | null>(null)
+
+  const send = (payload: any) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false
+    console.log('[tournaments] SEND', payload)
+    ws.send(JSON.stringify(payload))
+    return true
+  }
+
+  const refresh = () => {
+    send({ kind: 'poker', type: 'tournament-list' })
+    send({ kind: 'poker', type: 'list-rooms' }) // to pick up tournamentTables
+  }
+
+  useEffect(() => {
+    const url = resolveWsUrl()
+    const ws = new WebSocket(url)
+    wsRef.current = ws
+
+    const request = () => {
+      if (ws.readyState !== WebSocket.OPEN) return
+      ws.send(JSON.stringify({ kind: 'poker', type: 'tournament-list' }))
+      ws.send(JSON.stringify({ kind: 'poker', type: 'list-rooms' }))
     }
+
+    ws.onopen = () => {
+      setConnected(true)
+      request()
+      pollRef.current = window.setInterval(request, 2500) as unknown as number
+    }
+
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data)
+        // console.log('[tournaments] RECV', msg)
+
+        if (msg?.type === 'tournament-list-result' && Array.isArray(msg.tournaments)) {
+          setTournaments(msg.tournaments)
+          return
+        }
+
+        if (msg?.type === 'rooms-list') {
+          const m = msg as RoomsListMsg
+          if (Array.isArray(m.tournamentTables)) setTournamentTables(m.tournamentTables)
+          else setTournamentTables([])
+          return
+        }
+
+        // ✅ show create result + refresh
+        if (msg?.type === 'tournament-created') {
+          console.log('[tournaments] tournament-created', msg)
+          // even if ok:false, you'll see why now
+          window.setTimeout(refresh, 150)
+          return
+        }
+      } catch (e) {
+        console.warn('[tournaments] bad msg', e)
+      }
+    }
+
+    ws.onclose = () => setConnected(false)
+    ws.onerror = () => setConnected(false)
+
+    return () => {
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+      try {
+        ws.close()
+      } catch {}
+      wsRef.current = null
+    }
+  }, [])
+
+  const upcoming = useMemo(() => {
+    const list = [...tournaments].filter((t) => t.status !== 'finished' && t.status !== 'complete')
+    list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    return list
+  }, [tournaments])
+
+  const tables = useMemo(() => {
+    const list = [...tournamentTables]
+    list.sort((a, b) => (b.seatedCount - a.seatedCount) || (b.onlineCount - a.onlineCount))
+    return list
+  }, [tournamentTables])
+
+  const topTourneys = useMemo(() => upcoming.slice(0, 10), [upcoming])
+  const topTables = useMemo(() => tables.slice(0, 12), [tables])
+
+  const TOURNAMENT_HERO = '/images/poker-tournament-hero.png'
+
+  const HybridHero = ({ src, alt }: { src: string; alt: string }) => {
+    return (
+      <div className="relative overflow-hidden rounded-3xl border border-emerald-300/18 bg-black/55 shadow-[0_18px_60px_rgba(0,0,0,0.85)]">
+        <div className="absolute inset-0">
+          <Image src={src} alt="" fill sizes="100vw" className="object-cover opacity-45" priority />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/20 to-black/70" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),transparent_60%)]" />
+        </div>
+
+        <div className="relative h-[210px] sm:h-[250px] md:h-[280px]">
+          <Image src={src} alt={alt} fill sizes="100vw" className="object-contain scale-[1.18] opacity-95" priority />
+        </div>
+      </div>
+    )
   }
-  return (poker as any).lastTournamentStart || null;
-}, [(poker as any).messages, (poker as any).lastTournamentStart]);
-
-  // if we get a start event, route player to their assigned table
- useEffect(() => {
-  const msg: any = startMsg;
-  if (!msg?.ok || !msg?.tournamentId || !Array.isArray(msg.assignments)) return;
-
-  const my = msg.assignments.find(
-    (a: any) => Array.isArray(a.players) && a.players.includes(playerId)
-  );
-  if (!my?.tableRoomId) return;
-
-  const name = encodeURIComponent(msg?.config?.tournamentName || "Tournament");
-  router.push(
-    `/poker/${my.tableRoomId}?mode=tournament&tournamentId=${msg.tournamentId}&name=${name}`
-  );
-}, [startMsg, playerId, router]);
-
-
-  // Make list stable + inject cap if server doesn't send it
-  const list = useMemo(() => {
-    const arr = Array.isArray((poker as any).tournaments) ? (poker as any).tournaments : [];
-    const normalized = arr
-      .map((t: any) => {
-        const seatsPerTable = Number(t.seatsPerTable ?? 9);
-        const maxTables = Number(t.maxTables ?? 5);
-        const cap =
-          Number.isFinite(Number(t.cap)) && Number(t.cap) > 0
-            ? Number(t.cap)
-            : Math.max(1, maxTables) * Math.max(2, seatsPerTable);
-
-        return {
-          ...t,
-          buyIn: Number(t.buyIn ?? 0),
-          startingStack: Number(t.startingStack ?? 0),
-          seatsPerTable,
-          minPlayers: Number(t.minPlayers ?? 2),
-          registeredCount: Number(t.registeredCount ?? 0),
-          maxTables,
-          cap,
-          status: (t.status || "waiting") as "waiting" | "running" | "finished",
-        };
-      })
-      .filter((t: any) => t.status !== "finished");
-
-    // sort newest first
-    normalized.sort((a: any, b: any) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0));
-    return normalized;
-  }, [(poker as any).tournaments]);
-
-  const activeLive = useMemo(() => {
-    if (!active?.tournamentId) return null;
-    return list.find((x: any) => x.tournamentId === active.tournamentId) || active;
-  }, [active, list]);
-
-  const isHost = Boolean(activeLive && String(activeLive.hostPlayerId) === String(playerId));
-
-  async function handleCreate(args: {
-    tournamentName?: string;
-    buyIn: number;
-    startingStack: number;
-    seatsPerTable?: number;
-    isPrivate?: boolean;
-    minPlayers?: number;
-    maxTables?: number;
-  }) {
-    // usePokerRoom already has tournamentCreate
-    await (poker as any).tournamentCreate({
-      playerId,
-      tournamentName: (args.tournamentName || "BGLD Nightly").slice(0, 48),
-      buyIn: Number(args.buyIn || 0),
-      startingStack: Number(args.startingStack || 0),
-      seatsPerTable: Number(args.seatsPerTable ?? 9),
-      isPrivate: Boolean(args.isPrivate),
-      minPlayers: Number(args.minPlayers ?? 6),
-      maxTables: Number(args.maxTables ?? 5),
-    });
-
-    setOpenCreate(false);
-    // quick refresh so it appears immediately
-    window.setTimeout(() => (poker as any).tournamentList(), 250);
-  }
-  
-
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#050509] to-black text-white">
-      {/* Top bar */}
-      <div className="sticky top-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
-          <div className="min-w-0">
-            <div className="text-[11px] text-white/50 font-mono">You: {playerName} • {playerId}</div>
+      {/* HERO */}
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0 -z-10">
+          <Image src={TOURNAMENT_HERO} alt="Poker tournaments" fill priority sizes="100vw" className="object-cover opacity-55" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.72),rgba(0,0,0,0.90))]" />
+        </div>
 
-            <div className="text-[10px] uppercase tracking-[0.28em] text-white/50">
+        <div className="mx-auto max-w-6xl px-4 pt-6 pb-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-black/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-emerald-200">
+              <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-white/30'}`} />
               Poker • Tournament Lobby
             </div>
-            <div className="text-lg font-extrabold text-white/90 truncate">
-              Tournament Registration Desk
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={refresh}
+                className="rounded-full border border-white/15 bg-black/50 px-3 py-1.5 text-[11px] font-semibold text-white/75 hover:bg-white/5"
+              >
+                Refresh
+              </button>
+              <Link
+                href="/poker"
+                className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/80 hover:bg-white/10"
+              >
+                ← Cash Lobby
+              </Link>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="mt-2 text-[11px] text-white/45">
+            You: <span className="font-mono text-white/70">{playerName}</span> • <span className="font-mono text-white/60">{playerId}</span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setOpenCreate(true)}
-              className="rounded-full border border-emerald-400/20 bg-emerald-500/15 px-4 py-2 text-[12px] font-extrabold text-emerald-100 hover:bg-emerald-500/25"
+              onClick={() => setOpenCreateTournament(true)}
+              className="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-[11px] font-extrabold text-emerald-200 hover:bg-emerald-500/15"
             >
-              + Create
+              Create Tournament +
             </button>
 
-            <button
-              type="button"
-              onClick={() => (poker as any).tournamentList()}
-              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[12px] font-extrabold text-white/75 hover:bg-white/10"
-            >
-              Refresh
-            </button>
-
-            <Link
-              href="/poker"
-              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[12px] font-extrabold text-white/75 hover:bg-white/10"
-            >
-              ← Cash
-            </Link>
+            <div className="text-[11px] text-white/45 ml-1">
+              Register → wait → host starts → auto-seat.
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/*  Hero / Desk */}
-      <section className="mx-auto max-w-6xl px-4 pt-5">
-        <div className="relative overflow-hidden rounded-3xl border border-emerald-400/12 bg-black/55 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.8)]">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),transparent_55%)]" />
-          <div className="relative flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <section className="mx-auto max-w-6xl px-4 pt-5 pb-10 space-y-6">
+        <HybridHero src={TOURNAMENT_HERO} alt="Tournament Lobby" />
+
+        {/* UPCOMING */}
+        <div className="space-y-2">
+          <div className="flex items-end justify-between gap-3">
             <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] text-white/50">
-                How it works
-              </div>
-              <div className="mt-1 text-sm text-white/75">
-                Create an event → players register → when{" "}
-                <span className="font-extrabold text-emerald-200">min players</span>{" "}
-                reached the host starts →{" "}
-                <span className="font-extrabold text-white">auto-seat & auto-route</span>.
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70">
-                Active events:{" "}
-                <span className="font-mono text-white/90">{list.length}</span>
-              </span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70">
-                Entry:{" "}
-                <span className="font-mono text-white/90">BGLD chips</span>
-              </span>
+              <div className="text-[10px] uppercase tracking-[0.25em] text-white/45">Tournaments</div>
+              <div className="mt-1 text-lg font-extrabold text-emerald-200">Upcoming</div>
             </div>
           </div>
+
+          {topTourneys.map((t) => {
+            const href = `/poker/tournaments/${t.tournamentId}?name=${encodeURIComponent(t.tournamentName)}`
+            const needs = Math.max(0, (t.minPlayers ?? 2) - (t.registeredCount ?? 0))
+
+            const statusLabel =
+              t.status === 'running' ? 'RUNNING' : t.status === 'ready' ? 'READY' : 'REG OPEN'
+
+            const statusChip =
+              t.status === 'running' || t.status === 'ready'
+                ? 'border-emerald-300/25 bg-emerald-500/10 text-emerald-200'
+                : 'border-amber-300/25 bg-amber-500/10 text-amber-200'
+
+            return (
+              <Link
+                key={t.tournamentId}
+                href={href}
+                className="block rounded-2xl border border-emerald-300/15 bg-black/55 hover:bg-black/70 hover:border-emerald-300/25 transition shadow-[0_12px_40px_rgba(0,0,0,0.7)] px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-extrabold text-white/90 truncate">{t.tournamentName}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/55">
+                      <span className={`rounded-full border px-2 py-0.5 font-mono ${statusChip}`}>
+                        {statusLabel}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5 font-mono">
+                        Buy-in {formatNum(t.buyIn)}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5 font-mono">
+                        Stack {formatNum(t.startingStack)}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5 font-mono">
+                        {t.registeredCount}/{t.minPlayers} reg
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px] text-white/50">
+                      {t.status === 'waiting' || t.status === 'ready'
+                        ? needs > 0
+                          ? `Needs ${needs} more to start`
+                          : 'Ready to start'
+                        : t.status === 'running'
+                        ? 'Tables assigned'
+                        : 'Complete'}
+                    </div>
+                  </div>
+                  <div className="text-white/35 text-xl mt-0.5">›</div>
+                </div>
+              </Link>
+            )
+          })}
+
+          {topTourneys.length === 0 && (
+            <div className="rounded-2xl border border-emerald-300/15 bg-black/60 p-4 text-[12px] text-white/65">
+              No tournaments posted yet. Create the first one.
+            </div>
+          )}
+        </div>
+
+        {/* ACTIVE TABLES */}
+        <div className="space-y-2">
+          <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-[12px] text-white/75">
+            Active tournament tables (running)…
+          </div>
+
+          {topTables.map((r) => {
+            const tid = tournamentIdFromTableRoomId(r.roomId)
+            const href = tid
+              ? `/poker/${r.roomId}?mode=tournament&tournamentId=${encodeURIComponent(tid)}&name=${encodeURIComponent('Tournament')}`
+              : `/poker/${r.roomId}?mode=tournament`
+
+            return (
+              <Link
+                key={r.roomId}
+                href={href}
+                className="block rounded-2xl border border-white/10 bg-black/55 hover:bg-black/70 hover:border-white/15 transition px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-extrabold text-white/85 truncate">Tournament Table</div>
+                    <div className="mt-1 text-[11px] text-white/55 font-mono truncate">{safeRoomLabel(r.roomId)}</div>
+                    <div className="mt-1 text-[11px] text-white/55">
+                      {r.seatedCount}/9 seated • {formatNum(r.onlineCount)} online
+                    </div>
+                    {tid && <div className="mt-1 text-[11px] text-white/45">From {tid}</div>}
+                  </div>
+
+                  <span className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-extrabold text-emerald-200">
+                    Join →
+                  </span>
+                </div>
+              </Link>
+            )
+          })}
+
+          {topTables.length === 0 && (
+            <div className="rounded-2xl border border-white/10 bg-black/50 p-4 text-[12px] text-white/60">
+              No tournament tables running right now.
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Grid */}
-      <section className="mx-auto max-w-6xl px-4 pb-16 pt-4">
-        {list.length === 0 ? (
-          <div className="rounded-3xl border border-white/10 bg-black/50 p-5 text-[12px] text-white/70">
-            No tournaments yet. Click{" "}
-            <span className="font-extrabold text-emerald-200">+ Create</span>{" "}
-            to post the first event.
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((t: any) => (
-              <TournamentCard
-                key={t.tournamentId}
-                t={t}
-                myPlayerId={playerId}
-                onOpen={() => setActive(t)}
-                onQuickJoin={() => {
-                  (poker as any).tournamentJoin({
-                    playerId,
-                    tournamentId: t.tournamentId,
-                    name: playerName,
-                  });
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Detail modal */}
-      <TournamentDetailModal
-        open={!!activeLive}
-        onClose={() => setActive(null)}
-        t={activeLive}
-        myPlayerId={playerId}
-        isHost={isHost}
-        onJoin={() =>
-          activeLive?.tournamentId
-            ? (poker as any).tournamentJoin({
-                playerId,
-                tournamentId: activeLive.tournamentId,
-                name: playerName,
-              })
-            : undefined
-        }
-        onStart={() =>
-          activeLive?.tournamentId
-            ? (poker as any).tournamentStart({
-                playerId,
-                tournamentId: activeLive.tournamentId,
-              })
-            : undefined
-        }
-      />
-
-      {/* Create modal */}
       <TournamentCreateModal
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        onCreate={handleCreate}
+        open={openCreateTournament}
+        onClose={() => setOpenCreateTournament(false)}
+        onCreate={(payload: any) => {
+          // ✅ MUST include playerId or server rejects creation
+          const ok = send({
+            kind: 'poker',
+            type: 'tournament-create',
+            playerId,
+            ...payload,
+          })
+          if (!ok) alert('Still connecting to coordinator… try again.')
+
+          setOpenCreateTournament(false)
+          window.setTimeout(refresh, 250)
+        }}
       />
     </main>
-  );
+  )
 }

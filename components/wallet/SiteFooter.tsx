@@ -4,8 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
-const CASINO  = process.env.NEXT_PUBLIC_CASINO_CA as string | undefined
-const BGLD    = process.env.NEXT_PUBLIC_BGLD_CA as string | undefined
+const BGLD = process.env.NEXT_PUBLIC_BGLD_CA as string | undefined
 const CASHIER = process.env.NEXT_PUBLIC_CASHIER_CA as string | undefined
 
 function FooterNavLink(props: {
@@ -38,84 +37,53 @@ export default function SiteFooter() {
   return (
     <footer className="mt-10 border-t border-white/10 bg-black/80">
       <div className="mx-auto max-w-6xl px-4 py-8 grid gap-6 md:grid-cols-3">
-        {/* Brand Section with logo + chips */}
+        {/* Brand */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="relative h-9 w-9 md:h-10 md:w-10">
               <Image
                 src="/images/goldrush-icon-v2.png"
-                alt="Base Gold Rush"
+                alt="Base Gold"
                 fill
                 className="rounded-md object-contain drop-shadow-[0_0_14px_rgba(250,204,21,0.7)]"
               />
             </div>
             <div>
               <div className="font-extrabold tracking-[0.28em] text-[#FFD700] uppercase text-[13px]">
-                BASE GOLD RUSH
+                GLD RUSH
               </div>
               <div className="text-[10px] text-white/60 tracking-[0.18em] uppercase">
-                Poker Room • Casino Floor
+                Wallet-native games • Peer-to-peer tables
               </div>
             </div>
           </div>
 
           <p className="text-sm text-white/60 max-w-sm">
-            Base-native live poker room and casino. GLD chips on the casino floor,
-            PGLD chips at the tables, and BGLD at the cashier when the cage is fully live.
+            A wallet-native, non-custodial game platform. Game sessions and tables are player-driven,
+            with on-chain transactions for transparency.
           </p>
 
-          {/* Little chip strip */}
+          {/* Optional chip strip (kept but de-casino’d) */}
           <div className="flex items-center gap-2 mt-2">
             <div className="relative h-7 w-7">
               <Image
                 src="/chips/chip-gld-main.png"
-                alt="GLD casino chip"
+                alt="GLD chip"
                 fill
                 className="object-contain drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]"
               />
             </div>
             <span className="text-[11px] text-white/55">
-              GLD chips power the casino floor; PGLD chips track live poker stacks — all tied to your wallet profile.
+              Chips are in-app units for gameplay and display. Always review risk disclosures and
+              verify any on-chain interactions.
             </span>
           </div>
         </div>
 
-        {/* Explore Section with game icons */}
+        {/* Explore */}
         <div>
           <div className="text-sm font-bold text-white/80">Explore</div>
           <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              <FooterNavLink
-                className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/live-tables"
-              >
-                <span className="relative h-6 w-6">
-                  <Image
-                    src="/icons/game-poker-room.png"
-                    alt="Poker Room"
-                    fill
-                    className="object-contain"
-                  />
-                </span>
-                <span>Poker Room & Live Tables</span>
-              </FooterNavLink>
-            </li>
-            <li>
-              <FooterNavLink
-                className="flex items-center gap-2 text-white/70 hover:text-white"
-                href="/arcade"
-              >
-                <span className="relative h-6 w-6">
-                  <Image
-                    src="/icons/game-slots.png"
-                    alt="Casino Floor"
-                    fill
-                    className="object-contain"
-                  />
-                </span>
-                <span>Casino Floor • Slots & Tables</span>
-              </FooterNavLink>
-            </li>
             <li>
               <FooterNavLink
                 className="flex items-center gap-2 text-white/70 hover:text-white"
@@ -123,19 +91,43 @@ export default function SiteFooter() {
               >
                 <span className="relative h-6 w-6">
                   <Image
-                    src="/icons/game-video-poker1.png"
-                    alt="Poker hub"
+                    src="/icons/game-poker-room.png"
+                    alt="Poker"
                     fill
                     className="object-contain"
                   />
                 </span>
-                <span>Poker Hub & Profile</span>
+                <span>Poker</span>
               </FooterNavLink>
             </li>
+
+            <li>
+              <FooterNavLink
+                className="flex items-center gap-2 text-white/70 hover:text-white"
+                href="/poker/tournaments"
+              >
+                <span className="relative h-6 w-6">
+                  <Image
+                    src="/icons/game-video-poker1.png"
+                    alt="Tournaments"
+                    fill
+                    className="object-contain"
+                  />
+                </span>
+                <span>Tournaments</span>
+              </FooterNavLink>
+            </li>
+
+            
           </ul>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-[11px] text-white/60">
+            <span className="font-extrabold text-white/75">Note:</span> Some experiences may be in development or
+            unavailable in certain regions.
+          </div>
         </div>
 
-        {/* On-chain + Legal Section */}
+        {/* On-chain + Legal */}
         <div>
           <div className="text-sm font-bold text-white/80">On-Chain</div>
           <ul className="mt-2 space-y-1 text-sm">
@@ -150,12 +142,12 @@ export default function SiteFooter() {
                   <span className="relative h-5 w-5">
                     <Image
                       src="/images/cashier-icon.png"
-                      alt="GLD token"
+                      alt="BGLD token"
                       fill
                       className="object-contain"
                     />
                   </span>
-                  <span>BGLD Main Token</span>
+                  <span>BGLD Token</span>
                 </a>
               </li>
             )}
@@ -171,7 +163,7 @@ export default function SiteFooter() {
                   <span className="relative h-5 w-5">
                     <Image
                       src="/images/cashier-icon1.png"
-                      alt="Cashier"
+                      alt="Cashier contract"
                       fill
                       className="object-contain"
                     />
@@ -182,8 +174,7 @@ export default function SiteFooter() {
             )}
 
             <li className="pt-2 text-[12px] text-white/50">
-              Contract links are provided for transparency. Always verify contract addresses
-              before you send funds or load chips.
+              Contract links are provided for transparency. Always verify addresses before sending funds.
             </li>
           </ul>
 
@@ -198,34 +189,31 @@ export default function SiteFooter() {
             </FooterNavLink>
             <span className="opacity-40">•</span>
             <FooterNavLink href="/legal/risk" className="hover:text-white">
-              Risk
+              Risk Disclosure
             </FooterNavLink>
             <span className="opacity-40">•</span>
             <FooterNavLink href="/legal/responsible-gaming" className="hover:text-white">
-              Responsible Gaming
+              Responsible Play
             </FooterNavLink>
           </div>
 
-          {/* Legal Text Block */}
+          {/* Legal Text */}
           <div className="mt-4 space-y-2 text-[10px] text-white/40 leading-relaxed">
             <p>
-              Play responsibly. Only use funds and chips you can afford to lose.
-              On-chain games involve risk and transactions cannot be reversed.
+              Play responsibly. Only use funds you can afford to lose. On-chain transactions may be irreversible.
             </p>
 
             <p>
-              Base Gold Rush is a non-custodial platform. All transactions occur
-              directly through your wallet or chip account. Never share your seed
-              phrase or private keys.
+              This is a non-custodial platform. You control your wallet. Never share your seed phrase or private keys.
             </p>
 
             <p>
-              Not available where prohibited. You are responsible for complying
-              with local laws regarding crypto-based gaming.
+              Not available where prohibited. You are responsible for compliance with local laws and eligibility
+              requirements.
             </p>
 
             <div className="mt-2 text-[10px] text-white/40">
-              See regional notices:{' '}
+              Regional notices:{' '}
               <FooterNavLink href="/legal/regions/us" className="hover:text-white">
                 US
               </FooterNavLink>{' '}
@@ -244,7 +232,7 @@ export default function SiteFooter() {
 
       {/* Copyright */}
       <div className="border-t border-white/10 py-3 text-center text-xs text-white/50">
-        © {new Date().getFullYear()} Base Gold — All rights reserved.
+        © {new Date().getFullYear()} GLD Rush — All rights reserved.
       </div>
     </footer>
   )

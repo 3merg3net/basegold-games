@@ -5,13 +5,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useNetwork } from 'wagmi';
+import { useAccount, useNetwork } from 'wagmi';
 import FaucetButton from '@/components/wallet/FaucetButton';
 
 const NavBar = dynamic(() => import('@/components/general/NavBar'), { ssr: false });
 
 export default function SiteHeader() {
   const { chain } = useNetwork();
+  const { isConnected } = useAccount();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -44,7 +45,7 @@ export default function SiteHeader() {
               className="h-8 w-8 rounded-full object-contain"
             />
             <span className="text-sm font-extrabold tracking-[0.3em] text-[#FFD700]">
-              BGRC
+              GLD RUSH
             </span>
           </Link>
 
@@ -61,10 +62,12 @@ export default function SiteHeader() {
             {netLabel}
           </span>
 
-          <FaucetButton />
+          {/* Faucet only when connected and on Sepolia */}
+          {isSepolia && isConnected && <FaucetButton />}
+
           <ConnectButton chainStatus="icon" showBalance={false} />
 
-          {/* Mobile menu button lives here now (no extra bar below header) */}
+          {/* Mobile menu button lives here */}
           <div className="md:hidden">
             <NavBar />
           </div>

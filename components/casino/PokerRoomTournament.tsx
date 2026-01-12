@@ -86,6 +86,7 @@ type TournamentTableComplete = {
   type: 'tournament-table-complete'
   tournamentId?: string | null
   reason?: string
+  winner?: { playerId: string; name: string; chips?: number }
 }
 
 type Props = {
@@ -228,9 +229,10 @@ export default function PokerRoomTournament({
   }, [messages])
 
   const tableComplete = useMemo<TournamentTableComplete | null>(() => {
-    const arr = (messages as any[]).filter((m) => m && m.type === 'tournament-table-complete')
-    return arr.length ? (arr[arr.length - 1] as TournamentTableComplete) : null
-  }, [messages])
+  const arr = (messages as any[]).filter((m) => m && m.type === 'tournament-table-complete')
+  return arr.length ? (arr[arr.length - 1] as TournamentTableComplete) : null
+}, [messages])
+
 
   const lastError = useMemo<string | null>(() => {
     const arr = (messages as any[]).filter((m) => m && m.type === 'error' && typeof m.message === 'string')
@@ -462,12 +464,24 @@ export default function PokerRoomTournament({
   /* ---------- Tournament closure ---------- */
 
   const [showComplete, setShowComplete] = useState(false)
-  useEffect(() => {
-    if (!tableComplete) return
-    setShowComplete(true)
-    const t = setTimeout(() => router.push('/poker/tournaments'), 1800)
-    return () => clearTimeout(t)
-  }, [tableComplete, router])
+const [completeWinner, setCompleteWinner] = useState<string | null>(null)
+
+useEffect(() => {
+  if (!tableComplete) return
+  setShowComplete(true)
+
+  const wName =
+    (tableComplete as any)?.winner?.name ||
+    (tableComplete as any)?.winnerName ||
+    null
+
+  setCompleteWinner(wName)
+
+  // 3.5s feels “WSOP-ish” without being annoying
+  const t = setTimeout(() => router.push('/poker/tournaments'), 3500)
+  return () => clearTimeout(t)
+}, [tableComplete, router])
+
 
   /* ---------- Actions ---------- */
 
@@ -1107,15 +1121,25 @@ export default function PokerRoomTournament({
         </div>
       </section>
 
-      {showComplete && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#05060a] p-5 text-center shadow-[0_24px_80px_rgba(0,0,0,0.75)]">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-white/45">Tournament</div>
-            <div className="mt-2 text-xl font-extrabold text-white">Table Complete</div>
-            <div className="mt-2 text-sm text-white/70">Returning to the tournament lobby…</div>
-          </div>
+     {showComplete && (
+  <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-4">
+    <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#05060a] p-5 text-center shadow-[0_24px_80px_rgba(0,0,0,0.75)]">
+      <div className="text-[10px] uppercase tracking-[0.3em] text-white/45">Tournament</div>
+      <div className="mt-2 text-xl font-extrabold text-white">Complete</div>
+
+      {completeWinner ? (
+        <div className="mt-2 text-sm text-white/80">
+          Winner: <span className="font-extrabold text-emerald-300">{completeWinner}</span>
         </div>
+      ) : (
+        <div className="mt-2 text-sm text-white/70">Finalizing results…</div>
       )}
+
+      <div className="mt-3 text-[11px] text-white/55">Returning to the tournament lobby…</div>
+    </div>
+  </div>
+)}
+
     </main>
   )
 }
