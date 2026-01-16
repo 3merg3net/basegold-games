@@ -380,21 +380,18 @@ export default function PokerRoomArcade({ roomId, tableName }: PokerRoomArcadePr
     }
   }, []);
 
-  function displayNameForSeat(seat: any) {
-  const raw =
-    (seat?.name && String(seat.name)) ||
-    (seat?.playerName && String(seat.playerName)) ||
-    "";
-
-  const clean = raw.trim();
-
-  if (clean) return clean.slice(0, 18);
-
-  // fallback: short playerId (never full)
-  const pid = String(seat?.playerId ?? "");
-  if (!pid) return "Player";
-  return `${pid.slice(0, 6)}…${pid.slice(-4)}`;
+  function shortId(id?: string | null) {
+  if (!id) return "";
+  if (id.startsWith("player-")) return id.slice(0, 10);
+  if (id.startsWith("p_")) return id.slice(0, 10);
+  return id.length > 10 ? id.slice(0, 6) + "…" + id.slice(-4) : id;
 }
+
+function displayNameForSeat(seat?: { name?: string | null; playerId?: string | null } | null) {
+  const n = (seat?.name ?? "").trim();
+  return n.length ? n : shortId(seat?.playerId ?? "");
+}
+
 
 
   // Use profile.id as the canonical player id (matches chips + account)
@@ -1317,6 +1314,10 @@ useEffect(() => {
   }
 }, [messages]);
 
+const [dealHeld, setDealHeld] = useState(false)
+const [dealHeldBy, setDealHeldBy] = useState<string | null>(null)
+
+
 
     // ───────────────── Action display state ─────────────────
 
@@ -1338,6 +1339,17 @@ const [seatActionMap, setSeatActionMap] = useState<Record<number, TableAction>>(
 
 const ACTION_TICKER_MS = 3800; // top-center ticker
 const ACTION_SEAT_MS = 3800;   // per-seat badge lifespan
+
+useEffect(() => {
+  const last = messages[messages.length - 1]
+  if (!last) return
+
+  if (last?.type === "deal-hold-state") {
+    setDealHeld(Boolean(last.dealHeld))
+    setDealHeldBy(typeof last.dealHeldBy === "string" ? last.dealHeldBy : null)
+  }
+}, [messages])
+
 
 
 // Track previous betting to infer actions when turn advances
@@ -2319,30 +2331,30 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       ) : null}
     </div>
 
-    {/* STACK + NAME PILL (bottom) — tighter + raised so it doesn’t collide with hero bar */}
-   <div className="absolute left-1/2 bottom-[-10px] md:bottom-[3px] -translate-x-1/2 flex justify-center">
-         <div
-        className={[
-          "pointer-events-auto flex flex-col items-center",
-          "rounded-xl md:rounded-2xl",
-          "bg-gradient-to-r from-black/82 via-[#0b1220]/88 to-black/82",
-          "border border-[#FACC15]/55",
-          "shadow-[0_0_10px_rgba(0,0,0,0.9)]",
-          // tighter sizing
-          "px-2 py-[2px]",
-          "w-[96px] md:w-auto md:min-w-[108px] md:max-w-[140px]",
-        ].join(" ")}
-      >
-        <div className="rounded-full bg-black/65 px-2 py-[1px] text-[11px] md:text-[13px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-          {formatChips(stackAmount)} PGLD
-        </div>
-
-        <div className="mt-[1px] max-w-[90px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
-          {displayNameForSeat(seat)}
-
-        </div>
-      </div>
+   {/* STACK + NAME PILL (bottom) — mobile-safe: smaller + BELOW cards */}
+<div className="absolute left-1/2 bottom-[-10px] md:bottom-[3px] -translate-x-1/2 flex justify-center">
+  <div
+    className={[
+      "pointer-events-auto flex flex-col items-center",
+      "rounded-lg md:rounded-2xl",
+      "bg-gradient-to-r from-black/82 via-[#0b1220]/88 to-black/82",
+      "border border-[#FACC15]/45 md:border-[#FACC15]/55",
+      "shadow-[0_0_10px_rgba(0,0,0,0.9)]",
+      // tighter mobile sizing
+      "px-1.5 py-[2px] md:px-2 md:py-[2px]",
+      "w-[80px] md:w-auto md:min-w-[108px] md:max-w-[140px]",
+    ].join(" ")}
+  >
+    <div className="rounded-full bg-black/65 px-1.5 md:px-2 py-[1px] text-[10px] md:text-[13px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+      {formatChips(stackAmount)} PGLD
     </div>
+
+    <div className="mt-[1px] max-w-[76px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
+      {displayNameForSeat(seat)}
+    </div>
+  </div>
+</div>
+
   </div>
 )}
 
@@ -2491,29 +2503,30 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
   </div>
 
   {/* Hand helper ABOVE bankroll (desktop only; keeps mobile tight) */}
-  {!isMobile &&
-    heroHandHelper &&
-    betting &&
-    betting.street !== "preflop" &&
-    table &&
-    table.board.length >= 3 && (
-      <div className="mt-1 flex items-center gap-2 text-[13px] md:text-[14px]">
-        <span
-          className={[
-            "font-semibold truncate",
-            heroHandHelper.category >= 6
-              ? "text-emerald-300"
-              : heroHandHelper.category >= 4
-              ? "text-sky-300"
-              : heroHandHelper.category >= 2
-              ? "text-amber-200"
-              : "text-white/70",
-          ].join(" ")}
-        >
-          {heroHandHelper.label}
-        </span>
-      </div>
-    )}
+  {heroHandHelper &&
+  betting &&
+  betting.street !== "preflop" &&
+  table &&
+  table.board.length >= 3 && (
+    <div className="mt-1 flex items-center gap-2">
+      <span
+        className={[
+          "truncate font-semibold",
+          isMobile ? "text-[11px]" : "text-[13px] md:text-[14px]",
+          heroHandHelper.category >= 6
+            ? "text-emerald-300"
+            : heroHandHelper.category >= 4
+            ? "text-sky-300"
+            : heroHandHelper.category >= 2
+            ? "text-amber-200"
+            : "text-white/70",
+        ].join(" ")}
+      >
+        {heroHandHelper.label}
+      </span>
+    </div>
+  )}
+
 
   {/* Bankroll row */}
   <div className="mt-[2px] flex flex-wrap items-center gap-1 text-[11px] text-white/75">
@@ -2785,9 +2798,10 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
     )}
 
     
-    {/* Host tools (updated) */}
+    {/* ───────────────── HOST TOOLS (WSOP-style) ───────────────── */}
 {isHostClient && (
   <div className="mt-2 rounded-xl border border-white/10 bg-black/50 px-2 py-1.5">
+    {/* Header */}
     <div className="flex flex-wrap items-center justify-between gap-2">
       <button
         type="button"
@@ -2797,63 +2811,71 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
         Host tools {showHostPanel ? "▾" : "▸"}
       </button>
 
-      <span className="text-[10px] text-white/45">Host-only controls</span>
+      <span className="text-[10px] text-white/45">
+        Host-only controls
+      </span>
     </div>
 
+    {/* Body */}
     {showHostPanel && (
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {/* Pause / Resume */}
+        {/* HOLD / RESUME NEXT DEAL */}
         <button
           type="button"
           onClick={() => {
-  if (isPaused) {
-    sendMessage({ type: "host-resume" })
-  } else {
-    sendMessage({ type: "host-hold", seconds: PAUSE_MS / 1000 })
-  }
-}}
-
+            if (dealHeld) {
+              sendMessage({ type: "host-resume-deal" });
+            } else {
+              sendMessage({ type: "host-hold-deal" });
+            }
+          }}
           className={[
             "rounded-lg px-2.5 py-1 text-[10px] font-semibold",
-            paused
+            dealHeld
               ? "bg-emerald-500/85 text-black hover:bg-emerald-400"
               : "bg-red-500/80 text-black hover:bg-red-400",
           ].join(" ")}
         >
-          {isPaused ? "Resume dealing" : `Hold dealing (${PAUSE_MS / 1000}s)`}
-
+          {dealHeld ? "Resume dealing" : "Hold next deal"}
         </button>
 
-        {/* Start game (only when idle + enough players) */}
-        {seatedCount >= MIN_PLAYERS_TO_START && tableIdle && (
+        {/* MANUAL DEAL (only when idle + allowed) */}
+        {tableIdle && seatedCount >= MIN_PLAYERS_TO_START && !dealHeld && (
           <button
             type="button"
             onClick={handleManualDeal}
             className="rounded-lg bg-[#FFD700] px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-yellow-400"
           >
-            Start game
+            Deal hand
           </button>
         )}
 
-        {/* Reset */}
+        {/* RESET TABLE (guarded on server) */}
         <button
           type="button"
           onClick={() => setConfirmResetOpen(true)}
           className="rounded-lg border border-red-400/45 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-red-200 hover:bg-black/70"
         >
-          Reset
+          Reset table
         </button>
 
-        {/* Tiny status readout */}
+        {/* STATUS READOUT */}
         <div className="ml-auto flex items-center gap-2 text-[10px] text-white/55">
-          <span className="font-mono">hand {table?.handId ?? "-"}</span>
+          <span className="font-mono">
+            hand {table?.handId ?? "-"}
+          </span>
+
           <span className="opacity-50">•</span>
-          <span className="font-mono">{betting?.street ?? "idle"}</span>
-          {paused && (
+
+          <span className="font-mono">
+            {betting?.street ?? "idle"}
+          </span>
+
+          {dealHeld && (
             <>
               <span className="opacity-50">•</span>
-              <span className="rounded-full border border-red-400/50 bg-red-500/15 px-2 py-[1px] font-bold text-red-200">
-                PAUSED
+              <span className="rounded-full border border-amber-400/50 bg-amber-500/15 px-2 py-[1px] font-bold text-amber-200">
+                DEAL HELD
               </span>
             </>
           )}
@@ -2862,6 +2884,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
     )}
   </div>
 )}
+
 
   </div>
 </div>
