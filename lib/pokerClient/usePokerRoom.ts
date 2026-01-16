@@ -15,6 +15,12 @@ type SendPayload =
   | { type: "show-cards" }
   | { type: "reset-table" }
   | { type: "close-room" }
+  | { type: "host-hold"; seconds?: number }   // hold dealing (optionally timed)
+  | { type: "host-resume" }                  // resume dealing
+  | { type: "host-reset" }                   // reset table (host only)
+  | { type: "host-force-end-hand" }          // optional (keep if you want later)
+
+
   // ✅ tournaments
   | {
       type: "tournament-create";

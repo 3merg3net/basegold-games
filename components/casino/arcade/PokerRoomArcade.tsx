@@ -380,6 +380,23 @@ export default function PokerRoomArcade({ roomId, tableName }: PokerRoomArcadePr
     }
   }, []);
 
+  function displayNameForSeat(seat: any) {
+  const raw =
+    (seat?.name && String(seat.name)) ||
+    (seat?.playerName && String(seat.playerName)) ||
+    "";
+
+  const clean = raw.trim();
+
+  if (clean) return clean.slice(0, 18);
+
+  // fallback: short playerId (never full)
+  const pid = String(seat?.playerId ?? "");
+  if (!pid) return "Player";
+  return `${pid.slice(0, 6)}…${pid.slice(-4)}`;
+}
+
+
   // Use profile.id as the canonical player id (matches chips + account)
 const effectivePlayerId =
   profile?.id ||
@@ -2263,7 +2280,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
     {/* HOLE CARDS (top) */}
     <div className="absolute left-1/2 top-[6px] -translate-x-1/2 flex justify-center">
       {visibleCards && visibleCards.length === 2 ? (
-        <div className="relative flex -space-x-5 md:-space-x-6">
+        <div className="relative flex -space-x-4 md:-space-x-6">
           {visibleCards.map((c, i) => (
             <div
               key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
@@ -2288,7 +2305,14 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
                 transformOrigin: "50% 80%",
               }}
             >
-              <PokerCard card={"As"} isBack={true} highlight={false} size="normal" tilt={0} />
+              <PokerCard
+  card={"As"}
+  isBack={true}
+  highlight={false}
+  size={!isHeroSeat && isMobile ? "small" : "normal"}
+  tilt={0}
+/>
+
             </div>
           ))}
         </div>
@@ -2296,7 +2320,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
     </div>
 
     {/* STACK + NAME PILL (bottom) — tighter + raised so it doesn’t collide with hero bar */}
-   <div className="absolute left-1/2 bottom-[3px] -translate-x-1/2 flex justify-center">
+   <div className="absolute left-1/2 bottom-[-10px] md:bottom-[3px] -translate-x-1/2 flex justify-center">
          <div
         className={[
           "pointer-events-auto flex flex-col items-center",
@@ -2314,7 +2338,8 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
         </div>
 
         <div className="mt-[1px] max-w-[90px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
-          {label}
+          {displayNameForSeat(seat)}
+
         </div>
       </div>
     </div>
@@ -2782,11 +2807,12 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
           type="button"
           onClick={() => {
   if (isPaused) {
-    sendMessage({ type: "resume-game" });
+    sendMessage({ type: "host-resume" })
   } else {
-    sendMessage({ type: "pause-game", ms: PAUSE_MS });
+    sendMessage({ type: "host-hold", seconds: PAUSE_MS / 1000 })
   }
 }}
+
           className={[
             "rounded-lg px-2.5 py-1 text-[10px] font-semibold",
             paused
@@ -2794,7 +2820,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
               : "bg-red-500/80 text-black hover:bg-red-400",
           ].join(" ")}
         >
-          {isPaused ? "Resume" : `Pause (${PAUSE_MS / 1000}s)`}
+          {isPaused ? "Resume dealing" : `Hold dealing (${PAUSE_MS / 1000}s)`}
 
         </button>
 

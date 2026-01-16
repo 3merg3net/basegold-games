@@ -14,13 +14,13 @@ export default function CashierPage() {
 
   const title = useMemo(() => {
     return chip === 'gld'
-      ? 'GLD Chips (Casino Floor)'
+      ? 'GLD Chips (games)'
       : 'PGLD Chips (Poker Tables)'
   }, [chip])
 
   const subtitle = useMemo(() => {
     return chip === 'gld'
-      ? 'GLD chips are used for slots, arcade games, and table games (including Blackjack).'
+      ? 'GLD chips are used for arcade games and Blackjack.'
       : 'PGLD chips are used for live poker table stacks and poker gameplay.'
   }, [chip])
 
@@ -69,7 +69,7 @@ export default function CashierPage() {
       <section className="mx-auto max-w-6xl px-4 py-8 md:py-10">
         <div className="mb-6">
           <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
-            Base Gold Rush • Cashier
+            GLD Rush • Cashier
           </div>
           <h1 className="mt-1 text-2xl md:text-3xl font-extrabold">
             Cashier Window
@@ -165,7 +165,7 @@ export default function CashierPage() {
             <div className="mt-4 rounded-xl border border-yellow-500/25 bg-black/60 p-3 text-[12px] text-white/70 space-y-2">
               <div className="font-semibold text-white/85">Important</div>
               <p>
-                Chips are in-house gameplay credits tracked by your Casino ID during early access.
+                Chips are in-house gameplay credits tracked by your Gld ID during early access.
                 You control what you wager and you are responsible for complying with local laws.
               </p>
               <p className="text-[11px] text-white/60">
@@ -178,9 +178,9 @@ export default function CashierPage() {
                 <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
                   GLD
                 </div>
-                <div className="mt-1 text-sm font-semibold">Casino floor chips</div>
+                <div className="mt-1 text-sm font-semibold">Gld chips</div>
                 <p className="mt-1 text-[12px] text-white/65">
-                  Slots, arcade games, roulette-style games, and blackjack tables use GLD.
+                  Arcade games, roulette-style games, and blackjack tables use GLD.
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/40 p-3">
@@ -189,7 +189,7 @@ export default function CashierPage() {
                 </div>
                 <div className="mt-1 text-sm font-semibold">Poker table chips</div>
                 <p className="mt-1 text-[12px] text-white/65">
-                  Live poker stacks and table buy-ins use PGLD so poker accounting stays clean.
+                  Live poker stacks and table buy-ins use PGLD.
                 </p>
               </div>
             </div>

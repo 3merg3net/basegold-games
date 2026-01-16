@@ -33,8 +33,8 @@ export default function HomePage() {
             </div>
 
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-              <span className="text-[#FFD700]">Peer-to-peer Poker</span>
-              <span className="text-white/85"> is Live.</span>
+              <span className="text-[#FFD700]">Peer-to-peer OnChain Live Tables</span>
+              <span className="text-white/85"> Driven with BGLD.</span>
             </h1>
 
             <p className="text-[12px] sm:text-sm text-white/75 leading-relaxed">
