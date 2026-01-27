@@ -25,9 +25,12 @@ import { IS_DEMO } from "@/config/env";
 type SeatView = {
   seatIndex: number;
   playerId: string | null;
+  handle?: string; // ✅ add
   name?: string;
   chips?: number;
 };
+
+
 
 type SeatsUpdateMessage = {
   type: "seats-update";
@@ -337,14 +340,16 @@ function useSound(url: string) {
   };
 }
 
-/* ───────────────── Main component ───────────────── */
+/* ───────────────── Main component (CLEANED + HANDLE-FIRST IDENTITY) ───────────────── */
 
-export default function PokerRoomArcade({ roomId, tableName }: PokerRoomArcadeProps) {
-  const { profile } = usePlayerProfileContext() as any;
+export default function PokerRoomArcade({
+  roomId,
+  tableName,
+}: PokerRoomArcadeProps) {
+  const { profile } = usePlayerProfileContext() as any
 
-    // ───────────────── Demo bankroll config ─────────────────
-  // Enable demo bankroll in local/dev so we can test gameplay before cashier is live.
-  const DEMO_TARGET = 5000;
+  // ───────────────── Demo bankroll config ─────────────────
+  const DEMO_TARGET = 5000
 
   const DEMO_ENABLED =
     (process.env.NEXT_PUBLIC_DEMO_BANKROLL ?? "") === "1" ||
@@ -352,185 +357,209 @@ export default function PokerRoomArcade({ roomId, tableName }: PokerRoomArcadePr
       (window.location.hostname === "localhost" ||
         window.location.hostname.startsWith("127.") ||
         window.location.hostname.startsWith("192.") ||
-        window.location.hostname.startsWith("10.")));
+        window.location.hostname.startsWith("10.")))
 
-  const demoRequestedRef = useRef(false);
+  const demoRequestedRef = useRef(false)
 
+  // ───────────────── Stable playerId per device (fallback only) ─────────────────
+  const [playerId, setPlayerId] = useState<string | null>(null)
 
-
-  // Stable playerId per device
-  const [playerId, setPlayerId] = useState<string | null>(null);
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return
 
     try {
-      let id = window.localStorage.getItem("pgld-poker-player-id");
+      let id = window.localStorage.getItem("pgld-poker-player-id")
       if (!id) {
         const rand =
           typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? ((crypto as any).randomUUID?.() || "").slice(0, 8)
-            : Math.random().toString(36).slice(2, 10);
-        id = `player-${rand}`;
-        window.localStorage.setItem("pgld-poker-player-id", id);
+            ? (((crypto as any).randomUUID?.() || "") as string).slice(0, 8)
+            : Math.random().toString(36).slice(2, 10)
+
+        id = `player-${rand}`
+        window.localStorage.setItem("pgld-poker-player-id", id)
       }
-      setPlayerId(id);
+      setPlayerId(id)
     } catch {
-      const fallback = "player-" + Math.random().toString(36).slice(2, 10);
-      setPlayerId(fallback);
+      const fallback = "player-" + Math.random().toString(36).slice(2, 10)
+      setPlayerId(fallback)
     }
-  }, []);
+  }, [])
 
-  function shortId(id?: string | null) {
-  if (!id) return "";
-  if (id.startsWith("player-")) return id.slice(0, 10);
-  if (id.startsWith("p_")) return id.slice(0, 10);
-  return id.length > 10 ? id.slice(0, 6) + "…" + id.slice(-4) : id;
-}
+  // ───────────────── Identity helpers (HANDLE FIRST) ─────────────────
 
-function displayNameForSeat(seat?: { name?: string | null; playerId?: string | null } | null) {
-  const n = (seat?.name ?? "").trim();
-  return n.length ? n : shortId(seat?.playerId ?? "");
-}
+  function normHandle(raw?: string | null) {
+    const h = (raw ?? "").trim()
+    if (!h) return ""
+    return h.startsWith("@") ? h : `@${h}`
+  }
 
+  // NOTE: this is only a UI fallback; never show raw ids to players
+  function seatLabel(seatIndex?: number | null) {
+    if (seatIndex == null) return "Seat"
+    return `Seat ${seatIndex + 1}`
+  }
 
+  /**
+   * Decide what to show on the pill for a given seat.
+   * Priority:
+   *  1) seat.handle (authoritative for ALL players if coordinator broadcasts it)
+   *  2) hero profile.handle (for hero seat, in case seat data lags)
+   *  3) seat.name (optional nickname)
+   *  4) Seat X
+   */
+  function displayNameForSeat(args: {
+    seatIndex: number
+    seatHandle?: string | null
+    seatName?: string | null
+    isHero: boolean
+    profileHandle?: string | null
+  }) {
+    const h = normHandle(args.seatHandle)
+    if (h) return h
 
-  // Use profile.id as the canonical player id (matches chips + account)
-const effectivePlayerId =
-  profile?.id ||
-  (playerId ?? "player-pending"); // keep your fallback if profile not ready yet
+    if (args.isHero) {
+      const heroH = normHandle(args.profileHandle)
+      if (heroH) return heroH
+    }
 
-  const myId = String(effectivePlayerId);
+    const n = (args.seatName ?? "").trim()
+    if (n) return n
 
+    return seatLabel(args.seatIndex)
+  }
 
+  // ───────────────── Canonical player id (profile.id) ─────────────────
 
-const { ready, messages, send } = usePokerRoom({
-  roomId,
-  playerId: effectivePlayerId,
-  tableName: tableName || undefined,
-  isPrivate: typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("private") === "1"
-    : false,
-});
+  // Use profile.id as canonical WS player id when available (chips/account tied to it).
+  const effectivePlayerId = profile?.id || (playerId ?? "player-pending")
+  const myId = String(effectivePlayerId)
 
+  const { ready, messages, send } = usePokerRoom({
+    roomId,
+    playerId: effectivePlayerId,
+    tableName: tableName || undefined,
+    isPrivate:
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("private") === "1"
+        : false,
+  })
 
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  if (!profile?.id) return;
-
-  try {
-    // Force poker's stable id to match the canonical profile id
-    window.localStorage.setItem("pgld-poker-player-id", String(profile.id));
-    setPlayerId(String(profile.id));
-  } catch {}
-}, [profile?.id]);
-
-const sendMessage = (msg: any) => (send as any)(msg);
-
-
-  const playDeal = useSound("/sounds/deal-card.mp3");
-  const playChip = useSound("/sounds/chip.wav");
-  const playWin = useSound("/sounds/win.wav");
-
-  // Invite link
-  const [inviteUrl, setInviteUrl] = useState("");
-  const [copiedInvite, setCopiedInvite] = useState(false);
+  // Once profile.id exists, pin localStorage + state to it (prevents id drift across reloads)
   useEffect(() => {
-    if (typeof window !== "undefined") setInviteUrl(window.location.href);
-  }, []);
+    if (typeof window === "undefined") return
+    if (!profile?.id) return
+
+    try {
+      window.localStorage.setItem("pgld-poker-player-id", String(profile.id))
+      setPlayerId(String(profile.id))
+    } catch {}
+  }, [profile?.id])
+
+  const sendMessage = (msg: any) => (send as any)(msg)
+
+  // ───────────────── Sounds ─────────────────
+  const playDeal = useSound("/sounds/deal-card.mp3")
+  const playChip = useSound("/sounds/chip.wav")
+  const playWin = useSound("/sounds/win.wav")
+
+  // ───────────────── Invite link ─────────────────
+  const [inviteUrl, setInviteUrl] = useState("")
+  const [copiedInvite, setCopiedInvite] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") setInviteUrl(window.location.href)
+  }, [])
 
   function handleCopyInvite() {
-    if (!inviteUrl) return;
+    if (!inviteUrl) return
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard
         .writeText(inviteUrl)
         .then(() => {
-          setCopiedInvite(true);
-          setTimeout(() => setCopiedInvite(false), 1500);
+          setCopiedInvite(true)
+          setTimeout(() => setCopiedInvite(false), 1500)
         })
-        .catch(() => {});
+        .catch(() => {})
     }
   }
 
   /* ───────────────── Dealer log ───────────────── */
 
-  const [dealerLog, setDealerLog] = useState<DealerLogEntry[]>([]);
-  const logIdRef = useRef(0);
+  const [dealerLog, setDealerLog] = useState<DealerLogEntry[]>([])
+  const logIdRef = useRef(0)
 
   const pushLog = useCallback((text: string) => {
     setDealerLog((prev) => {
-      const id = logIdRef.current++;
-      const next: DealerLogEntry[] = [{ id, text, ts: Date.now() }, ...prev];
-      return next.slice(0, 24);
-    });
-  }, []);
+      const id = logIdRef.current++
+      const next: DealerLogEntry[] = [{ id, text, ts: Date.now() }, ...prev]
+      return next.slice(0, 24)
+    })
+  }, [])
 
   /* ───────────────── WS derived state ───────────────── */
 
   const seatsUpdate = useMemo<SeatsUpdateMessage | null>(() => {
-  const seatMessages = (messages as any[]).filter(
-    (m) => m && m.type === "seats-update"
-  );
-  if (seatMessages.length === 0) return null;
-  return seatMessages[seatMessages.length - 1] as SeatsUpdateMessage;
-}, [messages]);
+    const seatMessages = (messages as any[]).filter(
+      (m) => m && m.type === "seats-update"
+    )
+    if (seatMessages.length === 0) return null
+    return seatMessages[seatMessages.length - 1] as SeatsUpdateMessage
+  }, [messages])
 
-const seats = useMemo<SeatView[]>(() => seatsUpdate?.seats ?? [], [seatsUpdate]);
+  const seats = useMemo<SeatView[]>(() => seatsUpdate?.seats ?? [], [seatsUpdate])
 
-const bankrolls = useMemo<Record<string, number>>(
-  () => seatsUpdate?.bankrolls ?? {},
-  [seatsUpdate]
-);
+  const bankrolls = useMemo<Record<string, number>>(
+    () => seatsUpdate?.bankrolls ?? {},
+    [seatsUpdate]
+  )
 
-const heroBankroll = useMemo(() => {
-  if (!myId) return 0;
-  return Number(bankrolls[myId] ?? 0);
-}, [bankrolls, myId]);
-
+  const heroBankroll = useMemo(() => {
+    if (!myId) return 0
+    return Number(bankrolls[myId] ?? 0)
+  }, [bankrolls, myId])
 
   // Auto-topup demo bankroll once on connect (dev/demo mode)
   useEffect(() => {
-    if (!DEMO_ENABLED) return;
-    if (!ready) return;
-    if (!playerId) return;
+    if (!DEMO_ENABLED) return
+    if (!ready) return
+    if (!myId) return
 
-    // If server hasn't assigned bankroll yet OR it's 0, request demo topup once.
-    const current = Number(bankrolls[playerId] ?? 0);
-    if (current > 0) return;
+    const current = Number(bankrolls[myId] ?? 0)
+    if (current > 0) return
 
-    if (demoRequestedRef.current) return;
-    demoRequestedRef.current = true;
+    if (demoRequestedRef.current) return
+    demoRequestedRef.current = true
 
-    sendMessage({ type: "demo-topup", target: DEMO_TARGET });
-    pushLog(`Demo mode: requesting ${DEMO_TARGET.toLocaleString()} PGLD bankroll…`);
-  }, [DEMO_ENABLED, ready, playerId, bankrolls, pushLog]);
-
+    sendMessage({ type: "demo-topup", target: DEMO_TARGET })
+    pushLog(`Demo mode: requesting ${DEMO_TARGET.toLocaleString()} PGLD bankroll…`)
+  }, [DEMO_ENABLED, ready, myId, bankrolls, pushLog])
 
   const table = useMemo<TableState | null>(() => {
     const tableMessages = (messages as any[]).filter(
       (m) => m && m.type === "table-state"
-    );
-    if (tableMessages.length === 0) return null;
-    const last = tableMessages[tableMessages.length - 1];
+    )
+    if (tableMessages.length === 0) return null
+    const last = tableMessages[tableMessages.length - 1]
     return {
       handId: last.handId,
       board: last.board,
       players: last.players,
-    } as TableState;
-  }, [messages]);
+    } as TableState
+  }, [messages])
 
   const betting = useMemo<BettingState | null>(() => {
-    const bs = (messages as any[]).filter((m) => m && m.type === "betting-state");
-    if (bs.length === 0) return null;
-    const last = bs[bs.length - 1];
-    return last as BettingState;
-  }, [messages]);
+    const bs = (messages as any[]).filter((m) => m && m.type === "betting-state")
+    if (bs.length === 0) return null
+    const last = bs[bs.length - 1]
+    return last as BettingState
+  }, [messages])
 
   const showdown = useMemo<ShowdownState | null>(() => {
-    const sd = (messages as any[]).filter((m) => m && m.type === "showdown");
-    if (sd.length === 0) return null;
-    const last = sd[sd.length - 1];
-    return last as ShowdownState;
-  }, [messages]);
+    const sd = (messages as any[]).filter((m) => m && m.type === "showdown")
+    if (sd.length === 0) return null
+    const last = sd[sd.length - 1]
+    return last as ShowdownState
+  }, [messages])
 
   const chatMessages = useMemo(
     () =>
@@ -538,97 +567,92 @@ const heroBankroll = useMemo(() => {
         (m) => m && m.type === "chat-broadcast"
       ) as Array<{ playerId: string; text: string }>,
     [messages]
-  );
+  )
 
   const heroSeat = useMemo(() => {
-  if (!seats || seats.length === 0) return null;
-  return seats.find((s) => s.playerId === myId) || null;
-}, [seats, myId]);
-
+    if (!seats || seats.length === 0) return null
+    return seats.find((s) => String(s.playerId) === myId) || null
+  }, [seats, myId])
 
   const seatedCount = useMemo(
     () => seats.filter((s) => s.playerId).length,
     [seats]
-  );
-  
+  )
 
-
-  const MIN_PLAYERS_TO_START = 2;
+  const MIN_PLAYERS_TO_START = 2
 
   const hostSeatIndex = useMemo(() => {
-    let min: number | null = null;
+    let min: number | null = null
     for (const s of seats) {
-      if (!s.playerId) continue;
-      if (min === null || s.seatIndex < min) min = s.seatIndex;
+      if (!s.playerId) continue
+      if (min === null || s.seatIndex < min) min = s.seatIndex
     }
-    return min;
-  }, [seats]);
+    return min
+  }, [seats])
 
   const isHostClient =
-    !!heroSeat && hostSeatIndex !== null && heroSeat.seatIndex === hostSeatIndex;
+    !!heroSeat && hostSeatIndex !== null && heroSeat.seatIndex === hostSeatIndex
 
-  const handInProgress = !!betting && betting.street !== "done";
+  const handInProgress = !!betting && betting.street !== "done"
 
   const rawHeroBetting = useMemo(() => {
-    if (!betting) return null;
-    return betting.players.find((p) => p.playerId === myId) ?? null;
+    if (!betting) return null
+    return betting.players.find((p) => String(p.playerId) === myId) ?? null
+  }, [betting, myId])
 
-  }, [betting, playerId]);
-
-  const [joinedMidHand, setJoinedMidHand] = useState(false);
-  const heroBetting = joinedMidHand && handInProgress ? null : rawHeroBetting;
+  const [joinedMidHand, setJoinedMidHand] = useState(false)
+  const heroBetting = joinedMidHand && handInProgress ? null : rawHeroBetting
 
   const heroHand = useMemo(() => {
-    if (!table) return null;
-    if (joinedMidHand && handInProgress) return null;
-    const hero = table.players.find((p) => p.playerId === myId);
-
-    return hero?.holeCards ?? null;
-  }, [table, playerId, joinedMidHand, handInProgress]);
+    if (!table) return null
+    if (joinedMidHand && handInProgress) return null
+    const hero = table.players.find((p) => String(p.playerId) === myId)
+    return hero?.holeCards ?? null
+  }, [table, myId, joinedMidHand, handInProgress])
 
   const heroHandHelper = useMemo<HandHelper | null>(() => {
-    if (!table) return null;
-    if (!heroHand || heroHand.length < 2) return null;
-    if (!Array.isArray(table.board) || table.board.length < 3) return null;
-    return getHandHelper(heroHand, table.board);
-  }, [table, heroHand]);
+    if (!table) return null
+    if (!heroHand || heroHand.length < 2) return null
+    if (!Array.isArray(table.board) || table.board.length < 3) return null
+    return getHandHelper(heroHand, table.board)
+  }, [table, heroHand])
 
-  const DEFAULT_BUYIN = 500;
+  const DEFAULT_BUYIN = 500
 
-  const heroIsInHand =
-    !!heroBetting && heroBetting.inHand && !heroBetting.hasFolded;
+  const heroIsInHand = !!heroBetting && heroBetting.inHand && !heroBetting.hasFolded
 
   const isHeroTurn: boolean =
     !!betting &&
     !!heroSeat &&
     !!heroBetting &&
     betting.currentSeatIndex === heroSeat.seatIndex &&
-    betting.street !== "done";
+    betting.street !== "done"
 
-    const heroTurnPrevRef = useRef(false);
+  const heroTurnPrevRef = useRef(false)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const wasHeroTurn = heroTurnPrevRef.current;
+    if (typeof window === "undefined") return
+    const wasHeroTurn = heroTurnPrevRef.current
 
     if (!wasHeroTurn && isHeroTurn && "vibrate" in window.navigator) {
-      if (window.innerWidth <= 768) window.navigator.vibrate([35, 40, 35]);
+      if (window.innerWidth <= 768) window.navigator.vibrate([35, 40, 35])
     }
-    heroTurnPrevRef.current = isHeroTurn;
-  }, [isHeroTurn]);
+    heroTurnPrevRef.current = isHeroTurn
+  }, [isHeroTurn])
 
+  const heroHasAction = !!heroSeat && !!betting && betting.street !== "done" && !!heroBetting
 
-  const heroHasAction =
-    !!heroSeat && !!betting && betting.street !== "done" && !!heroBetting;
-
-  const showHeroBar =
-    !!heroSeat && heroIsInHand && betting && betting.street !== "done" && isHeroTurn;
+  const showHeroBar = !!heroSeat && heroIsInHand && betting && betting.street !== "done" && isHeroTurn
 
   const describeHero = useCallback(() => {
-    const nm = profile?.name ?? "";
-    if (nm.trim().length > 0) return nm.trim();
-    if (heroSeat?.name) return heroSeat.name;
-    return "You";
-  }, [profile?.name, heroSeat?.name]);
+    const h = normHandle(profile?.handle)
+    if (h) return h
+    const nm = (profile?.name ?? "").trim()
+    if (nm.length > 0) return nm
+    const seatNm = (heroSeat?.name ?? "").trim()
+    if (seatNm.length > 0) return seatNm
+    return "You"
+  }, [profile?.handle, profile?.name, heroSeat?.name])
+
 
   
 
@@ -850,27 +874,29 @@ try {
 
 
     const now = Date.now();
-    if (Array.isArray(showdown.players)) {
-      const additions: WinnerEntry[] = showdown.players
-        .filter((p) => p.isWinner)
-        .map((p) => {
-          const seatMeta = seats.find(
-            (s) => s.seatIndex === p.seatIndex && s.playerId === p.playerId
-          );
-          return {
-            handId: showdown.handId,
-            seatIndex: p.seatIndex,
-            playerId: p.playerId,
-            name: seatMeta?.name,
-            rankName: p.rankName,
-            timestamp: now,
-          };
-        });
+if (Array.isArray(showdown.players)) {
+  const additions: WinnerEntry[] = showdown.players
+    .filter((p) => p.isWinner)
+    .map((p) => {
+      const seatMeta = seats.find(
+        (s) => s.seatIndex === p.seatIndex && s.playerId === p.playerId
+      );
 
-      if (additions.length > 0) {
-        setWinners((prev) => [...additions, ...prev].slice(0, 10));
-      }
-    }
+      return {
+        handId: showdown.handId,
+        seatIndex: p.seatIndex,
+        playerId: p.playerId,
+        name: seatMeta?.name ?? undefined, // ✅ fix
+        rankName: p.rankName,
+        timestamp: now,
+      };
+    });
+
+  if (additions.length > 0) {
+    setWinners((prev) => [...additions, ...prev].slice(0, 10));
+  }
+}
+
   }, [showdown, table, playWin, pushLog, seats]);
 
   
@@ -1066,10 +1092,12 @@ return;
 
       // keep sit payload consistent with your current server contract
       sendMessage({
-        type: "sit",
-        name: profile?.name ?? "",
-        buyIn: effBuyIn,
-      } as any);
+  type: "sit",
+  handle: (profile?.handle ?? "").trim(), // ✅ REQUIRED identity
+  name: (profile?.name ?? "").trim(),     // optional, can be blank
+  buyIn: effBuyIn,
+} as any);
+
     }, 450);
 
     return;
@@ -1088,10 +1116,12 @@ return;
   }
 
   sendMessage({
-    type: "sit",
-    name: profile?.name ?? "",
-    buyIn: effBuyIn,
-  } as any);
+  type: "sit",
+  handle: (profile?.handle ?? "").trim(),
+  name: (profile?.name ?? "").trim(),
+  buyIn: 500,
+})
+
 }
 
 
@@ -1766,63 +1796,59 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
                  <div
   className={[
     "absolute inset-[4%] md:inset-[5%] origin-center rounded-[999px]",
-    // Gold bumper + emerald inner border
-    "border border-[#FFD700]/55",
-    "shadow-[0_0_40px_rgba(250,204,21,0.14),0_0_90px_rgba(0,0,0,0.9)]",
-    "bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)]",
-    "overflow-hidden",
-  ].join(" ")}
+   // Gold bumper + emerald inner border
+"border border-[#FFD700]/55",
+"shadow-[0_0_40px_rgba(250,204,21,0.14),0_0_90px_rgba(0,0,0,0.9)]",
+"bg-[radial-gradient(circle_at_top,#15803d_0,#065f46_40%,#022c22_70%,#020617_100%)]",
+"overflow-hidden",
+].join(" ")}
 >
-  {/* Rail shimmer (bumper highlight sweep) */}
-  <div className="pointer-events-none absolute inset-0 rail-shimmer opacity-80" />
-  {/* Inner rail edge */}
-  <div className="pointer-events-none absolute inset-[10px] rounded-[999px] border border-emerald-300/30" />
+  {/* (removed rail shimmer + inner rail edge) */}
 
+  {/* Felt texture stays (static, subtle) */}
   <div className="pointer-events-none absolute inset-0 bg-[url('/felt/felt-texture.png')] mix-blend-soft-light opacity-[0.16]" />
 
-  {/* ...keep the rest of your existing children BELOW (logo, pot, board, showdown, etc.) */}
-                    
-
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <div className="flex translate-y-1 flex-col items-center md:translate-y-0">
-                        <div className="mb-1 opacity-85">
-                          <Image
-                            src="/felt/bgrc-logo.png"
-                            alt="Base Gold Rush"
-                            width={160}
-                            height={160}
-                            className="mx-auto object-contain drop-shadow-[0_0_18px_rgba(250,204,21,0.6)]"
-                          />
-                        </div>
-                        <div className="text-[9px] font-semibold uppercase tracking-[0.35em] text-[#FFD700]/90 md:text-[10px]">
-                          BASE GOLD POKER
-                        </div>
-                      </div>
-                    </div>
-
-                    {pot > 0 && (
-  <div className="pointer-events-none absolute left-1/2 top-[12%] -translate-x-1/2 z-[60] flex flex-col items-center">
-    {/* chips */}
-    <div className="mb-2">
-      <ChipStack amount={pot} size={34} maxChips={16} />
-
-    </div>
-
-    {isPaused && (
-  <div className="absolute inset-0 z-[90] flex items-center justify-center pointer-events-none">
-    <div className="rounded-2xl border border-red-400/40 bg-black/70 px-4 py-3 backdrop-blur shadow-[0_0_30px_rgba(0,0,0,0.85)]">
-      <div className="text-[12px] md:text-[14px] font-black tracking-[0.22em] uppercase text-red-200 text-center">
-        GAME PAUSED
+  {/* Center logo */}
+  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+    <div className="flex translate-y-1 flex-col items-center md:translate-y-0">
+      <div className="mb-1 opacity-85">
+        <Image
+          src="/felt/bgrc-logo.png"
+          alt="Base Gold Rush"
+          width={160}
+          height={160}
+          className="mx-auto object-contain drop-shadow-[0_0_18px_rgba(250,204,21,0.6)]"
+        />
       </div>
-      <div className="mt-1 text-center font-mono text-[18px] md:text-[22px] font-extrabold text-white/90">
-        {pauseRemainingSec}s
-      </div>
-      <div className="mt-1 text-center text-[10px] md:text-[11px] text-white/60">
-        Resuming automatically…
+      <div className="text-[9px] font-semibold uppercase tracking-[0.35em] text-[#FFD700]/90 md:text-[10px]">
+        BASE GOLD POKER
       </div>
     </div>
   </div>
-)}
+
+  {pot > 0 && (
+    <div className="pointer-events-none absolute left-1/2 top-[12%] -translate-x-1/2 z-[60] flex flex-col items-center">
+      {/* chips */}
+      <div className="mb-2">
+        <ChipStack amount={pot} size={34} maxChips={16} />
+      </div>
+
+      {isPaused && (
+        <div className="absolute inset-0 z-[90] flex items-center justify-center pointer-events-none">
+          <div className="rounded-2xl border border-red-400/40 bg-black/70 px-4 py-3 backdrop-blur shadow-[0_0_30px_rgba(0,0,0,0.85)]">
+            <div className="text-[12px] md:text-[14px] font-black tracking-[0.22em] uppercase text-red-200 text-center">
+              GAME PAUSED
+            </div>
+            <div className="mt-1 text-center font-mono text-[18px] md:text-[22px] font-extrabold text-white/90">
+              {pauseRemainingSec}s
+            </div>
+            <div className="mt-1 text-center text-[10px] md:text-[11px] text-white/60">
+              Resuming automatically…
+            </div>
+          </div>
+        </div>
+      )}
+
 
 
     {/* badge */}
@@ -1977,7 +2003,8 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
         typeof seatIndex === "number" ? seatByIndex.get(seatIndex) : undefined;
 
       const isOccupied = !!seat?.playerId;
-      const isHeroSeat = isOccupied && seat!.playerId === playerId;
+      const isHeroSeat = isOccupied && seat!.playerId === myId;
+
 
       const seatBetting = isOccupied
         ? betting?.players.find((p) => p.seatIndex === seat!.seatIndex)
@@ -2350,10 +2377,28 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
     </div>
 
     <div className="mt-[1px] max-w-[76px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
-      {displayNameForSeat(seat)}
-    </div>
+  {(() => {
+    const seatHandle = ((seat as any)?.handle ?? "").trim()
+    const heroHandle = (profile?.handle ?? "").trim()
+    const nick = (seat?.name ?? "").trim()
+
+    // ✅ Global rule:
+    // 1) seat.handle (everyone)
+    // 2) hero profile.handle (if seat not yet populated)
+    // 3) optional nick
+    // 4) Seat N
+    return (
+      seatHandle ||
+      (isHeroSeat ? (heroHandle ? (heroHandle.startsWith("@") ? heroHandle : `@${heroHandle}`) : "") : "") ||
+      nick ||
+      `Seat ${seat?.seatIndex != null ? seat.seatIndex + 1 : ""}`
+    )
+  })()}
+</div>
+
   </div>
 </div>
+
 
   </div>
 )}
@@ -3264,29 +3309,7 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 }
 
 
-      @keyframes railSweep {
-  0% { transform: translateX(-60%) rotate(12deg); opacity: 0; }
-  15% { opacity: 0.25; }
-  50% { opacity: 0.55; }
-  85% { opacity: 0.25; }
-  100% { transform: translateX(60%) rotate(12deg); opacity: 0; }
-}
-
-.rail-shimmer::before {
-  content: "";
-  position: absolute;
-  inset: -30%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(250, 204, 21, 0.18) 30%,
-    rgba(255, 255, 255, 0.10) 45%,
-    rgba(250, 204, 21, 0.18) 60%,
-    transparent 100%
-  );
-  filter: blur(6px);
-  animation: railSweep 3.4s ease-in-out infinite;
-}
+  
 
 @keyframes potPulse {
   0% { transform: translateZ(0) scale(1); box-shadow: 0 0 18px rgba(0,0,0,0.9); }

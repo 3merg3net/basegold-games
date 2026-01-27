@@ -7,7 +7,7 @@ type IncomingMessage = any;
 type SendPayload =
   | { type: "ping"; payload?: string }
   | { type: "chat"; text: string }
-  | { type: "sit"; name?: string; seatIndex?: number; buyIn?: number }
+  | { type: "sit"; name?: string; handle?: string; seatIndex?: number; buyIn?: number }
   | { type: "stand" }
   | { type: "start-hand" | "start-game" }
   | { type: "refill-stack"; amount: number }
@@ -70,13 +70,14 @@ type UsePokerRoomOpts = {
   roomId: string;
   playerId: string;
 
-  // Player display name (handle/nickname) — OPTIONAL but recommended
+  // Player display name (handle/nickname)
   playerName?: string;
+  playerHandle?: string; // ✅ ADD
 
-  // Table meta — OPTIONAL
   tableName?: string;
   isPrivate?: boolean;
 };
+
 
 export function usePokerRoom(opts: UsePokerRoomOpts) {
   const { roomId, playerId } = opts;
@@ -233,14 +234,16 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
 
         // Join-room (required for actual room gameplay; harmless for __lobby__)
         wsSend({
-          kind: "poker",
-          roomId,
-          playerId,
-          type: "join-room",
-          name: (opts.playerName ?? "").trim() || undefined,
-          tableName: tableName || undefined,
-          private: isPrivate ? "1" : "0",
-        });
+  kind: "poker",
+  roomId,
+  playerId,
+  type: "join-room",
+  name: (opts.playerName ?? "").trim() || undefined,
+  handle: (opts.playerHandle ?? "").trim() || undefined, // ✅ ADD
+  tableName: tableName || undefined,
+  private: isPrivate ? "1" : "0",
+});
+
 
         startHeartbeat();
 
