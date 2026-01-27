@@ -15,12 +15,10 @@ type SendPayload =
   | { type: "show-cards" }
   | { type: "reset-table" }
   | { type: "close-room" }
-  | { type: "host-hold"; seconds?: number }   // hold dealing (optionally timed)
-  | { type: "host-resume" }                  // resume dealing
-  | { type: "host-reset" }                   // reset table (host only)
-  | { type: "host-force-end-hand" }          // optional (keep if you want later)
-
-
+  | { type: "host-hold"; seconds?: number }
+  | { type: "host-resume" }
+  | { type: "host-reset" }
+  | { type: "host-force-end-hand" }
   // ✅ tournaments
   | {
       type: "tournament-create";
@@ -45,7 +43,7 @@ type SendPayload =
 /**
  * SUPER SIMPLE URL RESOLVER
  * - Local dev: ws://localhost:8080 (coordinator)
- * - Vercel: uses NEXT_PUBLIC_POKER_WS (wss://your-railway)
+ * - Deployed: uses NEXT_PUBLIC_POKER_WS (wss://your-railway)
  */
 function resolveWsUrl(): string {
   const raw = process.env.NEXT_PUBLIC_POKER_WS;
@@ -72,17 +70,20 @@ type UsePokerRoomOpts = {
 
   // Player display name (handle/nickname)
   playerName?: string;
-  playerHandle?: string; // ✅ ADD
+  playerHandle?: string;
 
   tableName?: string;
   isPrivate?: boolean;
 };
 
-
 export function usePokerRoom(opts: UsePokerRoomOpts) {
   const { roomId, playerId } = opts;
 
   const [ready, setReady] = useState(false);
+
+  // ✅ joined handshake (needed to avoid sending sit before join completes)
+  const [joined, setJoined] = useState(false);
+
   const [messages, setMessages] = useState<IncomingMessage[]>([]);
 
   // ✅ tournaments state
@@ -96,6 +97,9 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
   const heartbeatIntervalRef = useRef<number | null>(null);
   const manualCloseRef = useRef(false);
   const attemptsRef = useRef(0);
+
+  // ✅ queue messages until join-room handshake completes
+  const queuedRef = useRef<any[]>([]);
 
   function clearReconnectTimer() {
     if (reconnectTimeoutRef.current !== null) {
@@ -111,7 +115,6 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
     }
   }
 
-  // Low-level send (no readiness assumptions besides OPEN)
   function wsSend(payload: any) {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
@@ -120,6 +123,21 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  function flushQueue() {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!joined) return;
+
+    const q = queuedRef.current;
+    if (!q.length) return;
+
+    queuedRef.current = [];
+    for (const payload of q) {
+      console.log("[poker] FLUSH", payload);
+      wsSend(payload);
     }
   }
 
@@ -140,9 +158,21 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
     }, 25_000) as unknown as number;
   }
 
-  // ✅ public send() wrapper
   function send(msg: SendPayload) {
     const ws = wsRef.current;
+
+    // build envelope
+    const full = {
+      kind: "poker" as const,
+      roomId,
+      playerId,
+      ...msg,
+    };
+
+    // ALWAYS log outgoing (even if queued)
+    console.log("[poker] SEND", full);
+
+    // require socket open
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       console.warn("[poker] Tried to send but WS not open", {
         hasWs: !!ws,
@@ -151,17 +181,19 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       });
       return;
     }
-    
 
-    const full = {
-      kind: "poker" as const,
-      roomId,
-      playerId,
-      ...msg,
-    };
+    // ✅ Never allow gameplay msgs before join handshake.
+    // Tournament / lobby commands can still go through without join if you want,
+    // but to keep this deterministic: queue everything except join-room/ping.
+    const t = (msg as any)?.type;
+    const allowBeforeJoin =
+      t === "ping" || t === "tournament-list" || t === "tournament-create" || t === "tournament-join" || t === "tournament-start";
 
-    console.log("[poker] SEND", full);
-
+    if (!joined && !allowBeforeJoin) {
+      console.warn("[poker] Queuing message until joined:", t);
+      queuedRef.current.push(full);
+      return;
+    }
 
     try {
       ws.send(JSON.stringify(full));
@@ -169,7 +201,6 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       console.error("[poker] send failed:", err);
     }
   }
-
 
   // ✅ tournaments API
   function tournamentList() {
@@ -205,6 +236,10 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
     setLastTournamentJoin(null);
     setLastTournamentCreate(null);
 
+    setReady(false);
+    setJoined(false);
+    queuedRef.current = [];
+
     let didUnmount = false;
 
     function connect() {
@@ -214,6 +249,7 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
+      // ✅ Always show low-level socket events
       ws.onopen = () => {
         if (didUnmount) return;
 
@@ -230,29 +266,32 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
           if (!tableName) tableName = (qs.get("name") || "").trim();
           if (!opts.isPrivate) isPrivate = qs.get("private") === "1";
         }
-        
 
-        // Join-room (required for actual room gameplay; harmless for __lobby__)
-        wsSend({
-  kind: "poker",
-  roomId,
-  playerId,
-  type: "join-room",
-  name: (opts.playerName ?? "").trim() || undefined,
-  handle: (opts.playerHandle ?? "").trim() || undefined, // ✅ ADD
-  tableName: tableName || undefined,
-  private: isPrivate ? "1" : "0",
-});
+        // ✅ Explicit join-room first (deterministic; fixes Railway timing/races)
+        const joinPayload = {
+          kind: "poker",
+          roomId,
+          playerId,
+          type: "join-room",
+          name: (opts.playerName ?? "").trim() || undefined,
+          handle: (opts.playerHandle ?? "").trim() || undefined,
+          tableName: tableName || undefined,
+          private: isPrivate ? "1" : "0",
+        };
 
+        console.log("[poker] JOIN →", joinPayload);
+        wsSend(joinPayload);
 
         startHeartbeat();
 
-        // ✅ if this socket is a lobby socket, immediately ask for tournaments
-        // (harmless for cash rooms too; coordinator will answer)
+        // Lobby/tournaments are fine to request immediately
         wsSend({ kind: "poker", roomId, playerId, type: "tournament-list" });
       };
 
       ws.onmessage = (ev) => {
+        // ✅ raw log for debugging (critical for this bug)
+        console.log("[poker] RECV raw:", ev.data);
+
         try {
           const data = JSON.parse(ev.data);
 
@@ -263,7 +302,18 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
             return next;
           });
 
-          // ✅ only treat tournament messages as coordinator-level
+          // ✅ join handshake detection
+          if (data?.kind === "poker" && (data?.type === "room-joined" || data?.type === "seats-update")) {
+            if (!joined) {
+              console.log("[poker] JOINED ✅ via", data?.type);
+              setJoined(true);
+              // flush queued gameplay messages
+              // Note: flushQueue reads `joined`, so call after state tick too:
+              setTimeout(() => flushQueue(), 0);
+            }
+          }
+
+          // ✅ tournament messages
           if (data?.kind === "poker") {
             if (data?.type === "tournament-list-result") {
               setTournaments(Array.isArray(data.tournaments) ? data.tournaments : []);
@@ -272,14 +322,12 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
 
             if (data?.type === "tournament-created") {
               setLastTournamentCreate(data);
-              // ✅ force refresh so card appears immediately
               wsSend({ kind: "poker", roomId, playerId, type: "tournament-list" });
               return;
             }
 
             if (data?.type === "tournament-join-result") {
               setLastTournamentJoin(data);
-              // ✅ refresh counts
               wsSend({ kind: "poker", roomId, playerId, type: "tournament-list" });
               return;
             }
@@ -294,15 +342,16 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
         }
       };
 
-      ws.onerror = (err) => {
-        console.error("[poker] WS ERROR:", err);
+      ws.onerror = (ev) => {
+        console.log("[poker] WS ERROR:", ev);
       };
 
       ws.onclose = (event) => {
         if (didUnmount) return;
 
-        console.log("[poker] WS closed", "code:", event.code, "reason:", event.reason);
+        console.log("[poker] WS CLOSE:", event.code, event.reason);
         setReady(false);
+        setJoined(false);
         clearHeartbeat();
 
         if (manualCloseRef.current) return;
@@ -326,6 +375,7 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       didUnmount = true;
       manualCloseRef.current = true;
       setReady(false);
+      setJoined(false);
 
       clearHeartbeat();
       clearReconnectTimer();
@@ -335,6 +385,7 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
 
       if (ws) {
         try {
+          // leave-room is optional; your server currently ignores it anyway
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ kind: "poker", roomId, playerId, type: "leave-room" }));
           }
@@ -344,11 +395,12 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
         }
       }
     };
-    // ✅ include roomId/playerId (core). We intentionally do NOT depend on opts.* to avoid reconnect spam.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, playerId]);
 
   return {
     ready,
+    joined,
     messages,
     send,
 
