@@ -617,7 +617,7 @@ export default function PokerRoomArcade({
     return getHandHelper(heroHand, table.board)
   }, [table, heroHand])
 
-  const DEFAULT_BUYIN = 500
+  const DEFAULT_BUYIN = 1000
 
   const heroIsInHand = !!heroBetting && heroBetting.inHand && !heroBetting.hasFolded
 
@@ -1119,8 +1119,9 @@ return;
   type: "sit",
   handle: (profile?.handle ?? "").trim(),
   name: (profile?.name ?? "").trim(),
-  buyIn: 500,
-})
+  buyIn: effBuyIn,
+} as any);
+
 
 }
 
