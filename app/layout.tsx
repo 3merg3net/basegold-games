@@ -66,20 +66,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
               <main className="flex-1">
                 <RootClient>
-                  <PlayerProfileProvider>
-                    <CasinoChipsProvider>
-                      {/* Profile gate must live inside profile provider */}
-                      <ProfileGateOverlay />
+  <PlayerProfileProvider>
+    <CasinoChipsProvider>
+      {/* Gate order */}
+      <AgeGateOverlay />
+      <RiskBanner />
+      <ProfileGateOverlay />
 
-                      <ArcadeRootClient>{children}</ArcadeRootClient>
-                    </CasinoChipsProvider>
-                  </PlayerProfileProvider>
+      <ArcadeRootClient>{children}</ArcadeRootClient>
+    </CasinoChipsProvider>
+  </PlayerProfileProvider>
+</RootClient>
 
-                  {/* Global legal overlays (no profile needed) */}
-                  <RiskBanner />
-                  <AgeGateOverlay />
-                </RootClient>
               </main>
+
+              {/* ✅ these do NOT need profile, can stay global */}
+              <RiskBanner />
+              <AgeGateOverlay />
             </div>
           </WalletBarProvider>
         </Providers>
