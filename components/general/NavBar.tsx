@@ -97,7 +97,7 @@ export default function NavBar() {
       // send people straight to poker lobby now
       const url = `${base}/poker`
       const text =
-  'Join me at Base Gold Rush Live Tables — peer-to-peer poker on Base with real-time action. 🃏'
+  'Join me at BGLD Rush Live Tables — peer-to-peer poker on Base with real-time action. 🃏'
 
       if (typeof navigator !== 'undefined' && (navigator as any).share) {
         await (navigator as any).share({ title: 'Base Gold Rush Poker', text, url })

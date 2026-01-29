@@ -1539,6 +1539,9 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
 
   const [isMobile, setIsMobile] = useState(false);
 
+  const [showMobileRaise, setShowMobileRaise] = useState(false);
+
+
   // PC: after hero -> directly LEFT of hero slot, then directly RIGHT, then far-left, then sides, then top
   const SLOT_FILL_PC = [0, 2, 3, 1, 7, 8, 4, 6, 5];
 
@@ -1582,8 +1585,10 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
   if (!isHeroTurn) {
     setShowMobileTools(false);
     setShowMobileAdvanced(false);
+    setShowMobileRaise(false);
   }
 }, [isMobile, isHeroTurn]);
+
 
   
 
@@ -2603,85 +2608,104 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 
 
       {/* Right side */}
-      {isMobile ? (
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            {isHeroTurn && actionSeconds !== null && (
-              <span
-                className={[
-                  "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
-                  "timer-neon",
-                  actionPhase === "extra"
-                    ? "border border-red-500/60 text-red-200 bg-red-600/25"
-                    : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
-              </span>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowMobileTools((v) => !v)}
-              className="rounded-full border border-white/20 bg-black/60 px-3 py-1 text-[10px] font-semibold text-white/85 hover:bg-black/75"
-            >
-              {showMobileTools ? "Close" : "Tools"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-end gap-1.5 max-w-[190px]">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleRefillStack(500)}
-              disabled={!heroSeat || handInProgress}
-              className="rounded-full border border-emerald-400/50 bg-black/60 px-3 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-black/75 disabled:opacity-40"
-            >
-              Refill +500
-            </button>
-
-            {isHostClient && (
-              <button
-                type="button"
-                onClick={() => setShowHostPanel((v: boolean) => !v)}
-                className="rounded-full border border-amber-300/40 bg-black/60 px-3 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/75"
-              >
-                Host {showHostPanel ? "▾" : "▸"}
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isHeroTurn && actionSeconds !== null && (
-              <span
-                className={[
-                  "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
-                  "timer-neon",
-                  actionPhase === "extra"
-                    ? "border border-red-500/60 text-red-200 bg-red-600/25"
-                    : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
-              </span>
-            )}
-
-            <button
-              type="button"
-              onClick={handleUseTimeBank}
-              disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
-              className="rounded-full border border-sky-400/45 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-sky-200 hover:bg-black/75 disabled:opacity-40"
-            >
-              {timeBankUsed ? "Used" : `+${TIME_BANK_SECONDS}s`}
-            </button>
-          </div>
-        </div>
+{isMobile ? (
+  <div className="flex flex-col items-end gap-1">
+    <div className="flex items-center gap-2">
+      {isHeroTurn && actionSeconds !== null && (
+        <span
+          className={[
+            "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
+            "timer-neon",
+            actionPhase === "extra"
+              ? "border border-red-500/60 text-red-200 bg-red-600/25"
+              : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
+        </span>
       )}
+
+      {/* Mobile Raise toggle (shows slider/manual amount UI) */}
+      {isHeroTurn && (
+        <button
+          type="button"
+          onClick={() => {
+            setShowMobileRaise((v: boolean) => !v)
+            setShowMobileTools(false)
+            setShowMobileAdvanced(false)
+          }}
+          className="rounded-full border border-[#FFD700]/30 bg-black/60 px-3 py-1 text-[10px] font-semibold text-[#FFD700] hover:bg-black/75"
+        >
+          {showMobileRaise ? "Close" : "Raise"}
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={() => {
+          setShowMobileTools((v: boolean) => !v)
+          setShowMobileRaise(false)
+        }}
+        className="rounded-full border border-white/20 bg-black/60 px-3 py-1 text-[10px] font-semibold text-white/85 hover:bg-black/75"
+      >
+        {showMobileTools ? "Close" : "Tools"}
+      </button>
+    </div>
+  </div>
+) : (
+  <div className="flex flex-col items-end gap-1.5 max-w-[190px]">
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => handleRefillStack(500)}
+        disabled={!heroSeat || handInProgress}
+        className="rounded-full border border-emerald-400/50 bg-black/60 px-3 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-black/75 disabled:opacity-40"
+      >
+        Refill +500
+      </button>
+
+      {isHostClient && (
+        <button
+          type="button"
+          onClick={() => setShowHostPanel((v: boolean) => !v)}
+          className="rounded-full border border-amber-300/40 bg-black/60 px-3 py-1 text-[10px] font-semibold text-amber-200 hover:bg-black/75"
+        >
+          Host {showHostPanel ? "▾" : "▸"}
+        </button>
+      )}
+    </div>
+
+    <div className="flex items-center gap-2">
+      {isHeroTurn && actionSeconds !== null && (
+        <span
+          className={[
+            "inline-flex items-center rounded-full px-3 py-1 font-mono text-[12px] font-extrabold tracking-wide",
+            "timer-neon",
+            actionPhase === "extra"
+              ? "border border-red-500/60 text-red-200 bg-red-600/25"
+              : "border border-[#FFD700]/70 text-[#FFD700] bg-[#2a2a2a]/55",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {actionPhase === "extra" ? "LAST" : "ACT"} {actionSeconds}s
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={handleUseTimeBank}
+        disabled={!isHeroTurn || !actionDeadline || timeBankUsed}
+        className="rounded-full border border-sky-400/45 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-sky-200 hover:bg-black/75 disabled:opacity-40"
+      >
+        {timeBankUsed ? "Used" : `+${TIME_BANK_SECONDS}s`}
+      </button>
+    </div>
+  </div>
+)}
+
     </div>
 
     {/* Status row */}
