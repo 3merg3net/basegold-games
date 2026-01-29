@@ -2,6 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import SiteFooter from "@/components/wallet/SiteFooter";
+import RiskBanner from "@/components/legal/RiskBanner";
 
 // NOTE: update this to your real tournaments lobby route if different.
 const TOURNAMENTS_HREF = "/poker/tournaments";
@@ -9,6 +10,7 @@ const TOURNAMENTS_HREF = "/poker/tournaments";
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#050509] to-black text-white">
+       <RiskBanner />
       {/* HERO – LIVE TABLES (POKER DEFAULT) */}
       <section className="relative overflow-hidden border-b border-white/10">
         {/* Background wash */}
@@ -29,7 +31,7 @@ export default function HomePage() {
           {/* TITLE BLOCK */}
           <div className="max-w-2xl mx-auto text-center space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD700]/70 bg-black/80 px-4 py-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.24em] text-[#FFD700]/90 shadow-[0_0_20px_rgba(255,215,0,0.45)]">
-              Gld Rush • Live Tables
+              BGld Rush • Live Tables
             </div>
 
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white">

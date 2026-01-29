@@ -1917,20 +1917,25 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
 
 
 
-                   <div className="pointer-events-none absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 px-2 z-[40]">                      <div className="flex gap-1.5 md:gap-2">
-                        {boardCards.map((c, i) => {
-                          const tilts = [-3, 0, 0, 0, 3];
-                          return (
-                            <PokerCard
-                              key={`${table?.handId ?? 0}-board-${i}-${c}`}
-                              card={c}
-                              delayIndex={i}
-                              tilt={tilts[i]}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
+                   <div className="pointer-events-none absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 px-2 z-[40]">
+  {/* Scale board down on mobile so it doesn't cover side seats */}
+  <div className="origin-center scale-[0.84] sm:scale-[0.92] md:scale-100">
+    <div className="flex gap-1 sm:gap-1.5 md:gap-2">
+      {boardCards.map((c, i) => {
+        const tilts = [-3, 0, 0, 0, 3]
+        return (
+          <PokerCard
+            key={`${table?.handId ?? 0}-board-${i}-${c}`}
+            card={c}
+            delayIndex={i}
+            tilt={tilts[i]}
+          />
+        )
+      })}
+    </div>
+  </div>
+</div>
+
 
                     {/* Confetti (hero wins) */}
 {confettiKey != null && (
@@ -2779,7 +2784,10 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
         ) : (
           <button
             type="button"
-            onClick={() => setShowMobileAdvanced((v) => !v)}
+            onClick={() => {
+  setShowMobileAdvanced((v) => !v)
+  setShowMobileRaise(false)
+}}
             className="rounded-xl border border-[#FFD700]/30 bg-black/60 px-3 py-2 text-[11px] font-semibold text-[#FFD700]"
           >
             {showMobileAdvanced ? "Hide" : "Advanced"}
@@ -2788,9 +2796,78 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       </div>
     )}
 
-    {/* Raise controls: desktop always; mobile only when Advanced */}
-    {isHeroTurn && betting && heroBetting && (!isMobile || showMobileAdvanced) && (
-      <div className="mt-2 flex items-center justify-between gap-2">
+    {/* Raise controls: desktop always; mobile when Raise toggle OR Advanced */}
+{/* Raise controls: desktop always; mobile only when Raise toggle */}
+{isHeroTurn && betting && heroBetting && (!isMobile || showMobileRaise) && (
+  <div className="mt-2 rounded-xl border border-white/10 bg-black/40 p-2.5">
+    {isMobile ? (
+      <>
+        {/* Mobile: compact + obvious */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+            Raise
+          </div>
+
+          <span className="rounded-full border border-white/15 bg-black/55 px-2 py-[2px] text-[12px] font-mono text-[#FFD700]">
+            {manualBet.trim() !== ""
+              ? manualBet
+              : raiseSize > 0
+              ? raiseSize
+              : betting.bigBlind * 2}{" "}
+            PGLD
+          </span>
+        </div>
+
+        <div className="mt-2">
+          <input
+            type="range"
+            min={betting.bigBlind * 2}
+            max={Math.max(betting.bigBlind * 8, betting.pot || betting.bigBlind * 4)}
+            step={betting.bigBlind}
+            value={raiseSize || betting.bigBlind * 2}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              setRaiseSize(v)
+              setManualBet("")
+            }}
+            className="w-full accent-[#FFD700]"
+          />
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={betting.bigBlind * 2}
+            value={manualBet}
+            onChange={(e) => setManualBet(e.target.value)}
+            placeholder="Manual"
+            className="flex-1 rounded-xl border border-white/15 bg-black/55 px-3 py-2 text-[12px] text-white/85 outline-none focus:border-[#FFD700]"
+          />
+
+          <button
+            type="button"
+            onClick={() => setManualBet("")}
+            className="rounded-xl border border-white/15 bg-black/55 px-3 py-2 text-[11px] font-semibold text-white/70 hover:border-[#FFD700]/60"
+          >
+            Clear
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setRaiseSize(betting.bigBlind * 2)
+              setManualBet("")
+            }}
+            className="rounded-xl border border-white/15 bg-black/55 px-3 py-2 text-[11px] font-semibold text-white/70 hover:border-[#FFD700]/60"
+          >
+            Min
+          </button>
+        </div>
+      </>
+    ) : (
+      /* Desktop: keep your existing row layout */
+      <div className="flex items-center justify-between gap-2">
         <div className="shrink-0 flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-[0.22em] text-white/45">
             Raise
@@ -2850,6 +2927,9 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
         </div>
       </div>
     )}
+  </div>
+)}
+
 
    
 

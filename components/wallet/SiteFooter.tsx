@@ -50,7 +50,7 @@ export default function SiteFooter() {
             </div>
             <div>
               <div className="font-extrabold tracking-[0.28em] text-[#FFD700] uppercase text-[13px]">
-                GLD RUSH
+                BGLD RUSH
               </div>
               <div className="text-[10px] text-white/60 tracking-[0.18em] uppercase">
                 Wallet-native games • Peer-to-peer tables
@@ -232,7 +232,7 @@ export default function SiteFooter() {
 
       {/* Copyright */}
       <div className="border-t border-white/10 py-3 text-center text-xs text-white/50">
-        © {new Date().getFullYear()} GLD Rush — All rights reserved.
+        © {new Date().getFullYear()} BGLD Rush — All rights reserved.
       </div>
     </footer>
   )

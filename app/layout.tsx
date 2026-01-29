@@ -8,7 +8,6 @@ import RootClient from "@/components/wallet/RootClient";
 import { WalletBarProvider } from "@/components/wallet/WalletBarProvider";
 
 import AgeGateOverlay from "@/components/legal/AgeGateOverlay";
-import RiskBanner from "@/components/legal/RiskBanner";
 import ProfileGateOverlay from "@/components/legal/ProfileGateOverlay";
 
 import { PlayerProfileProvider } from "@/lib/player/PlayerProfileProvider";
@@ -66,23 +65,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
               <main className="flex-1">
                 <RootClient>
-  <PlayerProfileProvider>
-    <CasinoChipsProvider>
-      {/* Gate order */}
-      <AgeGateOverlay />
-      <RiskBanner />
-      <ProfileGateOverlay />
+                  <PlayerProfileProvider>
+                    <CasinoChipsProvider>
+                      {/* ✅ Gate order (global, single render) */}
+                      <AgeGateOverlay />
+                      <ProfileGateOverlay />
 
-      <ArcadeRootClient>{children}</ArcadeRootClient>
-    </CasinoChipsProvider>
-  </PlayerProfileProvider>
-</RootClient>
-
+                      <ArcadeRootClient>{children}</ArcadeRootClient>
+                    </CasinoChipsProvider>
+                  </PlayerProfileProvider>
+                </RootClient>
               </main>
-
-              {/* ✅ these do NOT need profile, can stay global */}
-              <RiskBanner />
-              <AgeGateOverlay />
             </div>
           </WalletBarProvider>
         </Providers>

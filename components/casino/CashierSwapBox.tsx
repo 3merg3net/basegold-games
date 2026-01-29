@@ -50,12 +50,13 @@ async function fetchBgldUsd(): Promise<number | null> {
   try {
     const res = await fetch('/api/bgld-price', { cache: 'no-store' })
     const j = await res.json().catch(() => ({}))
-    const p = Number(j?.priceUsd ?? j?.usd)
+    const p = Number(j?.priceUsd)
     return Number.isFinite(p) && p > 0 ? p : null
   } catch {
     return null
   }
 }
+
 
 function isChip(a: Asset) {
   return a === 'gld' || a === 'pgld'
@@ -275,15 +276,16 @@ if (!canLiveSwap) {
     }
   }, [parsedIn, from, to, playerId, onBalances])
 
-  const DEMO_ACTIVE = IS_DEMO && !playerId;
+  const canLiveSwap = Boolean(playerId)
+const canDemoSwap = IS_DEMO && !playerId
 
-
-    const disableSwap =
+const disableSwap =
   !parsedIn ||
   swapping ||
   !(isChip(from) && isChip(to)) ||
   from === to ||
-  (!DEMO_ACTIVE && !playerId);
+  (!canLiveSwap && !canDemoSwap)
+
 
 
     

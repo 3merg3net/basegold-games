@@ -92,7 +92,7 @@ export default function NavBar() {
       const base =
         typeof window !== 'undefined'
           ? window.location.origin
-          : 'https://basereserve.gold'
+          : 'https://casino.basereserve.gold'
 
       // send people straight to poker lobby now
       const url = `${base}/poker`

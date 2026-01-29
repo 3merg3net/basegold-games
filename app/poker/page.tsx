@@ -236,9 +236,17 @@ export default function PokerCashLobbyPage() {
   const cashFiltered = useMemo(() => {
     const list = [...rooms]
     const withFilter = openSeatsOnly ? list.filter((r) => r.seatedCount < 9) : list
-    withFilter.sort(
-      (a, b) => (b.seatedCount - a.seatedCount) || (b.onlineCount - a.onlineCount)
-    )
+    withFilter.sort((a, b) => {
+  const aOpen = a.seatedCount < 9
+  const bOpen = b.seatedCount < 9
+
+  // Open tables first
+  if (aOpen !== bOpen) return aOpen ? -1 : 1
+
+  // Then by seated, then online
+  return (b.seatedCount - a.seatedCount) || (b.onlineCount - a.onlineCount)
+})
+
     return withFilter
   }, [rooms, openSeatsOnly])
 
@@ -393,85 +401,152 @@ export default function PokerCashLobbyPage() {
                 return q ? `/poker/${r.roomId}?${q}` : `/poker/${r.roomId}`
               })()
 
-              return (
-                <div
-                  key={r.roomId}
-                  className="rounded-2xl border border-white/10 bg-[#0b1220]/70 hover:bg-[#0b1220]/90 hover:border-white/15 transition shadow-[0_12px_40px_rgba(0,0,0,0.7)]"
-                >
-                  <Link href={href} className="block px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-extrabold text-white/90 truncate">
-                          {displayName}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/55">
-                          <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5 font-mono">
-                            {safeRoomLabel(r.roomId)}
-                          </span>
-                          <span className="rounded-full border border-[#FFD700]/25 bg-black/50 px-2 py-0.5 text-[#FFD700]/85 font-mono">
-                            {BLINDS}
-                          </span>
-                          <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5">
-                            {GAME_NAME}
-                          </span>
-                          <span className="text-white/45">•</span>
-                          <span className="text-white/60">{formatNum(r.onlineCount)} online</span>
-                        </div>
-                      </div>
+             return (
+  <div
+    key={r.roomId}
+    className={[
+      "group rounded-2xl border transition shadow-[0_12px_40px_rgba(0,0,0,0.7)] overflow-hidden",
+      open
+        ? "border-emerald-300/30 bg-gradient-to-r from-emerald-500/10 via-[#0b1220]/80 to-[#0b1220]/80 hover:border-emerald-300/45"
+        : "border-white/10 bg-[#0b1220]/55 hover:bg-[#0b1220]/75 hover:border-white/15 opacity-[0.92]",
+    ].join(" ")}
+  >
+    {/* Left “rail” accent */}
+    <div
+      className={[
+        "h-full w-1.5",
+        open
+          ? "bg-gradient-to-b from-emerald-300 via-[#FFD700] to-emerald-500"
+          : "bg-white/10",
+      ].join(" ")}
+    />
 
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className="text-right">
-                          <div className="text-[12px] font-bold text-white/85 tabular-nums">
-                            {r.seatedCount}/9
-                          </div>
-                          <div
-                            className={`text-[10px] uppercase tracking-[0.18em] ${
-                              open ? 'text-emerald-200/80' : 'text-white/35'
-                            }`}
-                          >
-                            {open ? 'Open' : 'Full'}
-                          </div>
-                        </div>
-                        <div className="text-white/35 text-xl">›</div>
-                      </div>
-                    </div>
-                  </Link>
+    <div className="flex items-stretch">
+      {/* Main clickable area */}
+      <Link href={href} className="block flex-1 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-extrabold text-white/90 truncate">
+                {displayName}
+              </div>
 
-                  <div className="px-4 pb-3 -mt-1 flex items-center justify-between gap-2">
-                    <div className="text-[10px] text-white/40">
-                      {meta?.createdByMe ? 'Created by you' : 'Public table'}
-                      {Boolean(r.isPrivate ?? meta?.isPrivate) ? ' • Private' : ''}
-                    </div>
+              {open && (
+                <span className="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-200">
+                  OPEN SEATS
+                </span>
+              )}
 
-                    <div className="flex items-center gap-2">
-                      {meta?.createdByMe && (
-                        <button
-                          type="button"
-                          onClick={() => deleteRoomLocalOnly(r.roomId)}
-                          className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[11px] font-bold text-white/70 hover:bg-white/10"
-                        >
-                          Remove (Me)
-                        </button>
-                      )}
+              {Boolean(r.isPrivate ?? meta?.isPrivate) && (
+                <span className="rounded-full border border-white/15 bg-black/40 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+                  PRIVATE
+                </span>
+              )}
+            </div>
 
-                      {!!getAdminKey() && (
-                        <button
-                          type="button"
-                          disabled={busyRoomId === r.roomId}
-                          onClick={() => deleteRoomAdmin(r.roomId)}
-                          className={`rounded-full border px-3 py-1 text-[11px] font-extrabold transition ${
-                            busyRoomId === r.roomId
-                              ? 'border-white/10 bg-black/40 text-white/35 cursor-not-allowed'
-                              : 'border-rose-400/35 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15'
-                          }`}
-                        >
-                          {busyRoomId === r.roomId ? 'Deleting…' : 'Admin Delete'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/55">
+              <span className="rounded-full border border-white/10 bg-black/45 px-2 py-0.5 font-mono">
+                {safeRoomLabel(r.roomId)}
+              </span>
+
+              <span
+                className={[
+                  "rounded-full border bg-black/45 px-2 py-0.5 font-mono",
+                  open
+                    ? "border-[#FFD700]/30 text-[#FFD700]/90"
+                    : "border-white/10 text-white/65",
+                ].join(" ")}
+              >
+                {BLINDS}
+              </span>
+
+              <span className="rounded-full border border-white/10 bg-black/45 px-2 py-0.5">
+                {GAME_NAME}
+              </span>
+
+              <span className="text-white/35">•</span>
+              <span className="text-white/60">{formatNum(r.onlineCount)} online</span>
+            </div>
+          </div>
+
+          {/* Seats */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <div className="text-[12px] font-bold text-white/90 tabular-nums">
+                {r.seatedCount}/9
+              </div>
+              <div
+                className={[
+                  "text-[10px] uppercase tracking-[0.18em]",
+                  open ? "text-emerald-200/90" : "text-white/35",
+                ].join(" ")}
+              >
+                {open ? "Open" : "Full"}
+              </div>
+            </div>
+
+            <div className="text-white/25 text-xl group-hover:text-white/50 transition">
+              ›
+            </div>
+          </div>
+        </div>
+      </Link>
+
+      {/* Play Now CTA column (bigger + more WSOP “buttony”) */}
+      <div className="flex items-center pr-4 py-3">
+        <Link
+          href={href}
+          className={[
+            "inline-flex items-center justify-center rounded-xl px-4 py-2 text-[12px] font-extrabold transition",
+            open
+              ? "bg-[#FFD700] text-black shadow-[0_0_18px_rgba(250,204,21,0.35)] hover:bg-yellow-400"
+              : "border border-white/15 bg-black/40 text-white/50 cursor-not-allowed pointer-events-none",
+          ].join(" ")}
+          aria-disabled={!open}
+          tabIndex={open ? 0 : -1}
+        >
+          {open ? "Play Now" : "Full"}
+        </Link>
+      </div>
+    </div>
+
+    {/* Bottom meta row */}
+    <div className="px-4 pb-3 -mt-1 flex items-center justify-between gap-2">
+      <div className="text-[10px] text-white/40">
+        {meta?.createdByMe ? "Created by you" : "Public table"}
+        {Boolean(r.isPrivate ?? meta?.isPrivate) ? " • Private" : ""}
+      </div>
+
+      <div className="flex items-center gap-2">
+        {meta?.createdByMe && (
+          <button
+            type="button"
+            onClick={() => deleteRoomLocalOnly(r.roomId)}
+            className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[11px] font-bold text-white/70 hover:bg-white/10"
+          >
+            Remove (Me)
+          </button>
+        )}
+
+        {!!getAdminKey() && (
+          <button
+            type="button"
+            disabled={busyRoomId === r.roomId}
+            onClick={() => deleteRoomAdmin(r.roomId)}
+            className={`rounded-full border px-3 py-1 text-[11px] font-extrabold transition ${
+              busyRoomId === r.roomId
+                ? "border-white/10 bg-black/40 text-white/35 cursor-not-allowed"
+                : "border-rose-400/35 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
+            }`}
+          >
+            {busyRoomId === r.roomId ? "Deleting…" : "Admin Delete"}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+)
+
             })}
 
             {topCash.length === 0 && (
