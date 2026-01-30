@@ -7,12 +7,11 @@ import SiteHeader from "@/components/wallet/SiteHeader";
 import RootClient from "@/components/wallet/RootClient";
 import { WalletBarProvider } from "@/components/wallet/WalletBarProvider";
 
-import AgeGateOverlay from "@/components/legal/AgeGateOverlay";
-import ProfileGateOverlay from "@/components/legal/ProfileGateOverlay";
-
 import { PlayerProfileProvider } from "@/lib/player/PlayerProfileProvider";
 import { CasinoChipsProvider } from "@/lib/useCasinoChips";
 import ArcadeRootClient from "@/components/casino/layout/ArcadeRootClient";
+
+import GlobalOverlays from "@/components/legal/GlobalOverlays";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://casino.basereserve.gold"),
@@ -67,9 +66,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <RootClient>
                   <PlayerProfileProvider>
                     <CasinoChipsProvider>
-                      {/* ✅ Gate order (global, single render) */}
-                      <AgeGateOverlay />
-                      <ProfileGateOverlay />
+                      {/* ✅ gates/banners mounted ONCE and route-scoped */}
+                      <GlobalOverlays />
 
                       <ArcadeRootClient>{children}</ArcadeRootClient>
                     </CasinoChipsProvider>
