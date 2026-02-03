@@ -2327,88 +2327,90 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
 
            {isOccupied && (
   <div className="pointer-events-none absolute inset-0 z-20">
-    {/* HOLE CARDS (top) */}
-    <div className="absolute left-1/2 top-[6px] -translate-x-1/2 flex justify-center">
-      {visibleCards && visibleCards.length === 2 ? (
-        <div className="relative flex -space-x-4 md:-space-x-6">
-          {visibleCards.map((c, i) => (
-            <div
-              key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
-              className="relative"
-              style={{
-                transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
-                transformOrigin: "50% 80%",
-              }}
-            >
-              <PokerCard card={c} highlight={isWinnerSeat} />
-            </div>
-          ))}
+    {/* HOLE CARDS + STACK PILL (single cluster so pill sits UNDER cards, not over them) */}
+<div className="absolute left-1/2 top-[6px] -translate-x-1/2 flex justify-center">
+  <div className="relative">
+    {/* Cards */}
+    {visibleCards && visibleCards.length === 2 ? (
+      <div className="relative flex -space-x-4 md:-space-x-6">
+        {visibleCards.map((c, i) => (
+          <div
+            key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
+            className="relative"
+            style={{
+              transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
+              transformOrigin: "50% 80%",
+            }}
+          >
+            <PokerCard card={c} highlight={isWinnerSeat} />
+          </div>
+        ))}
+      </div>
+    ) : isInHand && handInProgress ? (
+      <div className="relative flex -space-x-5 md:-space-x-6">
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className="relative"
+            style={{
+              transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
+              transformOrigin: "50% 80%",
+            }}
+          >
+            <PokerCard
+              card={"As"}
+              isBack={true}
+              highlight={false}
+              size={!isHeroSeat && isMobile ? "small" : "normal"}
+              tilt={0}
+            />
+          </div>
+        ))}
+      </div>
+    ) : null}
+
+    {/* Pill: pinned to the card cluster bottom */}
+    <div className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-1 flex justify-center">
+      <div
+        className={[
+          "pointer-events-auto flex flex-col items-center",
+          "rounded-lg md:rounded-2xl",
+          "bg-gradient-to-r from-black/82 via-[#0b1220]/88 to-black/82",
+          "border border-[#FACC15]/45 md:border-[#FACC15]/55",
+          "shadow-[0_0_10px_rgba(0,0,0,0.9)]",
+          "px-1.5 py-[2px] md:px-2 md:py-[2px]",
+          "w-[80px] md:w-auto md:min-w-[108px] md:max-w-[140px]",
+        ].join(" ")}
+      >
+        <div className="rounded-full bg-black/65 px-1.5 md:px-2 py-[1px] text-[10px] md:text-[13px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
+          {formatChips(stackAmount)} PGLD
         </div>
-      ) : isInHand && handInProgress ? (
-        <div className="relative flex -space-x-5 md:-space-x-6">
-          {[0, 1].map((i) => (
-            <div
-              key={i}
-              className="relative"
-              style={{
-                transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
-                transformOrigin: "50% 80%",
-              }}
-            >
-              <PokerCard
-  card={"As"}
-  isBack={true}
-  highlight={false}
-  size={!isHeroSeat && isMobile ? "small" : "normal"}
-  tilt={0}
-/>
 
-            </div>
-          ))}
+        <div className="mt-[1px] max-w-[76px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
+          {(() => {
+            const seatHandle = ((seat as any)?.handle ?? "").trim()
+            const heroHandle = (profile?.handle ?? "").trim()
+            const nick = (seat?.name ?? "").trim()
+
+            return (
+              seatHandle ||
+              (isHeroSeat
+                ? heroHandle
+                  ? heroHandle.startsWith("@")
+                    ? heroHandle
+                    : `@${heroHandle}`
+                  : ""
+                : "") ||
+              nick ||
+              `Seat ${seat?.seatIndex != null ? seat.seatIndex + 1 : ""}`
+            )
+          })()}
         </div>
-      ) : null}
+      </div>
     </div>
-
-   {/* STACK + NAME PILL (bottom) — mobile-safe: smaller + BELOW cards */}
-<div className="absolute left-1/2 bottom-[-10px] md:bottom-[3px] -translate-x-1/2 flex justify-center">
-  <div
-    className={[
-      "pointer-events-auto flex flex-col items-center",
-      "rounded-lg md:rounded-2xl",
-      "bg-gradient-to-r from-black/82 via-[#0b1220]/88 to-black/82",
-      "border border-[#FACC15]/45 md:border-[#FACC15]/55",
-      "shadow-[0_0_10px_rgba(0,0,0,0.9)]",
-      // tighter mobile sizing
-      "px-1.5 py-[2px] md:px-2 md:py-[2px]",
-      "w-[80px] md:w-auto md:min-w-[108px] md:max-w-[140px]",
-    ].join(" ")}
-  >
-    <div className="rounded-full bg-black/65 px-1.5 md:px-2 py-[1px] text-[10px] md:text-[13px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-      {formatChips(stackAmount)} PGLD
-    </div>
-
-    <div className="mt-[1px] max-w-[76px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
-  {(() => {
-    const seatHandle = ((seat as any)?.handle ?? "").trim()
-    const heroHandle = (profile?.handle ?? "").trim()
-    const nick = (seat?.name ?? "").trim()
-
-    // ✅ Global rule:
-    // 1) seat.handle (everyone)
-    // 2) hero profile.handle (if seat not yet populated)
-    // 3) optional nick
-    // 4) Seat N
-    return (
-      seatHandle ||
-      (isHeroSeat ? (heroHandle ? (heroHandle.startsWith("@") ? heroHandle : `@${heroHandle}`) : "") : "") ||
-      nick ||
-      `Seat ${seat?.seatIndex != null ? seat.seatIndex + 1 : ""}`
-    )
-  })()}
-</div>
-
   </div>
 </div>
+
 
 
   </div>
