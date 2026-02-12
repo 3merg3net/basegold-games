@@ -10,7 +10,7 @@ const TOURNAMENTS_HREF = "/poker/tournaments";
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#050509] to-black text-white">
-       <RiskBanner />
+       
       {/* HERO – LIVE TABLES (POKER DEFAULT) */}
       <section className="relative overflow-hidden border-b border-white/10">
         {/* Background wash */}
@@ -38,44 +38,6 @@ export default function HomePage() {
               <span className="text-[#FFD700]">Peer-to-peer OnChain Live Tables</span>
               <span className="text-white/85"> Driven with BGLD.</span>
             </h1>
-
-            <p className="text-[12px] sm:text-sm text-white/75 leading-relaxed">
-              Real-time tables with on-chain execution. Poker is player-to-player; blackjack is a live
-              table experience.
-            </p>
-
-            <p className="text-[10px] sm:text-xs text-white/55">
-              Smart-contract verified on <span className="text-sky-200/90 font-semibold">Base</span> — Coinbase’s L2 network.
-            </p>
-
-            {/* PRIMARY CTAs */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
-              <Link
-                href="/poker"
-                className="w-full sm:w-auto rounded-full bg-[#FFD700] px-6 py-2.5 text-sm font-semibold text-black shadow-[0_20px_55px_rgba(250,204,21,0.9)] hover:bg-yellow-400 transition text-center"
-              >
-                Enter Poker (Cash) →
-              </Link>
-
-              <Link
-                href="/blackjack-live"
-                className="w-full sm:w-auto rounded-full border border-emerald-300/35 bg-black/70 px-6 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10 hover:border-emerald-300/60 transition text-center"
-              >
-                Play Blackjack →
-              </Link>
-            </div>
-
-            {/* TOURNAMENTS (SUBTLE) */}
-            <div className="pt-1 text-[11px] text-white/60">
-              <Link
-                href={TOURNAMENTS_HREF}
-                className="text-sky-200/90 hover:text-sky-200 underline underline-offset-4"
-              >
-                Tournament lobby →
-              </Link>
-              <span className="mx-2 text-white/35">•</span>
-              <span>More live tables unlock over time.</span>
-            </div>
           </div>
 
           {/* FEATURED: Poker (primary) + Blackjack (secondary) */}
@@ -110,10 +72,10 @@ export default function HomePage() {
                   Sit down. Buy in. <span className="text-[#FFD700]">Play Hold’em.</span>
                 </h2>
                 <p className="text-xs sm:text-sm text-white/80">
-                  Player-to-player Texas Hold’em cash tables with synced seats, blinds, boards, and action timers.
+                  Player-to-player Texas Hold’em tables.
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-white/60">
-                  <span>Fastest path to action.</span>
+                  
                   <span className="font-semibold text-[#FFD700]/90 group-hover:translate-x-0.5 transition-transform">
                     Enter poker →
                   </span>
@@ -143,13 +105,13 @@ export default function HomePage() {
 
               <div className="flex flex-col gap-2 px-5 py-5 bg-black/90">
                 <h3 className="text-lg sm:text-xl font-extrabold leading-tight">
-                  Play <span className="text-emerald-200">21</span>.
+                  Big Nugget Gold <span className="text-emerald-200">21</span>.
                 </h3>
                 <p className="text-[11px] sm:text-xs text-white/75">
-                  Real-time blackjack tables with crisp UI, fast hands, and smooth flow.
+                  Real-time blackjack tables
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-white/60">
-                  <span>Jump straight in.</span>
+                  
                   <span className="font-semibold text-emerald-200 group-hover:translate-x-0.5 transition-transform">
                     Play blackjack →
                   </span>
@@ -158,25 +120,11 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="mx-auto max-w-3xl text-center text-[11px] sm:text-xs text-white/65">
-            Poker is player-to-player. Live tables execute on-chain on Base.
-          </div>
+          
         </div>
       </section>
 
-      {/* RESPONSIBLE PLAY STRIP (cleaned wording) */}
-      <section className="border-t border-white/10 bg-black/90">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-[11px] text-white/55 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="font-semibold text-white/75">Play responsibly.</div>
-            <div>Set limits, take breaks, and treat every session as entertainment first.</div>
-          </div>
-          <div className="text-right md:text-left">
-            <div>Know your odds and never chase losses.</div>
-            <div>Some regions may be restricted once real chips go live.</div>
-          </div>
-        </div>
-      </section>
+      <RiskBanner />
 
       <SiteFooter />
     </main>

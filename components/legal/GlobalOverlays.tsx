@@ -23,7 +23,7 @@ export default function GlobalOverlays() {
       {/* Age gate can be global (but only ONCE) */}
       <AgeGateOverlay />
 
-      {showRiskBanner && <RiskBanner />}
+      
 
       {/* Profile gate only where you actually need it */}
       {needsProfileGate && <ProfileGateOverlay />}
