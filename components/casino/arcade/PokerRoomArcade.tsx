@@ -1700,7 +1700,7 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
                         onClick={() => setOpenPanels((v) => !v)}
                         className="inline-flex items-center rounded-full border border-white/15 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/80 hover:bg-black/70"
                       >
-                        {openPanels ? "Hide Load" : "Load"}
+                        {openPanels ? "Hide panel" : "Demo Chips"}
                       </button>
 
                       <span className="inline-flex items-center rounded-full border border-[#FFD700]/25 bg-black/50 px-2.5 py-[6px] text-[10px] md:text-[11px] font-semibold text-white/75">
@@ -1832,58 +1832,17 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
     </div>
   </div>
 
-  {pot > 0 && (
-    <div className="pointer-events-none absolute left-1/2 top-[12%] -translate-x-1/2 z-[60] flex flex-col items-center">
-      {/* chips */}
-      <div className="mb-2">
-        <ChipStack amount={pot} size={34} maxChips={16} />
-      </div>
-
-      {isPaused && (
-        <div className="absolute inset-0 z-[90] flex items-center justify-center pointer-events-none">
-          <div className="rounded-2xl border border-red-400/40 bg-black/70 px-4 py-3 backdrop-blur shadow-[0_0_30px_rgba(0,0,0,0.85)]">
-            <div className="text-[12px] md:text-[14px] font-black tracking-[0.22em] uppercase text-red-200 text-center">
-              GAME PAUSED
-            </div>
-            <div className="mt-1 text-center font-mono text-[18px] md:text-[22px] font-extrabold text-white/90">
-              {pauseRemainingSec}s
-            </div>
-            <div className="mt-1 text-center text-[10px] md:text-[11px] text-white/60">
-              Resuming automatically…
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-    {/* badge */}
-    <div
-      className={[
-        "rounded-full bg-black/85 border border-[#FFD700]/50 px-5 py-1.5",
-        "text-[12px] md:text-base font-extrabold text-[#FFD700]",
-        "shadow-[0_0_18px_rgba(0,0,0,0.9)]",
-        potPulse ? "pot-pulse" : "",
-      ].join(" ")}
-    >
-      Pot {formatChips(pot)} <span className="opacity-70">PGLD</span>
-    </div>
-  </div>
-)}
-
-
-
-{/* GLOBAL ACTION TICKER (last 3) */}
+  {/* GLOBAL ACTION TICKER (last 3) */}
 {recentActions.length > 0 && (
   <div className="pointer-events-none absolute left-1/2 top-[5%] z-[65] w-[92%] max-w-[520px] -translate-x-1/2">
     <div className="flex flex-col items-center gap-1">
       {recentActions.map((a) => {
-        const seatMeta = seats.find((s) => s.seatIndex === a.seatIndex);
+        const seatMeta = seats.find((s) => s.seatIndex === a.seatIndex)
         const name =
           seatMeta?.name?.trim() ||
-          (seatMeta?.playerId ? `Seat ${a.seatIndex + 1}` : `Seat ${a.seatIndex + 1}`);
+          (seatMeta?.playerId ? `Seat ${a.seatIndex + 1}` : `Seat ${a.seatIndex + 1}`)
 
-        const pill = getActionPillClasses(a.label);
+        const pill = getActionPillClasses(a.label)
 
         return (
           <div
@@ -1895,12 +1854,10 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
               pill.bg,
               pill.border,
               pill.glow,
-              // ✅ match pot class density (small + bold, mobile friendly)
               "px-3 py-[4px] md:px-4 md:py-[5px]",
               "text-[10px] md:text-[11px]",
               "font-black tracking-[0.08em] uppercase leading-none",
-              "whitespace-nowrap",
-              "max-w-full",
+              "whitespace-nowrap max-w-full",
             ].join(" ")}
           >
             <span className="text-white/65 truncate max-w-[220px]">{name}</span>
@@ -1908,19 +1865,18 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
               {a.label}
             </span>
           </div>
-        );
+        )
       })}
     </div>
   </div>
 )}
 
-
-
-
-                   <div className="pointer-events-none absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 px-2 z-[40]">
+{/* BOARD + POT CLUSTER (pot pinned under board) */}
+<div className="pointer-events-none absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 z-[60] px-2">
   {/* Scale board down on mobile so it doesn't cover side seats */}
-  <div className="origin-center scale-[0.84] sm:scale-[0.92] md:scale-100">
-    <div className="flex gap-1 sm:gap-1.5 md:gap-2">
+  <div className="origin-center scale-[0.78] sm:scale-[0.9] md:scale-100">
+    {/* BOARD */}
+    <div className="flex justify-center gap-0.5 sm:gap-1.5 md:gap-2">
       {boardCards.map((c, i) => {
         const tilts = [-3, 0, 0, 0, 3]
         return (
@@ -1933,8 +1889,49 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
         )
       })}
     </div>
+
+    {/* POT (compact; chips inside pill; sits directly below board) */}
+    {pot > 0 && (
+      <div className="mt-2 flex items-center justify-center">
+        <div
+          className={[
+            "flex items-center gap-2 rounded-full",
+            "bg-black/85 border border-[#FFD700]/50",
+            "px-3 py-1.5",
+            "shadow-[0_0_18px_rgba(0,0,0,0.9)]",
+            potPulse ? "pot-pulse" : "",
+          ].join(" ")}
+        >
+          <div className="translate-y-[1px]">
+            <ChipStack amount={pot} size={20} maxChips={7} />
+          </div>
+
+          <div className="text-[11px] md:text-[13px] font-extrabold text-[#FFD700] leading-none">
+            Pot {formatChips(pot)} <span className="opacity-70">PGLD</span>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
+
+  {/* PAUSE OVERLAY (centered over board+pot cluster) */}
+  {isPaused && (
+    <div className="absolute inset-0 z-[90] flex items-center justify-center">
+      <div className="rounded-2xl border border-red-400/40 bg-black/70 px-4 py-3 backdrop-blur shadow-[0_0_30px_rgba(0,0,0,0.85)]">
+        <div className="text-[12px] md:text-[14px] font-black tracking-[0.22em] uppercase text-red-200 text-center">
+          GAME PAUSED
+        </div>
+        <div className="mt-1 text-center font-mono text-[18px] md:text-[22px] font-extrabold text-white/90">
+          {pauseRemainingSec}s
+        </div>
+        <div className="mt-1 text-center text-[10px] md:text-[11px] text-white/60">
+          Resuming automatically…
+        </div>
+      </div>
+    </div>
+  )}
 </div>
+
 
 
                     {/* Confetti (hero wins) */}
@@ -2021,7 +2018,9 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
         ? betting?.players.find((p) => p.seatIndex === seat!.seatIndex)
         : undefined;
 
-      const committed = isOccupied ? totalBySeat[seat!.seatIndex] ?? 0 : 0;
+      // ✅ street-only bet amount (resets naturally per street if server resets committed)
+const committed = isOccupied ? Number(seatBetting?.committed ?? 0) : 0;
+
 
 const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : undefined;
 
@@ -2084,29 +2083,56 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
       const rawIsWinnerSeat = isOccupied ? winnerSeatKeys.has(winnerKey) : false;
       const isWinnerSeat = rawIsWinnerSeat && !(isHeroSeat && !handInProgress);
 
-      let visibleCards: string[] | null = null;
+     let visibleCards: string[] | null = null
 
-      if (isHeroSeat && !handInProgress) {
-        visibleCards = null;
-      } else if (handInProgress && isHeroSeat && isInHand && heroHand?.length === 2) {
-        visibleCards = heroHand;
-      } else if (isOccupied) {
-        const manual = revealedHoles[seat!.playerId!];
-        if (betting?.street === "done" && manual?.length === 2 && !isHeroSeat) {
-          visibleCards = manual;
-        } else if (
-          betting?.street === "done" &&
-          showdown &&
-          table &&
-          showdown.handId === table.handId &&
-          !isHeroSeat
-        ) {
-          const sdPlayer = showdown.players.find(
-            (p) => p.seatIndex === seat!.seatIndex && p.playerId === seat!.playerId
-          );
-          if (sdPlayer?.holeCards?.length === 2) visibleCards = sdPlayer.holeCards;
-        }
-      }
+// If this slot isn't mapped to a real seat (or isn't occupied), bail early.
+if (!seat || !isOccupied) {
+  visibleCards = null
+} else {
+  // hero cards from table-state (often present even if showdown payload omits hero)
+  const heroTableCards =
+    isHeroSeat && table
+      ? table.players.find((p) => String(p.playerId) === myId)?.holeCards
+      : null
+
+  // showdown cards for THIS seat (only valid if showdown matches current hand)
+  const sdCards =
+    betting?.street === "done" &&
+    showdown &&
+    table &&
+    showdown.handId === table.handId
+      ? showdown.players.find(
+          (p) => p.seatIndex === seat.seatIndex && p.playerId === seat.playerId
+        )?.holeCards
+      : null
+
+  const manual = revealedHoles[String(seat.playerId)]
+
+  // ✅ AFTER HAND: show real cards for everyone (including hero)
+  if (betting?.street === "done") {
+    if (manual?.length === 2) {
+      visibleCards = manual
+    } else if (sdCards?.length === 2) {
+      visibleCards = sdCards
+    } else if (isHeroSeat && heroTableCards?.length === 2) {
+      visibleCards = heroTableCards
+    } else {
+      visibleCards = null
+    }
+  }
+  // ✅ DURING HAND: hero sees real cards; others show backs (your render does that)
+  else if (handInProgress) {
+    if (isHeroSeat && isInHand && heroHand?.length === 2) {
+      visibleCards = heroHand
+    } else {
+      visibleCards = null
+    }
+  } else {
+    // in-between states (no hand running, not done) — show nothing
+    visibleCards = null
+  }
+}
+
 
       const stylePos: React.CSSProperties =
         ACTIVE_GEOMETRY[slotIndex] ?? ACTIVE_GEOMETRY[ACTIVE_GEOMETRY.length - 1];

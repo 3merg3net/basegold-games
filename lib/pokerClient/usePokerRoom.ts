@@ -386,9 +386,7 @@ export function usePokerRoom(opts: UsePokerRoomOpts) {
       if (ws) {
         try {
           // leave-room is optional; your server currently ignores it anyway
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ kind: "poker", roomId, playerId, type: "leave-room" }));
-          }
+          
           ws.close();
         } catch (err) {
           console.warn("[poker] error during WS cleanup:", err);
