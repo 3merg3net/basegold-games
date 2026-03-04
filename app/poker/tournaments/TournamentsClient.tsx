@@ -1,4 +1,5 @@
 // app/poker/tournaments/TournamentsClient.tsx  (TOURNAMENT LOBBY ONLY)
+// ✅ Match cash lobby: remove the “image behind the image” in HybridHero (single image only)
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -151,7 +152,6 @@ export default function TournamentsClient() {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data)
-        // console.log('[tournaments] RECV', msg)
 
         if (msg?.type === 'tournament-list-result' && Array.isArray(msg.tournaments)) {
           setTournaments(msg.tournaments)
@@ -168,7 +168,6 @@ export default function TournamentsClient() {
         // ✅ show create result + refresh
         if (msg?.type === 'tournament-created') {
           console.log('[tournaments] tournament-created', msg)
-          // even if ok:false, you'll see why now
           window.setTimeout(refresh, 150)
           return
         }
@@ -200,7 +199,7 @@ export default function TournamentsClient() {
 
   const tables = useMemo(() => {
     const list = [...tournamentTables]
-    list.sort((a, b) => (b.seatedCount - a.seatedCount) || (b.onlineCount - a.onlineCount))
+    list.sort((a, b) => b.seatedCount - a.seatedCount || b.onlineCount - a.onlineCount)
     return list
   }, [tournamentTables])
 
@@ -209,11 +208,12 @@ export default function TournamentsClient() {
 
   const TOURNAMENT_HERO = '/images/poker-tournament-hero.png'
 
+  // ✅ Single image only (no background image “behind” it)
   const HybridHero = ({ src, alt }: { src: string; alt: string }) => {
     return (
       <div className="relative overflow-hidden rounded-3xl border border-emerald-300/18 bg-black/55 shadow-[0_18px_60px_rgba(0,0,0,0.85)]">
-        <div className="absolute inset-0">
-          <Image src={src} alt="" fill sizes="100vw" className="object-cover opacity-45" priority />
+        {/* Keep the styling overlays, but remove the background image layer */}
+        <div className="absolute inset-0 pointer-events-none">
           <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/20 to-black/70" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),transparent_60%)]" />
         </div>
@@ -230,7 +230,14 @@ export default function TournamentsClient() {
       {/* HERO */}
       <section className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 -z-10">
-          <Image src={TOURNAMENT_HERO} alt="Poker tournaments" fill priority sizes="100vw" className="object-cover opacity-55" />
+          <Image
+            src={TOURNAMENT_HERO}
+            alt="Poker tournaments"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover opacity-55"
+          />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.72),rgba(0,0,0,0.90))]" />
         </div>
 
@@ -259,7 +266,8 @@ export default function TournamentsClient() {
           </div>
 
           <div className="mt-2 text-[11px] text-white/45">
-            You: <span className="font-mono text-white/70">{playerName}</span> • <span className="font-mono text-white/60">{playerId}</span>
+            You: <span className="font-mono text-white/70">{playerName}</span> •{' '}
+            <span className="font-mono text-white/60">{playerId}</span>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -271,9 +279,7 @@ export default function TournamentsClient() {
               Create Tournament +
             </button>
 
-            <div className="text-[11px] text-white/45 ml-1">
-              Register → wait → host starts → auto-seat.
-            </div>
+            <div className="text-[11px] text-white/45 ml-1">Register → wait → host starts → auto-seat.</div>
           </div>
         </div>
       </section>
@@ -294,8 +300,7 @@ export default function TournamentsClient() {
             const href = `/poker/tournaments/${t.tournamentId}?name=${encodeURIComponent(t.tournamentName)}`
             const needs = Math.max(0, (t.minPlayers ?? 2) - (t.registeredCount ?? 0))
 
-            const statusLabel =
-              t.status === 'running' ? 'RUNNING' : t.status === 'ready' ? 'READY' : 'REG OPEN'
+            const statusLabel = t.status === 'running' ? 'RUNNING' : t.status === 'ready' ? 'READY' : 'REG OPEN'
 
             const statusChip =
               t.status === 'running' || t.status === 'ready'
@@ -312,9 +317,7 @@ export default function TournamentsClient() {
                   <div className="min-w-0">
                     <div className="text-sm font-extrabold text-white/90 truncate">{t.tournamentName}</div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/55">
-                      <span className={`rounded-full border px-2 py-0.5 font-mono ${statusChip}`}>
-                        {statusLabel}
-                      </span>
+                      <span className={`rounded-full border px-2 py-0.5 font-mono ${statusChip}`}>{statusLabel}</span>
                       <span className="rounded-full border border-white/10 bg-black/50 px-2 py-0.5 font-mono">
                         Buy-in {formatNum(t.buyIn)}
                       </span>
@@ -357,7 +360,9 @@ export default function TournamentsClient() {
           {topTables.map((r) => {
             const tid = tournamentIdFromTableRoomId(r.roomId)
             const href = tid
-              ? `/poker/${r.roomId}?mode=tournament&tournamentId=${encodeURIComponent(tid)}&name=${encodeURIComponent('Tournament')}`
+              ? `/poker/${r.roomId}?mode=tournament&tournamentId=${encodeURIComponent(tid)}&name=${encodeURIComponent(
+                  'Tournament'
+                )}`
               : `/poker/${r.roomId}?mode=tournament`
 
             return (

@@ -1,4 +1,4 @@
-// app/poker/page.tsx  (CASH LOBBY ONLY) ✅ WSOP-ish: active/open highlighting + Play Now
+// app/poker/page.tsx  (CASH LOBBY ONLY) ✅ Box tiles grid + keep top Tournament pill
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -298,14 +298,7 @@ export default function PokerCashLobbyPage() {
         </div>
 
         <div className="relative h-[210px] sm:h-[250px] md:h-[280px]">
-          <Image
-            src={src}
-            alt={alt}
-            fill
-            sizes="100vw"
-            className="object-contain scale-[1.18] opacity-95"
-            priority
-          />
+          <Image src={src} alt={alt} fill sizes="100vw" className="object-contain scale-[1.18] opacity-95" priority />
         </div>
       </div>
     )
@@ -316,14 +309,7 @@ export default function PokerCashLobbyPage() {
       {/* HERO STRIP */}
       <section className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 -z-10">
-          <Image
-            src={CASH_HERO}
-            alt="Poker cash lobby"
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover opacity-55"
-          />
+          <Image src={CASH_HERO} alt="Poker cash lobby" fill priority sizes="100vw" className="object-cover opacity-55" />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.72),rgba(0,0,0,0.90))]" />
         </div>
 
@@ -351,6 +337,7 @@ export default function PokerCashLobbyPage() {
             </div>
           </div>
 
+          {/* Keep ONE top pill link for tournaments */}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -367,9 +354,7 @@ export default function PokerCashLobbyPage() {
               Tournament Lobby →
             </Link>
 
-            <div className="text-[11px] text-white/45 ml-1">
-              Cash games and tournaments are separate lobbies.
-            </div>
+            <div className="text-[11px] text-white/45 ml-1">Cash games and tournaments are separate lobbies.</div>
           </div>
         </div>
       </section>
@@ -399,7 +384,8 @@ export default function PokerCashLobbyPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          {/* BOX TILES GRID */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {topCash.map((r) => {
               const open = r.seatedCount < 9
               const active = r.seatedCount > 0
@@ -420,115 +406,88 @@ export default function PokerCashLobbyPage() {
                 return q ? `/poker/${r.roomId}?${q}` : `/poker/${r.roomId}`
               })()
 
-              // Visual priority:
+              // Tile priority:
               // 1) Active + Open = strongest glow
               // 2) Active + Full = gold tint
               // 3) Empty = subdued
               const shellClass =
                 active && open
-                  ? 'border-emerald-300/40 bg-gradient-to-r from-emerald-500/15 via-[#0b1220]/85 to-[#0b1220]/85 hover:border-emerald-300/60 shadow-[0_0_35px_rgba(16,185,129,0.25)]'
+                  ? 'border-emerald-300/35 bg-gradient-to-b from-emerald-500/10 via-[#0b1220]/75 to-[#0b1220]/90 shadow-[0_0_40px_rgba(16,185,129,0.18)]'
                   : active && !open
-                  ? 'border-[#FFD700]/25 bg-gradient-to-r from-[#FFD700]/10 via-[#0b1220]/80 to-[#0b1220]/80 opacity-95'
-                  : 'border-white/10 bg-[#0b1220]/55 hover:bg-[#0b1220]/75 hover:border-white/15 opacity-[0.88]'
-
-              const railClass =
-                active && open
-                  ? 'bg-gradient-to-b from-emerald-300 via-[#FFD700] to-emerald-500'
-                  : active && !open
-                  ? 'bg-gradient-to-b from-[#FFD700] via-white/20 to-[#FFD700]'
-                  : 'bg-white/10'
+                  ? 'border-[#FFD700]/25 bg-gradient-to-b from-[#FFD700]/10 via-[#0b1220]/75 to-[#0b1220]/90'
+                  : 'border-white/10 bg-[#0b1220]/55 hover:bg-[#0b1220]/75 hover:border-white/15 opacity-[0.92]'
 
               return (
                 <div
                   key={r.roomId}
-                  className={['group rounded-2xl border transition shadow-[0_12px_40px_rgba(0,0,0,0.7)] overflow-hidden', shellClass].join(
-                    ' '
-                  )}
+                  className={[
+                    'group relative overflow-hidden rounded-3xl border transition shadow-[0_16px_60px_rgba(0,0,0,0.7)]',
+                    shellClass,
+                  ].join(' ')}
                 >
-                  {/* Left “rail” accent */}
-                  <div className={['h-full w-1.5', railClass].join(' ')} />
+                  {/* subtle top highlight */}
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-[radial-gradient(circle_at_top,_rgba(255,215,0,0.14),transparent_60%)]" />
 
-                  <div className="flex items-stretch">
-                    {/* Main clickable area */}
-                    <Link href={href} className="block flex-1 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm font-extrabold text-white/90 truncate">
-                              {displayName}
-                            </div>
+                  {/* CLICKABLE CONTENT */}
+                  <Link href={href} className="block p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 truncate text-[15px] font-extrabold text-white/90">{displayName}</div>
 
-                            {active && (
-                              <span className="rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-200">
-                                ACTIVE
-                              </span>
-                            )}
-
-                            {open && (
-                              <span className="rounded-full border border-emerald-300/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-200">
-                                OPEN SEATS
-                              </span>
-                            )}
-
-                            {Boolean(r.isPrivate ?? meta?.isPrivate) && (
-                              <span className="rounded-full border border-white/15 bg-black/40 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
-                                PRIVATE
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/55">
-                            <span className="rounded-full border border-white/10 bg-black/45 px-2 py-0.5 font-mono">
-                              {safeRoomLabel(r.roomId)}
+                          {active && (
+                            <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-200">
+                              ACTIVE
                             </span>
+                          )}
 
-                            <span
-                              className={[
-                                'rounded-full border bg-black/45 px-2 py-0.5 font-mono',
-                                open ? 'border-[#FFD700]/30 text-[#FFD700]/90' : 'border-white/10 text-white/65',
-                              ].join(' ')}
-                            >
-                              {BLINDS}
+                          {Boolean(r.isPrivate ?? meta?.isPrivate) && (
+                            <span className="shrink-0 rounded-full border border-white/15 bg-black/40 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+                              PRIVATE
                             </span>
-
-                            <span className="rounded-full border border-white/10 bg-black/45 px-2 py-0.5">
-                              {GAME_NAME}
-                            </span>
-
-                            <span className="text-white/35">•</span>
-                            <span className="text-white/60">{formatNum(r.onlineCount)} online</span>
-                          </div>
+                          )}
                         </div>
 
-                        {/* Seats */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="text-right">
-                            <div className="text-[12px] font-bold text-white/90 tabular-nums">
-                              {r.seatedCount}/9
-                            </div>
-                            <div
-                              className={[
-                                'text-[10px] uppercase tracking-[0.18em]',
-                                open ? 'text-emerald-200/90' : 'text-white/35',
-                              ].join(' ')}
-                            >
-                              {open ? 'Open' : 'Full'}
-                            </div>
-                          </div>
-
-                          <div className="text-white/25 text-xl group-hover:text-white/50 transition">›</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/60">
+                          <span className="rounded-full border border-white/10 bg-black/45 px-2 py-0.5 font-mono">
+                            {safeRoomLabel(r.roomId)}
+                          </span>
+                          <span className="rounded-full border border-[#FFD700]/25 bg-black/45 px-2 py-0.5 font-mono text-[#FFD700]/90">
+                            {BLINDS}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-black/45 px-2 py-0.5">9-max</span>
                         </div>
                       </div>
-                    </Link>
 
-                    {/* Play Now CTA column */}
-                    <div className="flex items-center pr-4 py-3">
+                      {/* seats badge */}
+                      <div className="shrink-0 text-right">
+                        <div className="text-[12px] font-extrabold text-white/90 tabular-nums">{r.seatedCount}/9</div>
+                        <div
+                          className={[
+                            'text-[10px] uppercase tracking-[0.18em]',
+                            open ? 'text-emerald-200/90' : 'text-white/35',
+                          ].join(' ')}
+                        >
+                          {open ? 'Open' : 'Full'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-[11px] text-white/55">{formatNum(r.onlineCount)} online</div>
+                      <div className="text-[11px] text-white/45">{meta?.createdByMe ? 'Created by you' : 'Public table'}</div>
+                    </div>
+                  </Link>
+
+                  {/* ACTIONS (mobile friendly) */}
+                  <div className="px-4 pb-4">
+                    <div className="flex items-center gap-2">
                       <Link
                         href={href}
                         className={[
-                          'inline-flex items-center justify-center rounded-xl px-4 py-2 text-[12px] font-extrabold transition',
+                          'inline-flex flex-1 items-center justify-center rounded-2xl px-4 py-2.5 text-[12px] font-extrabold transition',
                           open
-                            ? 'bg-[#FFD700] text-black shadow-[0_0_18px_rgba(250,204,21,0.35)] hover:bg-yellow-400'
+                            ? 'bg-[#FFD700] text-black shadow-[0_0_18px_rgba(250,204,21,0.28)] hover:bg-yellow-400'
                             : 'border border-white/15 bg-black/40 text-white/50 cursor-not-allowed pointer-events-none',
                         ].join(' ')}
                         aria-disabled={!open}
@@ -536,17 +495,18 @@ export default function PokerCashLobbyPage() {
                       >
                         {open ? 'Play Now' : 'Full'}
                       </Link>
-                    </div>
-                  </div>
 
-                  {/* Bottom meta row */}
-                  <div className="px-4 pb-3 -mt-1 flex items-center justify-between gap-2">
-                    <div className="text-[10px] text-white/40">
-                      {meta?.createdByMe ? 'Created by you' : 'Public table'}
-                      {Boolean(r.isPrivate ?? meta?.isPrivate) ? ' • Private' : ''}
+                      <Link
+                        href={href}
+                        className="inline-flex items-center justify-center rounded-2xl border border-white/12 bg-black/40 px-3 py-2.5 text-[12px] font-extrabold text-white/70 hover:bg-white/5"
+                        title="View table"
+                      >
+                        View
+                      </Link>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* admin / owner tools */}
+                    <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                       {meta?.createdByMe && (
                         <button
                           type="button"
@@ -578,11 +538,9 @@ export default function PokerCashLobbyPage() {
             })}
 
             {topCash.length === 0 && (
-              <div className="rounded-2xl border border-white/15 bg-black/60 p-4 text-[12px] text-white/65">
+              <div className="sm:col-span-2 xl:col-span-3 rounded-3xl border border-white/15 bg-black/60 p-4 text-[12px] text-white/65">
                 No cash tables created yet.
-                <div className="mt-2 text-white/50">
-                  Create one and it will appear after you join (or refresh).
-                </div>
+                <div className="mt-2 text-white/50">Create one and it will appear after you join (or refresh).</div>
               </div>
             )}
           </div>
@@ -594,7 +552,7 @@ export default function PokerCashLobbyPage() {
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.22em] text-white/55">Create Cash Table</div>
                   <div className="mt-1 text-lg font-extrabold text-[#FFD700]">Create + Join</div>
-                  <div className="mt-1 text-[11px] text-white/70">This drops you straight into the game.</div>
+                  <div className="mt-1 text-[11px] text-white/70">Drops you straight into the game.</div>
                 </div>
                 <div className="rounded-full border border-[#FFD700]/30 bg-black/60 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#FFD700]/90">
                   {BLINDS}
@@ -613,9 +571,7 @@ export default function PokerCashLobbyPage() {
 
               <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 px-3 py-2">
                 <div>
-                  <div className="text-xs font-semibold text-white/85">
-                    {isPrivate ? 'Private table' : 'Public table'}
-                  </div>
+                  <div className="text-xs font-semibold text-white/85">{isPrivate ? 'Private table' : 'Public table'}</div>
                   <div className="text-[11px] text-white/55">
                     {isPrivate ? 'Invite-only link.' : 'Anyone with link can join.'}
                   </div>
@@ -625,9 +581,7 @@ export default function PokerCashLobbyPage() {
                   type="button"
                   onClick={() => setIsPrivate((v) => !v)}
                   className={`rounded-full px-3 py-1.5 text-[11px] font-extrabold border transition ${
-                    isPrivate
-                      ? 'border-white/25 bg-white/10 text-white'
-                      : 'border-emerald-300/40 bg-emerald-500/10 text-emerald-100'
+                    isPrivate ? 'border-white/25 bg-white/10 text-white' : 'border-emerald-300/40 bg-emerald-500/10 text-emerald-100'
                   }`}
                 >
                   {isPrivate ? 'Private' : 'Public'}
@@ -645,34 +599,9 @@ export default function PokerCashLobbyPage() {
               </div>
             </div>
           </div>
-
-          {/* Tournament lobby CTA */}
-          <Link
-            href="/poker/tournaments"
-            className="mt-6 block rounded-3xl border border-emerald-300/20 bg-black/60 overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.85)] hover:border-emerald-300/35 transition"
-          >
-            <div className="p-4 md:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-white/55">Tournament Lobby</div>
-                  <div className="mt-1 text-lg font-extrabold text-emerald-200">View &amp; Register</div>
-                  <div className="mt-1 text-[11px] text-white/70">
-                    Browse tournaments, register, and get routed to your table when the host starts.
-                  </div>
-                </div>
-                <div className="text-emerald-200/90 text-xl">›</div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-emerald-300/15 bg-black/45 px-4 py-3 text-[12px] text-white/80">
-                <span className="font-extrabold text-emerald-200">Flow:</span> Register → Wait → Start → Auto-seat
-              </div>
-            </div>
-          </Link>
         </div>
 
-        <div className="mt-5 text-center text-[11px] text-white/45">
-          Cash games and tournaments are separate lobbies.
-        </div>
+        <div className="mt-5 text-center text-[11px] text-white/45">Cash games and tournaments are separate lobbies.</div>
       </section>
     </main>
   )

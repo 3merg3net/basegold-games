@@ -1,7 +1,7 @@
 // lib/chips/usePlayerChips.ts
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 
 export type ChipState = {
@@ -11,8 +11,17 @@ export type ChipState = {
   reserved_pgld: number;
 };
 
-export function usePlayerChips() {
+export function usePlayerChips(playerIdOverride?: string | null) {
   const { profile } = usePlayerProfileContext();
+
+  // ✅ Single source of truth for which id we fetch balances for
+  const playerId = useMemo(() => {
+    const o = (playerIdOverride ?? "").trim();
+    if (o && o.length >= 3) return o;
+    const p = String(profile?.id ?? "").trim();
+    if (p && p.length >= 3) return p;
+    return "";
+  }, [playerIdOverride, profile?.id]);
 
   const [chips, setChips] = useState<ChipState>({
     balance_gld: 0,
@@ -25,18 +34,16 @@ export function usePlayerChips() {
   const [error, setError] = useState<unknown>(null);
 
   const fetchChips = useCallback(async () => {
-    if (!profile?.id) return;
+    if (!playerId) return;
 
     try {
       setLoading(true);
       setError(null);
 
       const res = await fetch(
-  `/api/chips/balance?playerId=${encodeURIComponent(profile.id)}`,
-  { cache: "no-store" }
-);
-
-
+        `/api/chips/balance?playerId=${encodeURIComponent(playerId)}`,
+        { cache: "no-store" }
+      );
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -57,13 +64,14 @@ export function usePlayerChips() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [playerId]);
 
   useEffect(() => {
     void fetchChips();
   }, [fetchChips]);
 
   return {
+    playerId, // ✅ helpful for debugging
     chips,
     loading,
     error,

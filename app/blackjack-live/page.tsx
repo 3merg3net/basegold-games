@@ -77,14 +77,27 @@ export default function BlackjackLobbyPage() {
   // ✅ table name input (same idea as poker)
   const [tableName, setTableName] = useState('Big Nugget 21')
 
-  // ✅ admin mode (simple)
+    // ✅ admin mode (only if key exists)
+  const [hasAdminKey, setHasAdminKey] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const v = window.localStorage.getItem('bj-admin') === '1'
+      const key =
+        window.localStorage.getItem('bj-admin-key') ||
+        process.env.NEXT_PUBLIC_BLACKJACK_ADMIN_KEY ||
+        ''
+      const ok = String(key).trim().length > 0
+      setHasAdminKey(ok)
+
+      // only restore admin mode if a key exists
+      const v = ok && window.localStorage.getItem('bj-admin') === '1'
       setIsAdmin(v)
-    } catch {}
+    } catch {
+      setHasAdminKey(false)
+      setIsAdmin(false)
+    }
   }, [])
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -132,7 +145,7 @@ export default function BlackjackLobbyPage() {
         type: 'bj-delete-room',
         playerId,
         roomId,
-        adminKey: isAdmin ? adminKey : undefined,
+        adminKey: isAdmin && hasAdminKey ? adminKey : undefined,
       })
     )
   }
@@ -238,17 +251,26 @@ export default function BlackjackLobbyPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !isAdmin
-                  setIsAdmin(next)
-                  try { window.localStorage.setItem('bj-admin', next ? '1' : '0') } catch {}
-                }}
-                className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/80 hover:bg-white/10"
-              >
-                {isAdmin ? 'Admin: ON' : 'Admin: OFF'}
-              </button>
+              {hasAdminKey && (
+  <button
+    type="button"
+    onClick={() => {
+      const next = !isAdmin
+      setIsAdmin(next)
+      try {
+        window.localStorage.setItem('bj-admin', next ? '1' : '0')
+      } catch {}
+    }}
+    className={[
+      "rounded-full border px-3 py-1.5 text-[11px] font-semibold hover:bg-white/10",
+      isAdmin
+        ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
+        : "border-white/20 bg-black/60 text-white/80",
+    ].join(" ")}
+  >
+    {isAdmin ? "Mod tools: ON" : "Mod tools: OFF"}
+  </button>
+)}
 
               <Link
                 href="/"
@@ -461,7 +483,7 @@ export default function BlackjackLobbyPage() {
                 </Link>
 
                 {/* ✅ Host delete OR Admin delete */}
-                {(isHost || isAdmin) && (
+                {(isHost || (isAdmin && hasAdminKey)) && (
                   <div className="px-4 pb-3">
                     <button
                       type="button"

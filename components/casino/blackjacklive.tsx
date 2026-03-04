@@ -451,11 +451,12 @@ useEffect(() => {
 
   // ---- chips (truth)
   const {
-    chips: chipState,
-    loading: chipsLoading,
-    error: chipsError,
-    refresh: refreshChips,
-  } = usePlayerChips();
+  playerId: chipsPlayerId,
+  chips: chipState,
+  loading: chipsLoading,
+  error: chipsError,
+  refresh: refreshChips,
+} = usePlayerChips(playerId);
 
   const balanceGld = Number(chipState?.balance_gld ?? 0);
   const reservedGld = Number(chipState?.reserved_gld ?? 0);

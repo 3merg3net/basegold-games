@@ -252,6 +252,34 @@ export function formatChips(amount: number): string {
   return Math.floor(amount).toString();
 }
 
+// Build pot layers from total contributions (standard side-pot decomposition)
+// Returns an array of pot layer amounts: [mainPot, sidePot1, sidePot2, ...]
+function computePotLayers(players: BettingPlayerState[] | null | undefined): number[] {
+  if (!players || players.length === 0) return [];
+
+  const totals = players
+    .map((p) => Math.max(0, Math.floor(Number((p as any).totalContributed ?? 0))))
+    .filter((v) => v > 0);
+
+  if (totals.length === 0) return [];
+
+  // Unique contribution "cut lines"
+  const levels = Array.from(new Set(totals)).sort((a, b) => a - b);
+
+  const layers: number[] = [];
+  let prev = 0;
+
+  for (const lvl of levels) {
+    const countAtOrAbove = totals.filter((t) => t >= lvl).length;
+    const layer = (lvl - prev) * countAtOrAbove;
+    if (layer > 0) layers.push(layer);
+    prev = lvl;
+  }
+
+  // Safety: coalesce tiny/invalid layers
+  return layers.filter((n) => Number.isFinite(n) && n > 0);
+}
+
 // --- PGLD → USD display helpers ---
 // For now this is a single configurable rate. Later you can hydrate it from
 // your cashier endpoint, supabase, or an oracle-backed API route.
@@ -944,7 +972,24 @@ if (Array.isArray(showdown.players)) {
         ((p.totalContributed ?? 0) > 0 || (betting.pot ?? 0) > 0)
     );
 
+const potLayers = useMemo(() => {
+  // Prefer breakdown from contributions (more accurate for side pots)
+  const layers = computePotLayers(betting?.players ?? []);
+  return layers;
+}, [betting?.players]);
 
+const mainPotAmount = potLayers.length > 0 ? potLayers[0] : pot;
+const sidePotAmounts = potLayers.length > 1 ? potLayers.slice(1) : [];
+
+const isPotSplit = useMemo(() => {
+  // Simple + reliable: split if >1 winners at showdown for current hand
+  if (!showdown || !table) return false;
+  if (showdown.handId !== table.handId) return false;
+  const winners = Array.isArray(showdown.players)
+    ? showdown.players.filter((p) => p.isWinner)
+    : [];
+  return winners.length > 1;
+}, [showdown, table]);
     
  
   /* ───────────────── player-show-cards (single effect) ───────────────── */
@@ -1872,11 +1917,9 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
 )}
 
 {/* BOARD + POT CLUSTER (pot pinned under board) */}
-<div className="pointer-events-none absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 z-[60] px-2">
-  {/* Scale board down on mobile so it doesn't cover side seats */}
-  <div className="origin-center scale-[0.78] sm:scale-[0.9] md:scale-100">
-    {/* BOARD */}
-    <div className="flex justify-center gap-0.5 sm:gap-1.5 md:gap-2">
+<div className="pointer-events-none absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 px-2 z-[40]">
+  <div className="origin-center scale-[0.66] sm:scale-[0.9] md:scale-100">
+    <div className="flex gap-0.5 sm:gap-1.5 md:gap-2">
       {boardCards.map((c, i) => {
         const tilts = [-3, 0, 0, 0, 3]
         return (
@@ -1890,28 +1933,66 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
       })}
     </div>
 
-    {/* POT (compact; chips inside pill; sits directly below board) */}
-    {pot > 0 && (
-      <div className="mt-2 flex items-center justify-center">
-        <div
-          className={[
-            "flex items-center gap-2 rounded-full",
-            "bg-black/85 border border-[#FFD700]/50",
-            "px-3 py-1.5",
-            "shadow-[0_0_18px_rgba(0,0,0,0.9)]",
-            potPulse ? "pot-pulse" : "",
-          ].join(" ")}
-        >
-          <div className="translate-y-[1px]">
-            <ChipStack amount={pot} size={20} maxChips={7} />
-          </div>
+    {/* POT(S): main pot + side pots (side pills beside main) */}
+{pot > 0 && (
+  <div className="mt-2 flex items-center justify-center">
+    <div className="flex items-center gap-2">
+      {/* MAIN POT */}
+      <div
+        className={[
+          "flex items-center gap-2 rounded-full",
+          "bg-black/85 border border-[#FFD700]/50",
+          "px-3 py-1.5",
+          "shadow-[0_0_18px_rgba(0,0,0,0.9)]",
+          potPulse ? "pot-pulse" : "",
+        ].join(" ")}
+      >
+        <div className="translate-y-[1px]">
+          <ChipStack amount={mainPotAmount} size={20} maxChips={7} />
+        </div>
 
-          <div className="text-[11px] md:text-[13px] font-extrabold text-[#FFD700] leading-none">
-            Pot {formatChips(pot)} <span className="opacity-70">PGLD</span>
-          </div>
+        <div className="text-[11px] md:text-[13px] font-extrabold text-[#FFD700] leading-none whitespace-nowrap">
+          Pot {formatChips(mainPotAmount)} <span className="opacity-70">PGLD</span>
+          {isPotSplit && (
+            <span className="ml-2 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-[1px] text-[10px] font-black tracking-[0.14em] text-white/80">
+              SPLIT
+            </span>
+          )}
         </div>
       </div>
-    )}
+
+      {/* SIDE POTS (pills beside main) */}
+      {sidePotAmounts.length > 0 && (
+        <div className="flex items-center gap-2">
+          {sidePotAmounts.map((amt, idx) => (
+            <div
+              key={`sidepot-${idx}-${amt}`}
+              className={[
+                "flex items-center gap-2 rounded-full",
+                "bg-black/80 border border-white/20",
+                "px-3 py-1.5",
+                "shadow-[0_0_14px_rgba(0,0,0,0.85)]",
+              ].join(" ")}
+            >
+              <div className="translate-y-[1px] opacity-90">
+                <ChipStack amount={amt} size={18} maxChips={6} />
+              </div>
+
+              <div className="text-[10px] md:text-[12px] font-extrabold text-white/85 leading-none whitespace-nowrap">
+                Side {idx + 1} {formatChips(amt)} <span className="opacity-60">PGLD</span>
+                {isPotSplit && (
+                  <span className="ml-2 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-1.5 py-[1px] text-[9px] font-black tracking-[0.14em] text-white/70">
+                    SPLIT
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+)}
   </div>
 
   {/* PAUSE OVERLAY (centered over board+pot cluster) */}
@@ -2555,15 +2636,17 @@ if (!seat || !isOccupied) {
       </button>
 
       {(() => {
-        const canShowCards =
-          !!heroSeat &&
-          !!heroHand &&
-          heroHand.length === 2 &&
-          !!betting &&
-          betting.street === "done" &&
-          !!showdown &&
-          !!table &&
-          showdown.handId === table.handId;
+        const alreadyShown = !!heroSeat && !!revealedHoles[String(myId)]?.length;
+
+const canShowCards =
+  !!heroSeat &&
+  !!heroHand &&
+  heroHand.length === 2 &&
+  !!betting &&
+  betting.street === "done" &&
+  !!table &&
+  table.handId === betting.handId &&   // ✅ hand is complete + consistent
+  !alreadyShown;                        // ✅ don’t show button after you’ve revealed
 
         if (!canShowCards) return null;
 
