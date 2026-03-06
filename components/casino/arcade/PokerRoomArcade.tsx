@@ -2491,7 +2491,7 @@ if (!seat || !isOccupied) {
       </div>
     ) : null}
 
-    {/* Pill: pinned to the card cluster bottom */}
+   {/* Pill: pinned to the card cluster bottom */}
 <div className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-1 flex justify-center">
   <div
     className={[
@@ -2503,13 +2503,13 @@ if (!seat || !isOccupied) {
       "backdrop-blur",
       "shadow-[0_0_10px_rgba(0,0,0,0.82)]",
       "px-2 py-[3px] md:px-2.5 md:py-[4px]",
-      "max-w-[126px] md:max-w-[168px]",
+      "min-w-[96px] max-w-[140px] md:max-w-[180px]",
     ].join(" ")}
   >
     {/* PLAYER NAME */}
     <div
       className={[
-        "truncate leading-tight font-semibold",
+        "truncate leading-tight font-semibold text-center w-full",
         "text-[10px] md:text-[11px]",
         isHeroSeat ? "text-[#FDE68A]" : "text-white/90",
       ].join(" ")}
@@ -2524,8 +2524,7 @@ if (!seat || !isOccupied) {
     </div>
 
     {/* STACK + USD */}
-    <div className="mt-[1px] flex items-center gap-1.5 leading-tight">
-      {/* tiny chip dot */}
+    <div className="mt-[1px] flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
       <span
         className={[
           "inline-block h-2 w-2 rounded-full shrink-0",
@@ -2541,9 +2540,9 @@ if (!seat || !isOccupied) {
 
       <span className="text-[8px] md:text-[10px] text-white/45">PGLD</span>
 
-      <span className="text-[8px] md:text-[10px] text-white/20">•</span>
+      <span className="text-[8px] md:text-[10px] text-white/25">•</span>
 
-      <span className="text-[8px] md:text-[10px] font-mono text-emerald-200/78">
+      <span className="text-[8px] md:text-[10px] font-mono font-semibold text-emerald-200/90">
         {formatUsdFromPgld(stackAmount)}
       </span>
     </div>
