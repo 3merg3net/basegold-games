@@ -1465,7 +1465,7 @@ useEffect(() => {
                             "border border-emerald-400/70",
                           ].join(" ")}
                         >
-                          Showdown • Pot {pot.toLocaleString()} PGLD
+                          Showdown • Pot {formatChips(pot)} PGLD • {formatUsdFromPgld(pot)}
                         </div>
 
                         

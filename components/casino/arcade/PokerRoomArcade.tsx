@@ -890,8 +890,8 @@ try {
     !!heroSeat &&
     Array.isArray(showdown.players) &&
     showdown.players.some(
-      (p) => p.isWinner && p.playerId === playerId && p.seatIndex === heroSeat.seatIndex
-    );
+  (p) => p.isWinner && String(p.playerId) === myId && p.seatIndex === heroSeat.seatIndex
+);
 
   if (heroWon) {
     setConfettiKey(`${showdown.handId}-${playerId}`);
@@ -973,9 +973,13 @@ if (Array.isArray(showdown.players)) {
     );
 
 const potLayers = useMemo(() => {
-  // Prefer breakdown from contributions (more accurate for side pots)
-  const layers = computePotLayers(betting?.players ?? []);
-  return layers;
+  const ps = betting?.players ?? [];
+  // only compute layers when someone is all-in (prevents blind mismatch looking like side pot)
+  const anyAllIn = ps.some(
+    (p) => p.inHand && !p.hasFolded && (p.stack ?? 0) === 0 && (p.totalContributed ?? 0) > 0
+  );
+  if (!anyAllIn) return [];
+  return computePotLayers(ps);
 }, [betting?.players]);
 
 const mainPotAmount = potLayers.length > 0 ? potLayers[0] : pot;
@@ -990,6 +994,9 @@ const isPotSplit = useMemo(() => {
     : [];
   return winners.length > 1;
 }, [showdown, table]);
+
+const isShowdownForThisHand =
+  !!showdown && !!table && showdown.handId === table.handId;
     
  
   /* ───────────────── player-show-cards (single effect) ───────────────── */
@@ -1953,6 +1960,9 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
 
         <div className="text-[11px] md:text-[13px] font-extrabold text-[#FFD700] leading-none whitespace-nowrap">
           Pot {formatChips(mainPotAmount)} <span className="opacity-70">PGLD</span>
+<span className="ml-2 text-emerald-200/90 font-mono">
+  {formatUsdFromPgld(mainPotAmount)}
+</span>
           {isPotSplit && (
             <span className="ml-2 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-[1px] text-[10px] font-black tracking-[0.14em] text-white/80">
               SPLIT
@@ -1961,35 +1971,38 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
         </div>
       </div>
 
-      {/* SIDE POTS (pills beside main) */}
-      {sidePotAmounts.length > 0 && (
-        <div className="flex items-center gap-2">
-          {sidePotAmounts.map((amt, idx) => (
-            <div
-              key={`sidepot-${idx}-${amt}`}
-              className={[
-                "flex items-center gap-2 rounded-full",
-                "bg-black/80 border border-white/20",
-                "px-3 py-1.5",
-                "shadow-[0_0_14px_rgba(0,0,0,0.85)]",
-              ].join(" ")}
-            >
-              <div className="translate-y-[1px] opacity-90">
-                <ChipStack amount={amt} size={18} maxChips={6} />
-              </div>
-
-              <div className="text-[10px] md:text-[12px] font-extrabold text-white/85 leading-none whitespace-nowrap">
-                Side {idx + 1} {formatChips(amt)} <span className="opacity-60">PGLD</span>
-                {isPotSplit && (
-                  <span className="ml-2 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-1.5 py-[1px] text-[9px] font-black tracking-[0.14em] text-white/70">
-                    SPLIT
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+     {/* SIDE POTS (ONLY at showdown for this hand) */}
+{isShowdownForThisHand && sidePotAmounts.length > 0 && (
+  <div className="flex items-center gap-2">
+    {sidePotAmounts.map((amt, idx) => (
+      <div
+        key={`sidepot-${idx}-${amt}`}
+        className={[
+          "flex items-center gap-2 rounded-full",
+          "bg-black/80 border border-white/20",
+          "px-3 py-1.5",
+          "shadow-[0_0_14px_rgba(0,0,0,0.85)]",
+        ].join(" ")}
+      >
+        <div className="translate-y-[1px] opacity-90">
+          <ChipStack amount={amt} size={18} maxChips={6} />
         </div>
-      )}
+
+        <div className="text-[10px] md:text-[12px] font-extrabold text-white/85 leading-none whitespace-nowrap">
+          Side {idx + 1} {formatChips(amt)} <span className="opacity-60">PGLD</span>
+          <span className="ml-2 text-emerald-200/85 font-mono">
+            {formatUsdFromPgld(amt)}
+          </span>
+          {isPotSplit && (
+            <span className="ml-2 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-1.5 py-[1px] text-[9px] font-black tracking-[0.14em] text-white/70">
+              SPLIT
+            </span>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
     </div>
   </div>
 )}
@@ -2031,7 +2044,7 @@ const quickPrimaryLabel = heroCallDiff > 0 ? `Call ${heroCallDiff}` : "Check";
                             "border border-emerald-400/70",
                           ].join(" ")}
                         >
-                          Showdown • Pot {pot.toLocaleString()} PGLD
+                          Showdown • Pot {formatChips(pot)} PGLD • {formatUsdFromPgld(pot)}
                         </div>
 
                         
@@ -2150,12 +2163,14 @@ const seatAction = typeof seatIndex === "number" ? seatActionMap[seatIndex] : un
         bbSeatIndex === seat!.seatIndex;
 
       const label = !isOccupied
-        ? `Seat ${slotIndex + 1}`
-        : seat!.name
-        ? seat!.name
-        : seat!.playerId
-        ? seat!.playerId
-        : `Seat ${seat!.seatIndex + 1}`;
+  ? `Seat ${slotIndex + 1}`
+  : displayNameForSeat({
+      seatIndex: seat!.seatIndex,
+      seatHandle: (seat as any)?.handle ?? null,
+      seatName: seat?.name ?? null,
+      isHero: isHeroSeat,
+      profileHandle: profile?.handle ?? null,
+    });
 
         const fallbackAvatar =
   DEFAULT_AVATARS[(seat?.seatIndex ?? slotIndex) % DEFAULT_AVATARS.length];
@@ -2477,44 +2492,63 @@ if (!seat || !isOccupied) {
     ) : null}
 
     {/* Pill: pinned to the card cluster bottom */}
-    <div className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-1 flex justify-center">
-      <div
-        className={[
-          "pointer-events-auto flex flex-col items-center",
-          "rounded-lg md:rounded-2xl",
-          "bg-gradient-to-r from-black/82 via-[#0b1220]/88 to-black/82",
-          "border border-[#FACC15]/45 md:border-[#FACC15]/55",
-          "shadow-[0_0_10px_rgba(0,0,0,0.9)]",
-          "px-1.5 py-[2px] md:px-2 md:py-[2px]",
-          "w-[80px] md:w-auto md:min-w-[108px] md:max-w-[140px]",
-        ].join(" ")}
-      >
-        <div className="rounded-full bg-black/65 px-1.5 md:px-2 py-[1px] text-[10px] md:text-[13px] text-[#FACC15] font-mono leading-tight shadow shadow-black/60">
-          {formatChips(stackAmount)} PGLD
-        </div>
-
-        <div className="mt-[1px] max-w-[76px] md:max-w-[112px] truncate text-[9px] md:text-[11px] text-white/85 leading-tight">
-          {(() => {
-            const seatHandle = ((seat as any)?.handle ?? "").trim()
-            const heroHandle = (profile?.handle ?? "").trim()
-            const nick = (seat?.name ?? "").trim()
-
-            return (
-              seatHandle ||
-              (isHeroSeat
-                ? heroHandle
-                  ? heroHandle.startsWith("@")
-                    ? heroHandle
-                    : `@${heroHandle}`
-                  : ""
-                : "") ||
-              nick ||
-              `Seat ${seat?.seatIndex != null ? seat.seatIndex + 1 : ""}`
-            )
-          })()}
-        </div>
-      </div>
+<div className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-1 flex justify-center">
+  <div
+    className={[
+      "pointer-events-auto inline-flex flex-col items-center",
+      "rounded-xl md:rounded-2xl",
+      isHeroSeat
+        ? "bg-gradient-to-r from-black/72 via-[#16110a]/78 to-black/72 border border-[#FACC15]/35"
+        : "bg-black/50 border border-white/12",
+      "backdrop-blur",
+      "shadow-[0_0_10px_rgba(0,0,0,0.82)]",
+      "px-2 py-[3px] md:px-2.5 md:py-[4px]",
+      "max-w-[126px] md:max-w-[168px]",
+    ].join(" ")}
+  >
+    {/* PLAYER NAME */}
+    <div
+      className={[
+        "truncate leading-tight font-semibold",
+        "text-[10px] md:text-[11px]",
+        isHeroSeat ? "text-[#FDE68A]" : "text-white/90",
+      ].join(" ")}
+    >
+      {displayNameForSeat({
+        seatIndex: seat!.seatIndex,
+        seatHandle: (seat as any)?.handle ?? null,
+        seatName: seat?.name ?? null,
+        isHero: isHeroSeat,
+        profileHandle: profile?.handle ?? null,
+      })}
     </div>
+
+    {/* STACK + USD */}
+    <div className="mt-[1px] flex items-center gap-1.5 leading-tight">
+      {/* tiny chip dot */}
+      <span
+        className={[
+          "inline-block h-2 w-2 rounded-full shrink-0",
+          isHeroSeat
+            ? "bg-[#FACC15] shadow-[0_0_8px_rgba(250,204,21,0.6)]"
+            : "bg-emerald-300/90 shadow-[0_0_6px_rgba(110,231,183,0.35)]",
+        ].join(" ")}
+      />
+
+      <span className="text-[9px] md:text-[11px] font-mono font-extrabold text-[#FACC15]">
+        {formatChips(stackAmount)}
+      </span>
+
+      <span className="text-[8px] md:text-[10px] text-white/45">PGLD</span>
+
+      <span className="text-[8px] md:text-[10px] text-white/20">•</span>
+
+      <span className="text-[8px] md:text-[10px] font-mono text-emerald-200/78">
+        {formatUsdFromPgld(stackAmount)}
+      </span>
+    </div>
+  </div>
+</div>
   </div>
 </div>
 
@@ -2634,6 +2668,16 @@ if (!seat || !isOccupied) {
       >
         {heroSeat ? "Stand up" : "Sit at table"}
       </button>
+
+      {isHostClient && tableIdle && seatedCount >= MIN_PLAYERS_TO_START && !dealHeld && (
+  <button
+    type="button"
+    onClick={handleManualDeal}
+    className="rounded-xl bg-[#FFD700] px-3 py-2 text-[12px] font-semibold text-black hover:bg-yellow-400"
+  >
+    Start hand
+  </button>
+)}
 
       {(() => {
         const alreadyShown = !!heroSeat && !!revealedHoles[String(myId)]?.length;
@@ -3256,7 +3300,20 @@ const canShowCards =
                 )}
                 {chatMessages.map((m, i) => (
                   <div key={i}>
-                    <span className="font-mono text-emerald-300">{(m as any).playerId}</span>
+                    {(() => {
+  const pid = String((m as any).playerId ?? "");
+  const seatMeta = seats.find((s) => String(s.playerId) === pid);
+  const name = seatMeta
+    ? displayNameForSeat({
+        seatIndex: seatMeta.seatIndex,
+        seatHandle: (seatMeta as any)?.handle ?? null,
+        seatName: seatMeta?.name ?? null,
+        isHero: String(seatMeta.playerId) === myId,
+        profileHandle: profile?.handle ?? null,
+      })
+    : "Player";
+  return <span className="font-mono text-emerald-300">{name}</span>;
+})()}
                     <span className="text-white/60">: </span>
                     <span>{(m as any).text}</span>
                   </div>
