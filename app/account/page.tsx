@@ -1,19 +1,20 @@
-// app/account/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState, type FormEvent, type ChangeEvent } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ChangeEvent,
+} from "react";
 import Image from "next/image";
-import { useAccount } from "wagmi";
+import { useRouter } from "next/navigation";
+import { useAccount, useBalance } from "wagmi";
+
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 import { supabase } from "@/lib/supabase/client";
 import CashierSwapBox from "@/components/casino/CashierSwapBox";
 import { usePlayerChips } from "@/lib/chips/usePlayerChips";
-import { useBalance } from "wagmi";
-import { useRouter } from "next/navigation";
-
-
-
-
 
 type StyleOption = "tight" | "loose" | "aggro" | "balanced";
 type PreferredStake = "Low" | "Medium" | "High";
@@ -29,13 +30,11 @@ const DEFAULT_AVATARS = [
 ];
 
 function pickDefaultAvatar(profileId?: string) {
-  // deterministic pick so it doesn't change each refresh
   const s = String(profileId || "player");
   let hash = 0;
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
   return DEFAULT_AVATARS[hash % DEFAULT_AVATARS.length];
 }
-
 
 function Pill({
   label,
@@ -54,9 +53,7 @@ function Pill({
       : "border-white/15 bg-white/5 text-white/70";
 
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] ${cls}`}
-    >
+    <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] ${cls}`}>
       {label}
     </span>
   );
@@ -80,9 +77,7 @@ function CardShell({
           <div className="text-[10px] uppercase tracking-[0.25em] text-white/45">
             {title}
           </div>
-          {subtitle ? (
-            <div className="mt-1 text-xs text-white/70">{subtitle}</div>
-          ) : null}
+          {subtitle ? <div className="mt-1 text-xs text-white/70">{subtitle}</div> : null}
         </div>
         {right ? <div className="shrink-0">{right}</div> : null}
       </div>
@@ -125,48 +120,39 @@ function formatChips(n: number) {
   return v.toLocaleString();
 }
 
-const CHIPS_PER_USD = 100;
-
-// set this once you have it (or keep env-based)
-const BGLD_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_BGLD_TOKEN_ADDRESS as
-  | `0x${string}`
-  | undefined;
-
 function formatUsd(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+const CHIPS_PER_USD = 100;
+
+const BGLD_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_BGLD_TOKEN_ADDRESS as
+  | `0x${string}`
+  | undefined;
+
 export default function AccountDashboardPage() {
   const router = useRouter();
 
-  const {
-    profile,
-    updateProfile,
-    chips,
-    setChips,
-    loading,
-    error,
-  } = usePlayerProfileContext() as any;
-
-
+  const { profile, updateProfile, loading, error } = usePlayerProfileContext() as any;
   const { address } = useAccount();
 
   const bgldBal = useBalance({
-  address,
-  token: BGLD_TOKEN_ADDRESS,
-  enabled: Boolean(address && BGLD_TOKEN_ADDRESS),
-  watch: true,
-});
+    address,
+    token: BGLD_TOKEN_ADDRESS,
+    enabled: Boolean(address && BGLD_TOKEN_ADDRESS),
+    watch: true,
+  });
 
-useEffect(() => {
-  if (!profile?.id) return;
-  // Force the app-wide "playerId" to be the real DB id.
-  // This prevents FK failures on chip_balances insert/update.
-  localStorage.setItem("playerId", profile.id);
-}, [profile?.id]);
+  // ✅ Keep BOTH keys in sync so old and new code paths behave.
+  useEffect(() => {
+    if (!profile?.id) return;
+    try {
+      localStorage.setItem("player-id", profile.id); // canonical
+      localStorage.setItem("playerId", profile.id); // legacy mirror
+    } catch {}
+  }, [profile?.id]);
 
-
-
+  // ✅ Single redirect effect
   useEffect(() => {
     if (loading) return;
     if (profile && !profile.isProfileComplete) {
@@ -174,9 +160,6 @@ useEffect(() => {
     }
   }, [loading, profile, router]);
 
-
-
-  // Real chip balances (GLD + PGLD) from your chips system
   const {
     chips: chipState,
     loading: chipsLoading,
@@ -185,37 +168,44 @@ useEffect(() => {
   } = usePlayerChips();
 
   const [bgldUsd, setBgldUsd] = useState<number | null>(null);
-const [bgldUsdErr, setBgldUsdErr] = useState<string | null>(null);
+  const [bgldUsdErr, setBgldUsdErr] = useState<string | null>(null);
 
-React.useEffect(() => {
-  let alive = true;
-  async function load() {
-    try {
-      setBgldUsdErr(null);
-      const res = await fetch("/api/bgld-price", { cache: "no-store" });
-      const j = await res.json().catch(() => ({}));
-      const p = Number(j?.priceUsd ?? j?.usd);
-      if (!alive) return;
-      setBgldUsd(Number.isFinite(p) && p > 0 ? p : null);
-      if (!(Number.isFinite(p) && p > 0)) setBgldUsdErr("Price unavailable");
-    } catch {
-      if (!alive) return;
-      setBgldUsd(null);
-      setBgldUsdErr("Price unavailable");
+  useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      try {
+        setBgldUsdErr(null);
+        const res = await fetch("/api/bgld-price", { cache: "no-store" });
+        const j = await res.json().catch(() => ({}));
+        const p = Number(j?.priceUsd ?? j?.usd);
+
+        if (!alive) return;
+
+        if (Number.isFinite(p) && p > 0) {
+          setBgldUsd(p);
+        } else {
+          setBgldUsd(null);
+          setBgldUsdErr("Price unavailable");
+        }
+      } catch {
+        if (!alive) return;
+        setBgldUsd(null);
+        setBgldUsdErr("Price unavailable");
+      }
     }
-  }
-  void load();
-  return () => {
-    alive = false;
-  };
-}, []);
 
+    void load();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  const handle = (profile?.handle ?? "") as string;
-  const nickname = (profile?.nickname ?? "") as string;
-  const avatarUrl = (profile?.avatarUrl ?? "") as string;
-  const avatarColor = (profile?.avatarColor ?? "#facc15") as string;
-  const linkedWallet = (profile?.walletAddress ?? "") as string;
+  const handle = String(profile?.handle ?? "");
+  const nickname = String(profile?.nickname ?? "");
+  const avatarUrl = String(profile?.avatarUrl ?? "");
+  const avatarColor = String(profile?.avatarColor ?? "#facc15");
+  const linkedWallet = String(profile?.walletAddress ?? "");
   const profileComplete = Boolean(profile?.isProfileComplete);
 
   const wins = Number(profile?.wins ?? 0);
@@ -239,61 +229,45 @@ React.useEffect(() => {
       .toUpperCase();
   }, [nickname, handle]);
 
-  // Collapsible account editor
   const [openEdit, setOpenEdit] = useState(false);
   const [openIdentity, setOpenIdentity] = useState(true);
   const [openPrefs, setOpenPrefs] = useState(false);
   const [openPrivacy, setOpenPrivacy] = useState(false);
 
-  // Local edit state (only used when editing)
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [localHandle, setLocalHandle] = useState<string>(handle);
   const [localNickname, setLocalNickname] = useState<string>(nickname);
-  const [localBio, setLocalBio] = useState<string>((profile?.bio ?? "") as string);
-
+  const [localBio, setLocalBio] = useState<string>(String(profile?.bio ?? ""));
   const [localStyle, setLocalStyle] = useState<StyleOption>(
     ((profile?.style ?? "balanced") as StyleOption) || "balanced"
   );
-
   const [favoriteGame, setFavoriteGame] = useState<FavoriteGame>(
     ((profile?.favoriteGame ?? "Poker") as FavoriteGame) || "Poker"
   );
-
   const [preferredStake, setPreferredStake] = useState<PreferredStake>(
     ((profile?.preferredStake ?? "Low") as PreferredStake) || "Low"
   );
-
   const [profileVisibility, setProfileVisibility] = useState<"public" | "private">(
     ((profile?.profileVisibility ?? "public") as "public" | "private") || "public"
   );
-
   const [showBalancesPublic, setShowBalancesPublic] = useState<boolean>(
     Boolean(profile?.showBalancesPublic)
   );
-
   const [localAvatarColor, setLocalAvatarColor] = useState<string>(avatarColor);
 
-  // Avatar upload
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
-  // Wallet link
   const [walletLinking, setWalletLinking] = useState(false);
   const [walletLinkError, setWalletLinkError] = useState<string | null>(null);
   const [walletLinkSuccess, setWalletLinkSuccess] = useState<string | null>(null);
 
-
-
-
-
-
-
   function startEdit() {
     setLocalHandle(handle);
     setLocalNickname(nickname);
-    setLocalBio((profile?.bio ?? "") as string);
+    setLocalBio(String(profile?.bio ?? ""));
     setLocalStyle(((profile?.style ?? "balanced") as StyleOption) || "balanced");
     setFavoriteGame(((profile?.favoriteGame ?? "Poker") as FavoriteGame) || "Poker");
     setPreferredStake(((profile?.preferredStake ?? "Low") as PreferredStake) || "Low");
@@ -301,7 +275,7 @@ React.useEffect(() => {
       ((profile?.profileVisibility ?? "public") as "public" | "private") || "public"
     );
     setShowBalancesPublic(Boolean(profile?.showBalancesPublic));
-    setLocalAvatarColor((profile?.avatarColor ?? "#facc15") as string);
+    setLocalAvatarColor(String(profile?.avatarColor ?? "#facc15"));
 
     setSaveError(null);
     setOpenEdit(true);
@@ -347,15 +321,12 @@ React.useEffect(() => {
   }
 
   useEffect(() => {
-  if (loading) return;
-  if (!profile?.id) return;
-
-  // If user has no avatarUrl yet, set a default once
-  if (!profile.avatarUrl) {
-    void updateProfile({ avatarUrl: pickDefaultAvatar(profile.id) } as any);
-  }
-}, [loading, profile?.id, profile?.avatarUrl, updateProfile]);
-
+    if (loading) return;
+    if (!profile?.id) return;
+    if (!profile.avatarUrl) {
+      void updateProfile({ avatarUrl: pickDefaultAvatar(profile.id) } as any);
+    }
+  }, [loading, profile?.id, profile?.avatarUrl, updateProfile]);
 
   async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     setAvatarError(null);
@@ -431,53 +402,41 @@ React.useEffect(() => {
     }
   }
 
-  // Chip balances
-  const gldBal = chipState?.balance_gld ?? 0;
-  const gldRes = chipState?.reserved_gld ?? 0;
-  const pgldBal = chipState?.balance_pgld ?? 0;
-  const pgldRes = chipState?.reserved_pgld ?? 0;
+  const gldBal = Number(chipState?.balance_gld ?? 0);
+  const gldRes = Number(chipState?.reserved_gld ?? 0);
+  const pgldBal = Number(chipState?.balance_pgld ?? 0);
+  const pgldRes = Number(chipState?.reserved_pgld ?? 0);
 
   const gldUsd = gldBal / CHIPS_PER_USD;
-const pgldUsd = pgldBal / CHIPS_PER_USD;
+  const pgldUsd = pgldBal / CHIPS_PER_USD;
 
-// reserved reduces “playable”
-const playableGld = Math.max(0, gldBal - gldRes);
-const playablePgld = Math.max(0, pgldBal - pgldRes);
+  const playableGld = Math.max(0, gldBal - gldRes);
+  const playablePgld = Math.max(0, pgldBal - pgldRes);
+  const playableUsd = (playableGld + playablePgld) / CHIPS_PER_USD;
 
-const playableUsd = (playableGld + playablePgld) / CHIPS_PER_USD;
+  const bgldTokenFloat = bgldBal.data ? Number(bgldBal.data.formatted) : 0;
+  const bgldValueUsd = bgldUsd ? bgldTokenFloat * bgldUsd : null;
 
-// BGLD wallet value (best-effort)
-const bgldTokenFloat = bgldBal.data ? Number(bgldBal.data.formatted) : 0;
-const bgldValueUsd = bgldUsd ? bgldTokenFloat * bgldUsd : null;
+  const chipWorthUsd = gldUsd + pgldUsd;
+  const totalWorthUsd = bgldValueUsd != null ? chipWorthUsd + bgldValueUsd : null;
 
-// Total “net worth” shown = chips USD + bgld wallet USD (if known)
-const chipWorthUsd = gldUsd + pgldUsd;
-const totalWorthUsd = bgldValueUsd != null ? chipWorthUsd + bgldValueUsd : null;
+  useEffect(() => {
+    if (!profile?.id) return;
+    console.log("[ACCOUNT] profile.id:", profile.id);
+    try {
+      console.log("[ACCOUNT] localStorage player-id:", localStorage.getItem("player-id"));
+      console.log("[ACCOUNT] localStorage playerId:", localStorage.getItem("playerId"));
+    } catch {}
+  }, [profile?.id]);
 
-useEffect(() => {
-  if (loading) return;
-  if (profile && !profile.isProfileComplete) {
-    router.replace("/profile");
-  }
-}, [loading, profile, router]);
+  const cashierPlayerId = profile?.id ? String(profile.id) : null;
 
-useEffect(() => {
-  if (!profile?.id) return
-  console.log("[ACCOUNT] profile.id:", profile.id)
-  try {
-    console.log("[ACCOUNT] localStorage playerId:", localStorage.getItem("playerId"))
-  } catch {}
-}, [profile?.id])
-
-
-
-  // Uniswap link (you can swap this to your exact pool / token URL later)
-  const uniswapBgldUrl = "https://app.uniswap.org/swap?chain=base&outputCurrency=0x0bbcaa0921da25ef216739e8dbbfd988875e81b4"; // placeholder
+  const uniswapBgldUrl =
+    "https://app.uniswap.org/swap?chain=base&outputCurrency=0x0bbcaa0921da25ef216739e8dbbfd988875e81b4";
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-black via-[#020617] to-black text-white">
       <div className="mx-auto max-w-6xl px-4 py-8 md:py-10 space-y-6">
-        {/* Top header */}
         <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="text-[10px] uppercase tracking-[0.32em] text-white/45">
@@ -502,30 +461,29 @@ useEffect(() => {
               />
             </div>
 
-           {(loading || chipsLoading) && (
-  <div className="mt-3 text-[11px] text-white/55">
-    Syncing your account state…
-  </div>
-)}
-<div className="flex items-center gap-2">
-  <button
-    type="button"
-    onClick={() => router.push("/profile")}
-    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
-  >
-    Edit Profile
-  </button>
+            {(loading || chipsLoading) && (
+              <div className="mt-3 text-[11px] text-white/55">
+                Syncing your account state…
+              </div>
+            )}
 
-  <button
-    type="button"
-    onClick={() => router.push("/poker")}
-    className="rounded-xl border border-[#FFD700]/35 bg-[#FFD700]/10 px-3 py-2 text-xs font-extrabold text-[#FFE58A] hover:bg-[#FFD700]/15"
-  >
-    Poker Lobby →
-  </button>
-</div>
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => router.push("/profile")}
+                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
+              >
+                Edit Profile
+              </button>
 
-
+              <button
+                type="button"
+                onClick={() => router.push("/poker")}
+                className="rounded-xl border border-[#FFD700]/35 bg-[#FFD700]/10 px-3 py-2 text-xs font-extrabold text-[#FFE58A] hover:bg-[#FFD700]/15"
+              >
+                Poker Lobby →
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -557,75 +515,78 @@ useEffect(() => {
         </header>
 
         {(error || chipsError) && (
-  <div className="rounded-2xl border border-red-500/30 bg-red-950/30 p-4 text-sm text-red-200 space-y-1">
-    {error ? <div>Error loading profile: {String(error)}</div> : null}
-    {chipsError ? <div>Chips error: {String(chipsError)}</div> : null}
-  </div>
-)}
+          <div className="rounded-2xl border border-red-500/30 bg-red-950/30 p-4 text-sm text-red-200 space-y-1">
+            {error ? <div>Error loading profile: {String(error)}</div> : null}
+            {chipsError ? <div>Chips error: {String(chipsError)}</div> : null}
+          </div>
+        )}
 
+        <section className="rounded-2xl border border-white/12 bg-black/50 p-4 md:p-5 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.28em] text-white/45">
+                Account Overview
+              </div>
+              <div className="mt-1 text-sm text-white/70">
+                Chips are priced at 100 = $1. Reserved is locked in active games.
+              </div>
+            </div>
 
-        {/* Net Worth Strip */}
-<section className="rounded-2xl border border-white/12 bg-black/50 p-4 md:p-5 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
-  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.28em] text-white/45">
-        Account Overview
-      </div>
-      <div className="mt-1 text-sm text-white/70">
-        Chips are priced at 100 = $1. Reserved is locked in active games.
-      </div>
-    </div>
+            <div className="flex flex-wrap gap-2">
+              <Pill
+                label={
+                  bgldUsd
+                    ? `BGLD/USD: $${bgldUsd.toFixed(6)}`
+                    : bgldUsdErr
+                    ? "BGLD/USD: —"
+                    : "BGLD/USD: …"
+                }
+                tone={bgldUsd ? "good" : "warn"}
+              />
+              <Pill label={`Playable: ${formatUsd(playableUsd)}`} tone="gold" />
+              <Pill
+                label={totalWorthUsd != null ? `Total: ${formatUsd(totalWorthUsd)}` : "Total: —"}
+                tone={totalWorthUsd != null ? "good" : "neutral"}
+              />
+            </div>
+          </div>
 
-    <div className="flex flex-wrap gap-2">
-      <Pill
-        label={
-          bgldUsd
-            ? `BGLD/USD: $${bgldUsd.toFixed(6)}`
-            : bgldUsdErr
-            ? `BGLD/USD: —`
-            : "BGLD/USD: …"
-        }
-        tone={bgldUsd ? "good" : "warn"}
-      />
-      <Pill label={`Playable: ${formatUsd(playableUsd)}`} tone="gold" />
-      <Pill
-        label={
-          totalWorthUsd != null ? `Total: ${formatUsd(totalWorthUsd)}` : "Total: —"
-        }
-        tone={totalWorthUsd != null ? "good" : "neutral"}
-      />
-    </div>
-  </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <StatTile
+              label="GLD Value"
+              value={formatUsd(gldUsd)}
+              sub={`GLD: ${formatChips(gldBal)}`}
+              tone="gold"
+            />
+            <StatTile
+              label="PGLD Value"
+              value={formatUsd(pgldUsd)}
+              sub={`PGLD: ${formatChips(pgldBal)}`}
+            />
+            <StatTile
+              label="BGLD Wallet"
+              value={
+                address && BGLD_TOKEN_ADDRESS
+                  ? bgldBal.isLoading
+                    ? "Loading…"
+                    : bgldBal.data
+                    ? `${bgldTokenFloat.toLocaleString(undefined, {
+                        maximumFractionDigits: 6,
+                      })} BGLD`
+                    : "—"
+                  : "—"
+              }
+              sub={bgldValueUsd != null ? `≈ ${formatUsd(bgldValueUsd)}` : "USD value unavailable"}
+              tone={bgldValueUsd != null ? "good" : "neutral"}
+            />
+            <StatTile
+              label="Reserved (Locked)"
+              value={formatUsd((gldRes + pgldRes) / CHIPS_PER_USD)}
+              sub={`GLD ${formatChips(gldRes)} • PGLD ${formatChips(pgldRes)}`}
+            />
+          </div>
+        </section>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-4">
-    <StatTile label="GLD Value" value={formatUsd(gldUsd)} sub={`GLD: ${formatChips(gldBal)}`} tone="gold" />
-    <StatTile label="PGLD Value" value={formatUsd(pgldUsd)} sub={`PGLD: ${formatChips(pgldBal)}`} />
-    <StatTile
-      label="BGLD Wallet"
-      value={
-        address && BGLD_TOKEN_ADDRESS
-          ? bgldBal.isLoading
-            ? "Loading…"
-            : bgldBal.data
-            ? `${bgldTokenFloat.toLocaleString(undefined, { maximumFractionDigits: 6 })} BGLD`
-            : "—"
-          : "—"
-      }
-      sub={
-        bgldValueUsd != null ? `≈ ${formatUsd(bgldValueUsd)}` : "USD value unavailable"
-      }
-      tone={bgldValueUsd != null ? "good" : "neutral"}
-    />
-    <StatTile
-      label="Reserved (Locked)"
-      value={formatUsd((gldRes + pgldRes) / CHIPS_PER_USD)}
-      sub={`GLD ${formatChips(gldRes)} • PGLD ${formatChips(pgldRes)}`}
-    />
-  </div>
-</section>
-
-
-        {/* Row 1: Balances + Wallet + Stats */}
         <div className="grid gap-4 md:grid-cols-3">
           <CardShell
             title="Balances"
@@ -654,7 +615,6 @@ useEffect(() => {
                 label="PGLD (Poker Chips)"
                 value={formatChips(pgldBal)}
                 sub={`Reserved: ${formatChips(pgldRes)}`}
-                tone="neutral"
               />
               <div className="rounded-xl border border-white/10 bg-black/40 p-3">
                 <div className="text-[10px] uppercase tracking-[0.25em] text-white/45">
@@ -752,24 +712,25 @@ useEffect(() => {
           </CardShell>
         </div>
 
-        {/* Row 2: Cashier + Activity/Settings */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <CardShell
             title="Cashier"
             subtitle="Swap BGLD ⇄ GLD / PGLD (preview). Settlement wiring comes next."
             right={<Pill label="Preview" tone="warn" />}
           >
-            <CashierSwapBox
-  playerId={profile?.id}
-  balances={{ gld: gldBal, pgld: pgldBal }}
-  onBalances={(next) => {
-    // optional immediate UI optimism; real truth comes from refreshChips()
-    // you can also just call refreshChips() here if you prefer
-    refreshChips();
-  }}
-/>
-
-
+            {cashierPlayerId ? (
+              <CashierSwapBox
+                playerId={cashierPlayerId}
+                balances={{ gld: gldBal, pgld: pgldBal }}
+                onBalances={() => {
+                  refreshChips();
+                }}
+              />
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-[11px] text-white/60">
+                Loading cashier identity…
+              </div>
+            )}
 
             <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3 text-[11px] text-white/60">
               GLD is the main casino currency for all non-poker games. PGLD is poker-only.
@@ -796,7 +757,6 @@ useEffect(() => {
               </div>
             ) : (
               <form onSubmit={saveEdits} className="space-y-3">
-                {/* Identity */}
                 <div className="rounded-xl border border-white/10 bg-black/40">
                   <button
                     type="button"
@@ -882,7 +842,6 @@ useEffect(() => {
                   ) : null}
                 </div>
 
-                {/* Preferences */}
                 <div className="rounded-xl border border-white/10 bg-black/40">
                   <button
                     type="button"
@@ -955,7 +914,6 @@ useEffect(() => {
                   ) : null}
                 </div>
 
-                {/* Privacy */}
                 <div className="rounded-xl border border-white/10 bg-black/40">
                   <button
                     type="button"

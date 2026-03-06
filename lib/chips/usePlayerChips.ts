@@ -1,7 +1,7 @@
 // lib/chips/usePlayerChips.ts
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 
 export type ChipState = {
@@ -15,21 +15,22 @@ function getOrCreateLocalPlayerId(): string | null {
   if (typeof window === "undefined") return null;
 
   try {
-    // ✅ canonical key everywhere
     const CANON = "player-id";
 
-    // ✅ migrate older key used by lobby
+    // migrate older key if it exists
     const legacy = window.localStorage.getItem("playerId");
     const canonExisting = window.localStorage.getItem(CANON);
 
-    if (canonExisting && canonExisting.trim().length >= 3) return canonExisting;
-
-    if (legacy && legacy.trim().length >= 3) {
-      window.localStorage.setItem(CANON, legacy.trim());
-      return legacy.trim();
+    if (canonExisting && canonExisting.trim().length >= 3) {
+      return canonExisting.trim();
     }
 
-    // create new
+    if (legacy && legacy.trim().length >= 3) {
+      const migrated = legacy.trim();
+      window.localStorage.setItem(CANON, migrated);
+      return migrated;
+    }
+
     const id =
       "p-" +
       (typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -43,7 +44,7 @@ function getOrCreateLocalPlayerId(): string | null {
   }
 }
 
-export function usePlayerChips() {
+export function usePlayerChips(forcedPlayerId?: string | null) {
   const { profile } = usePlayerProfileContext();
 
   const [chips, setChips] = useState<ChipState>({
@@ -56,19 +57,23 @@ export function usePlayerChips() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<unknown>(null);
 
-  // ✅ stable player id:
-  // - prefer authed profile id
-  // - fallback to canonical local id (demo/dev)
+  const activeRequestRef = useRef(0);
+
   const playerId = useMemo(() => {
-    const pid = String(profile?.id ?? "").trim();
-    if (pid.length >= 3) return pid;
+    const forced = String(forcedPlayerId ?? "").trim();
+    if (forced.length >= 3) return forced;
+
+    const profileId = String(profile?.id ?? "").trim();
+    if (profileId.length >= 3) return profileId;
 
     const local = getOrCreateLocalPlayerId();
     return local && local.length >= 3 ? local : "";
-  }, [profile?.id]);
+  }, [forcedPlayerId, profile?.id]);
 
   const fetchChips = useCallback(async () => {
     if (!playerId || playerId.length < 3) return;
+
+    const reqId = ++activeRequestRef.current;
 
     try {
       setLoading(true);
@@ -86,6 +91,8 @@ export function usePlayerChips() {
 
       const data = (await res.json()) as Partial<ChipState>;
 
+      if (reqId !== activeRequestRef.current) return;
+
       setChips({
         balance_gld: Number(data.balance_gld ?? 0),
         reserved_gld: Number(data.reserved_gld ?? 0),
@@ -93,10 +100,13 @@ export function usePlayerChips() {
         reserved_pgld: Number(data.reserved_pgld ?? 0),
       });
     } catch (err) {
+      if (reqId !== activeRequestRef.current) return;
       console.error("[usePlayerChips] error", err);
       setError(err);
     } finally {
-      setLoading(false);
+      if (reqId === activeRequestRef.current) {
+        setLoading(false);
+      }
     }
   }, [playerId]);
 
@@ -109,6 +119,6 @@ export function usePlayerChips() {
     loading,
     error,
     refresh: fetchChips,
-    playerId, // ✅ exposes for debugging/UI if you want
+    playerId,
   };
 }
