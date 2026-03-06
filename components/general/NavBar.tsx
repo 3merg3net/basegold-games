@@ -5,28 +5,17 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState, MouseEvent } from 'react'
 import { Menu, X } from 'lucide-react'
 
-
-
-
 type NavItem = { href: string; label: string }
 
 // Top-level sections
 const staticItems: NavItem[] = [{ href: '/', label: 'Home' }]
 
-
-
-
-// Floors – poker first, blackjack second (casino removed for now)
+// Floors
 const sectionItems: NavItem[] = [
   { href: '/poker', label: 'Poker' },
   { href: '/blackjack-live', label: 'Blackjack' },
 ]
 
-
-/**
- * Helper that falls back to a plain <a> (hard nav) on poker room detail routes.
- * This avoids any client router weirdness specifically on /poker/[roomId].
- */
 function NavLink(props: {
   href: string
   className?: string
@@ -36,7 +25,6 @@ function NavLink(props: {
   const pathname = usePathname()
   const { href, className, children, onClick } = props
 
-  // On room routes like /poker/foo, force a full navigation
   const isPokerRoomDetail =
     pathname?.startsWith('/poker/') && pathname !== '/poker'
 
@@ -54,7 +42,6 @@ function NavLink(props: {
     </Link>
   )
 }
-
 
 export default function NavBar() {
   const pathname = usePathname()
@@ -94,10 +81,9 @@ export default function NavBar() {
           ? window.location.origin
           : 'https://casino.basereserve.gold'
 
-      // send people straight to poker lobby now
       const url = `${base}/poker`
       const text =
-  'Join me at BGLD Rush Live Tables — peer-to-peer poker on Base with real-time action. 🃏'
+        'Join me at BGLD Rush Live Tables — peer-to-peer poker on Base with real-time action. 🃏'
 
       if (typeof navigator !== 'undefined' && (navigator as any).share) {
         await (navigator as any).share({ title: 'Base Gold Rush Poker', text, url })
@@ -110,9 +96,6 @@ export default function NavBar() {
         setInviteCopied(true)
         setTimeout(() => setInviteCopied(false), 2000)
       } else {
-        setInviteCopied(true)
-        setTimeout(() => setInviteCopied(false), 2000)
-        // eslint-disable-next-line no-alert
         alert(`Share this link with your friends:\n\n${url}`)
       }
     } catch (err) {
@@ -122,17 +105,21 @@ export default function NavBar() {
 
   return (
     <nav className="relative flex w-full items-center justify-between">
+
       {/* Desktop nav */}
       <div className="hidden md:flex w-full items-center justify-between gap-4">
-        {/* Left: Home + floors */}
+
+        {/* Left side */}
         <div className="flex items-center gap-4 min-w-0">
+
+          {/* Home */}
           <div className="flex items-center gap-2">
             {staticItems.map((it) => (
               <NavLink
                 key={it.href}
                 href={it.href}
                 className={[
-                  'text-xs font-semibold tracking-wide uppercase',
+                  'text-xs font-semibold tracking-wide uppercase transition-colors',
                   'text-white/60 hover:text-white',
                   isActive(it.href) ? 'text-[#FFD700]' : '',
                 ].join(' ')}
@@ -140,44 +127,44 @@ export default function NavBar() {
                 {it.label}
               </NavLink>
             ))}
+
             <span className="h-4 w-px bg-white/15" />
           </div>
 
-          {/* Casino floors segmented control */}
-          <div className="inline-flex items-center rounded-full bg-black/60 border border-white/15 px-1 py-0.5 shadow-[0_0_18px_rgba(0,0,0,0.7)]">
+          {/* Game floors */}
+          <div className="inline-flex items-center rounded-full border border-white/15 bg-black/60 px-1 py-0.5 shadow-[0_0_18px_rgba(0,0,0,0.7)]">
+
             {sectionItems.map((it) => {
               const active = isActive(it.href)
-              const isPoker = it.href === '/poker'
+
               return (
                 <NavLink
                   key={it.href}
                   href={it.href}
                   className={[
-                    'px-3 py-1 rounded-full text-[11px] font-semibold transition-colors whitespace-nowrap',
+  'px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap',
+  'border transition-all duration-200 nav-shimmer',
                     active
-                      ? 'bg-[#FFD700]/90 text-black shadow-[0_0_14px_rgba(250,204,21,0.9)]'
-                      : isPoker
-                      ? 'text-[#FFD700]/90 hover:bg-white/10 hover:text-white'
-                      : 'text-white/75 hover:bg-white/10 hover:text-white',
+  ? 'border-[#FFD700]/70 bg-[#FFD700]/90 text-black animate-gold-pulse'
+                      : [
+                          'border-transparent text-white/75',
+                          'hover:text-white',
+                          'hover:border-[#FACC15]/35',
+                          'hover:bg-white/10',
+                          'hover:shadow-[0_0_14px_rgba(250,204,21,0.15)]',
+                        ].join(' '),
                   ].join(' ')}
                 >
-                  <span className="flex items-center gap-1">
-                    {it.label}
-                    {isPoker && (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        LIVE
-                      </span>
-                    )}
-                  </span>
+                  {it.label}
                 </NavLink>
               )
             })}
           </div>
         </div>
 
-        {/* Right: actions */}
+        {/* Right side buttons */}
         <div className="flex items-center gap-2">
+
           <button
             onClick={handleInvite}
             className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-emerald-400/40 text-emerald-200 bg-black/40 hover:bg-emerald-500/10 hover:border-emerald-300 transition-colors"
@@ -186,35 +173,32 @@ export default function NavBar() {
           </button>
 
           <NavLink
-  href="/account"
-  className={[
-    "px-3 py-1.5 rounded-full text-[11px] font-semibold border",
-    "border-white/25 text-white/80 bg-black/50 hover:bg-white/10 hover:text-white",
-  ].join(" ")}
->
-  Account
-</NavLink>
+            href="/account"
+            className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-transparent text-white/80 bg-black/50 hover:bg-white/10 hover:text-white hover:border-[#FACC15]/30 hover:shadow-[0_0_12px_rgba(250,204,21,0.15)] transition-all"
+          >
+            Account
+          </NavLink>
 
-<NavLink
-  href="/profile"
-  className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-white/15 text-white/60 bg-black/40 hover:bg-white/10"
->
-  Setup
-</NavLink>
+          <NavLink
+            href="/profile"
+            className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-transparent text-white/60 bg-black/40 hover:bg-white/10 hover:text-white hover:border-[#FACC15]/25 transition-all"
+          >
+            Setup
+          </NavLink>
 
-
-          {/* ✅ Cashier now routes directly */}
           <NavLink
             href="/cashier"
-            className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#facc15]/50 text-[#facc15] bg-black/50 hover:bg-[#1f2937]"
+            className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#facc15]/50 text-[#facc15] bg-black/50 hover:bg-[#1f2937] hover:border-[#facc15]/80 hover:shadow-[0_0_16px_rgba(250,204,21,0.25)] transition-all"
           >
             Cashier
           </NavLink>
+
         </div>
       </div>
 
       {/* Mobile nav */}
       <div ref={mobileBoxRef} className="md:hidden ml-auto relative">
+
         <button
           onClick={() => setOpen((v) => !v)}
           aria-label="Menu"
@@ -226,16 +210,17 @@ export default function NavBar() {
         {open && (
           <div
             className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[#FFD700]/30 bg-black z-[80] shadow-2xl overflow-hidden"
-            role="menu"
-            aria-label="Mobile navigation"
           >
-            <div className="py-1 max-h-[80vh] overflow-y-auto text-sm">
+            <div className="max-h-[80vh] overflow-y-auto py-1 text-sm">
+
               {/* Main */}
               <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Main
               </div>
+
               {staticItems.map((it) => {
                 const active = isActive(it.href)
+
                 return (
                   <NavLink
                     key={it.href}
@@ -257,9 +242,10 @@ export default function NavBar() {
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Floors
               </div>
+
               {sectionItems.map((it) => {
                 const active = isActive(it.href)
-                const isPoker = it.href === '/poker'
+
                 return (
                   <NavLink
                     key={it.href}
@@ -272,15 +258,7 @@ export default function NavBar() {
                         : 'bg-black text-white/80 hover:bg-[#0f0f0f]',
                     ].join(' ')}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{it.label}</span>
-                      {isPoker && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          LIVE
-                        </span>
-                      )}
-                    </div>
+                    {it.label}
                   </NavLink>
                 )
               })}
@@ -289,28 +267,28 @@ export default function NavBar() {
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Player
               </div>
+
               <NavLink
-  href="/account"
-  onClick={() => setOpen(false)}
-  className="block w-full px-4 py-2.5 text-sm font-semibold text-[#FFD700] bg-black hover:bg-[#0f0f0f] border-t border-white/10"
->
-  Account
-</NavLink>
+                href="/account"
+                onClick={() => setOpen(false)}
+                className="block w-full border-t border-white/10 bg-black px-4 py-2.5 text-sm font-semibold text-[#FFD700] hover:bg-[#0f0f0f]"
+              >
+                Account
+              </NavLink>
 
-<NavLink
-  href="/profile"
-  onClick={() => setOpen(false)}
-  className="block w-full px-4 py-2.5 text-sm font-semibold text-white/80 bg-black hover:bg-[#0f0f0f]"
->
-  Setup (Profile)
-</NavLink>
-
-
+              <NavLink
+                href="/profile"
+                onClick={() => setOpen(false)}
+                className="block w-full bg-black px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-[#0f0f0f]"
+              >
+                Setup (Profile)
+              </NavLink>
 
               {/* Share */}
               <div className="px-4 pt-4 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Share
               </div>
+
               <button
                 onClick={async () => {
                   await handleInvite()
@@ -321,10 +299,11 @@ export default function NavBar() {
                 {inviteCopied ? 'Invite link copied' : 'Invite friends to poker'}
               </button>
 
-              {/* ✅ Cashier (no modal) */}
+              {/* Cashier */}
               <div className="px-4 pt-1 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
                 Cashier
               </div>
+
               <NavLink
                 href="/cashier"
                 onClick={() => setOpen(false)}
@@ -332,6 +311,7 @@ export default function NavBar() {
               >
                 Open Cashier →
               </NavLink>
+
             </div>
           </div>
         )}

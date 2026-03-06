@@ -2411,8 +2411,8 @@ if (!seat || !isOccupied) {
       "relative z-0 flex h-14 w-14 md:h-20 md:w-20 items-center justify-center rounded-full overflow-hidden transition",
       isOccupied ? "bg-slate-900" : "bg-black/40",
       isOccupied && isCurrentTurn
-        ? "seat-turn-glow border border-[#FACC15] shadow-[0_0_22px_rgba(250,204,21,0.85)]"
-        : "border border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.9)]",
+  ? "seat-turn-glow seat-turn-pulse border border-[#FACC15] shadow-[0_0_22px_rgba(250,204,21,0.85)]"
+  : "border border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.9)]",
       isWinnerSeat ? "winner-glow" : "",
       isOccupied && isOut ? "opacity-40" : "",
     ]
@@ -2499,11 +2499,13 @@ if (!seat || !isOccupied) {
       "rounded-xl md:rounded-2xl",
       isHeroSeat
         ? "bg-gradient-to-r from-black/72 via-[#16110a]/78 to-black/72 border border-[#FACC15]/35"
-        : "bg-black/50 border border-white/12",
+        : "bg-black/55 border border-white/12",
       "backdrop-blur",
-      "shadow-[0_0_10px_rgba(0,0,0,0.82)]",
-      "px-2 py-[3px] md:px-2.5 md:py-[4px]",
-      "min-w-[96px] max-w-[140px] md:max-w-[180px]",
+      isHeroSeat
+  ? "shadow-[0_0_14px_rgba(250,204,21,0.22),0_0_10px_rgba(0,0,0,0.82)]"
+  : "shadow-[0_0_10px_rgba(0,0,0,0.82)]",,
+      "px-2 py-[4px]",
+      "max-w-[105px] md:max-w-[150px]",
     ].join(" ")}
   >
     {/* PLAYER NAME */}
@@ -2523,8 +2525,8 @@ if (!seat || !isOccupied) {
       })}
     </div>
 
-    {/* STACK + USD */}
-    <div className="mt-[1px] flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
+    {/* PGLD STACK */}
+    <div className="mt-[1px] flex items-center gap-1">
       <span
         className={[
           "inline-block h-2 w-2 rounded-full shrink-0",
@@ -2533,18 +2535,15 @@ if (!seat || !isOccupied) {
             : "bg-emerald-300/90 shadow-[0_0_6px_rgba(110,231,183,0.35)]",
         ].join(" ")}
       />
-
       <span className="text-[9px] md:text-[11px] font-mono font-extrabold text-[#FACC15]">
         {formatChips(stackAmount)}
       </span>
-
       <span className="text-[8px] md:text-[10px] text-white/45">PGLD</span>
+    </div>
 
-      <span className="text-[8px] md:text-[10px] text-white/25">•</span>
-
-      <span className="text-[8px] md:text-[10px] font-mono font-semibold text-emerald-200/90">
-        {formatUsdFromPgld(stackAmount)}
-      </span>
+    {/* USD VALUE */}
+    <div className="text-[8px] md:text-[10px] font-mono text-emerald-200/90 leading-tight">
+      {formatUsdFromPgld(stackAmount)}
     </div>
   </div>
 </div>
@@ -3584,13 +3583,42 @@ const canShowCards =
   
 
 @keyframes potPulse {
-  0% { transform: translateZ(0) scale(1); box-shadow: 0 0 18px rgba(0,0,0,0.9); }
-  45% { transform: translateZ(0) scale(1.06); box-shadow: 0 0 24px rgba(250,204,21,0.55), 0 0 18px rgba(0,0,0,0.9); }
-  100% { transform: translateZ(0) scale(1); box-shadow: 0 0 18px rgba(0,0,0,0.9); }
+  0% {
+    transform: translateZ(0) scale(1);
+    box-shadow: 0 0 18px rgba(0,0,0,0.9);
+  }
+  40% {
+    transform: translateZ(0) scale(1.045);
+    box-shadow:
+      0 0 24px rgba(250,204,21,0.42),
+      0 0 40px rgba(16,185,129,0.14),
+      0 0 18px rgba(0,0,0,0.9);
+  }
+  100% {
+    transform: translateZ(0) scale(1);
+    box-shadow: 0 0 18px rgba(0,0,0,0.9);
+  }
+}
 }
 
 .pot-pulse {
   animation: potPulse 0.26s ease-out;
+}
+
+@keyframes seatTurnPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.seat-turn-pulse {
+  animation: seatTurnPulse 1.1s ease-in-out infinite;
 }
 
 @keyframes seatTurnGlow {

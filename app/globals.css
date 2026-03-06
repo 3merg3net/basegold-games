@@ -384,3 +384,70 @@ body { font-feature-settings: "tnum"; }
   border: 2px solid rgba(0,0,0,0.6);
 }
 
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 10px rgba(250, 204, 21, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(250, 204, 21, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(250, 204, 21, 0.45);
+  }
+}
+
+.animate-gold-pulse {
+  animation: goldPulse 2.4s ease-in-out infinite;
+}
+
+/* gold pulse for active tab */
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 10px rgba(250, 204, 21, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(250, 204, 21, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(250, 204, 21, 0.45);
+  }
+}
+
+.animate-gold-pulse {
+  animation: goldPulse 2.4s ease-in-out infinite;
+}
+
+/* shimmer sweep */
+.nav-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  transform: skewX(-20deg);
+}
+
+.nav-shimmer:hover::after {
+  animation: shimmerSweep 0.9s ease;
+}
+
+@keyframes shimmerSweep {
+  0% {
+    left: -120%;
+  }
+  100% {
+    left: 140%;
+  }
+}

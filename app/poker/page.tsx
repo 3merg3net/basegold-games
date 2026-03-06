@@ -496,13 +496,7 @@ export default function PokerCashLobbyPage() {
                         {open ? 'Play Now' : 'Full'}
                       </Link>
 
-                      <Link
-                        href={href}
-                        className="inline-flex items-center justify-center rounded-2xl border border-white/12 bg-black/40 px-3 py-2.5 text-[12px] font-extrabold text-white/70 hover:bg-white/5"
-                        title="View table"
-                      >
-                        View
-                      </Link>
+                      
                     </div>
 
                     {/* admin / owner tools */}
