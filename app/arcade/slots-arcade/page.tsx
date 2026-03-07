@@ -383,6 +383,8 @@ export default function SlotsArcadePage() {
               animation: none !important;
             }
           }
+
+          
         `}</style>
       </section>
     </main>

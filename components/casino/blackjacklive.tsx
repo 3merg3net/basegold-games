@@ -15,10 +15,7 @@ import {
   useBlackjackRoom,
   type BlackjackTableState,
   type BlackjackSeatState,
-  type BlackjackHandResult,
 } from "@/lib/blackjackClient/useBlackjackRoom";
-import { useArcadeWallet } from "@/lib/useArcadeWallet";
-
 import { usePlayerProfileContext } from "@/lib/player/PlayerProfileProvider";
 import { usePlayerChips } from "@/lib/chips/usePlayerChips";
 
@@ -35,27 +32,26 @@ const GLD_PER_USD = 100;
  * 0 = far right, 6 = far left, arcing up toward table edge.
  */
 const BJ_SEAT_POSITIONS: CSSProperties[] = [
-  { left: "76%", top: "24%" }, // 0 right
-  { left: "74%", top: "40%" }, // 1
-  { left: "64%", top: "53%" }, // 2 bottom-right
-  { left: "44%", top: "59%" }, // 3 center
-  { left: "24%", top: "53%" }, // 4 bottom-left
-  { left: "14%", top: "40%" }, // 5
-  { left: "12%", top: "24%" }, // 6 left
+  { left: "76%", top: "24%" },
+  { left: "74%", top: "40%" },
+  { left: "64%", top: "53%" },
+  { left: "44%", top: "59%" },
+  { left: "24%", top: "53%" },
+  { left: "14%", top: "40%" },
+  { left: "12%", top: "24%" },
 ];
 
 /**
- * Seat positions tuned for MOBILE (taller aspect, narrower width).
- * 0 = far right, 6 = far left.
+ * Mobile positions tightened upward to reduce overlap with bottom controls.
  */
 const BJ_SEAT_POSITIONS_MOBILE: CSSProperties[] = [
-  { left: "84%", top: "34%" }, // 0 right
-  { left: "79%", top: "43%" }, // 1
-  { left: "67%", top: "51%" }, // 2 bottom-right
-  { left: "50%", top: "55%" }, // 3 bottom-center
-  { left: "33%", top: "51%" }, // 4 bottom-left
-  { left: "21%", top: "43%" }, // 5
-  { left: "16%", top: "34%" }, // 6 left
+  { left: "83%", top: "29%" },
+  { left: "77%", top: "38%" },
+  { left: "66%", top: "46%" },
+  { left: "50%", top: "50%" },
+  { left: "34%", top: "46%" },
+  { left: "23%", top: "38%" },
+  { left: "17%", top: "29%" },
 ];
 
 /* ───────────── Helpers ───────────── */
@@ -130,41 +126,6 @@ function computeBlackjackValue(cards: string[]) {
   return { total, soft };
 }
 
-function getResultBadge(
-  result: BlackjackHandResult | undefined
-): { label: string; className: string } | null {
-  if (!result || result === "pending") return null;
-
-  switch (result) {
-    case "blackjack":
-      return {
-        label: "BLACKJACK",
-        className:
-          "bg-emerald-500/90 text-black border border-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.7)]",
-      };
-    case "win":
-      return {
-        label: "WIN",
-        className:
-          "bg-emerald-500/90 text-black border border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.6)]",
-      };
-    case "lose":
-      return {
-        label: "LOSE",
-        className:
-          "bg-red-500/90 text-black border border-red-200 shadow-[0_0_10px_rgba(239,68,68,0.6)]",
-      };
-    case "push":
-      return {
-        label: "PUSH",
-        className:
-          "bg-slate-500/90 text-white border border-slate-200 shadow-[0_0_10px_rgba(148,163,184,0.6)]",
-      };
-    default:
-      return null;
-  }
-}
-
 function parseCard(card: string) {
   if (!card || card === "XX") {
     return {
@@ -184,29 +145,33 @@ function parseCard(card: string) {
   return { isBack: false, rankLabel, suitLabel, suitColor };
 }
 
-type BJCardProps = { card: string; small?: boolean };
+type BJCardProps = {
+  card: string;
+  small?: boolean;
+  animateFlip?: boolean;
+  animatePop?: boolean;
+};
 
-function BJCard({ card, small = false }: BJCardProps) {
+function BJCard({
+  card,
+  small = false,
+  animateFlip = false,
+  animatePop = false,
+}: BJCardProps) {
   const { isBack, rankLabel, suitLabel, suitColor } = parseCard(card);
 
   const baseSize = small
-  ? "w-9 h-12 text-[11px] md:w-10 md:h-14 md:text-[12px]"
-  : "w-11 h-16 text-sm md:w-[62px] md:h-[90px] md:text-[18px]";
+    ? "w-9 h-12 text-[11px] md:w-10 md:h-14 md:text-[12px]"
+    : "w-11 h-16 text-sm md:w-[66px] md:h-[96px] md:text-[18px]";
 
-  if (isBack) {
-    return (
-      <div
-        className={`${baseSize} rounded-lg bg-gradient-to-br from-sky-500 via-blue-600 to-slate-900 border border-white/40 shadow-[0_4px_10px_rgba(0,0,0,0.75)] flex items-center justify-center`}
-      >
-        <div className="w-[80%] h-[80%] rounded-md border border-white/40 bg-[radial-gradient(circle_at_top,#38bdf8_0,#0f172a_70%)]" />
-      </div>
-    );
-  }
+  const backFace = (
+    <div className="h-full w-full rounded-lg bg-gradient-to-br from-sky-500 via-blue-600 to-slate-900 border border-white/40 shadow-[0_4px_10px_rgba(0,0,0,0.75)] flex items-center justify-center">
+      <div className="w-[80%] h-[80%] rounded-md border border-white/40 bg-[radial-gradient(circle_at_top,#38bdf8_0,#0f172a_70%)]" />
+    </div>
+  );
 
-  return (
-    <div
-      className={`${baseSize} relative rounded-lg bg-white border border-slate-200 shadow-[0_4px_10px_rgba(0,0,0,0.45)] flex flex-col justify-between px-1 py-0.5`}
-    >
+  const frontFace = (
+    <div className="h-full w-full relative rounded-lg bg-white border border-slate-200 shadow-[0_4px_10px_rgba(0,0,0,0.45)] flex flex-col justify-between px-1 py-0.5">
       <div className="flex items-start justify-between">
         <span className="font-bold text-slate-900 leading-none">
           {rankLabel}
@@ -237,7 +202,72 @@ function BJCard({ card, small = false }: BJCardProps) {
       </div>
     </div>
   );
+
+  // simple back card
+  if (isBack) {
+    return (
+      <div
+        className={[
+          "relative",
+          baseSize,
+          animatePop ? "animate-[bjCardPop_320ms_ease-out]" : "",
+        ].join(" ")}
+      >
+        {backFace}
+      </div>
+    );
+  }
+
+  // normal visible face card
+  if (!animateFlip) {
+    return (
+      <div
+        className={[
+          "relative",
+          baseSize,
+          animatePop ? "animate-[bjCardPop_320ms_ease-out]" : "",
+        ].join(" ")}
+      >
+        {frontFace}
+      </div>
+    );
+  }
+
+  // animated flip from back -> front
+  return (
+    <div
+      className={[
+        "relative",
+        baseSize,
+        animatePop ? "animate-[bjCardPop_320ms_ease-out]" : "",
+      ].join(" ")}
+      style={{ perspective: "1000px" }}
+    >
+      <div
+        className="relative h-full w-full animate-[bjCardFlip_520ms_ease-out_forwards]"
+        style={{ transformStyle: "preserve-3d" }}
+      >
+        <div
+          className="absolute inset-0"
+          style={{ backfaceVisibility: "hidden" }}
+        >
+          {backFace}
+        </div>
+
+        <div
+          className="absolute inset-0"
+          style={{
+            backfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          {frontFace}
+        </div>
+      </div>
+    </div>
+  );
 }
+
 
 /* ───────────── Main component ───────────── */
 
@@ -283,6 +313,10 @@ export default function BlackjackLive() {
   const lastScrollKeyRef = useRef<string | null>(null);
 
   const optimisticExtraRef = useRef<Map<string, number>>(new Map());
+  const seenDealerCardsRef = useRef<Set<string>>(new Set());
+  const seenPlayerCardsRef = useRef<Set<string>>(new Set());
+  const [dealerTotalPulseTick, setDealerTotalPulseTick] = useState(0);
+  const lastDealerTotalRef = useRef<number | null>(null);
 
   type SeatOutcome = {
     key: string;
@@ -291,7 +325,14 @@ export default function BlackjackLive() {
     until: number;
   };
 
+  type BetFlash = {
+    key: string;
+    amount: number;
+    until: number;
+  };
+
   const seatOutcomeFlashRef = useRef<Map<string, SeatOutcome>>(new Map());
+  const betFlashRef = useRef<Map<string, BetFlash>>(new Map());
   const [, forceSeatFlashRerender] = useState(0);
 
   const dealerNewCardIndex = useRef<number>(-1);
@@ -379,15 +420,6 @@ export default function BlackjackLive() {
     }
   }, []);
 
-  const [isLandscape, setIsLandscape] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(orientation: landscape)");
-    const onChange = () => setIsLandscape(mq.matches);
-    onChange();
-    mq.addEventListener?.("change", onChange);
-    return () => mq.removeEventListener?.("change", onChange);
-  }, []);
-
   const [stablePlayerId, setStablePlayerId] = useState<string | null>(null);
   useEffect(() => {
     if (stablePlayerId) return;
@@ -400,8 +432,6 @@ export default function BlackjackLive() {
   const {
     playerId: chipsPlayerId,
     chips: chipState,
-    loading: chipsLoading,
-    error: chipsError,
     refresh: refreshChips,
   } = usePlayerChips();
 
@@ -411,7 +441,6 @@ export default function BlackjackLive() {
   const reservedGld = Number(chipState?.reserved_gld ?? 0);
   const playableGld = Math.max(0, balanceGld - reservedGld);
   const credits = playableGld;
-
   const creditsUsd = gldToUsd(credits);
 
   const wsUrl = process.env.NEXT_PUBLIC_BLACKJACK_WS || "";
@@ -453,6 +482,15 @@ export default function BlackjackLive() {
   const [dealerCardsAnimated, setDealerCardsAnimated] = useState<string[]>([]);
   const dealerCardsToRender =
     phase === "dealer-turn" ? dealerCardsAnimated : dealerCardsRaw;
+
+  useEffect(() => {
+    if (phase === "waiting-bets" || phase === "round-complete") {
+      seenDealerCardsRef.current.clear();
+      seenPlayerCardsRef.current.clear();
+      dealerNewCardIndex.current = -1;
+      lastDealerTotalRef.current = null;
+    }
+  }, [table?.roundId, phase]);
 
   useEffect(() => {
     if (phase !== "dealer-turn") {
@@ -516,6 +554,16 @@ export default function BlackjackLive() {
     return { total, soft, hideHole };
   }, [table, phase, dealerCardsToRender]);
 
+  useEffect(() => {
+    const total = dealerValue?.total ?? null;
+    if (total === null) return;
+
+    if (lastDealerTotalRef.current !== null && lastDealerTotalRef.current !== total) {
+      setDealerTotalPulseTick((x) => x + 1);
+    }
+    lastDealerTotalRef.current = total;
+  }, [dealerValue?.total]);
+
   const heroSeat: BlackjackSeatState | null =
     table && heroSeatIndex !== null
       ? table.seats.find((s) => s.seatIndex === heroSeatIndex) ?? null
@@ -525,12 +573,6 @@ export default function BlackjackLive() {
     heroSeat && heroSeat.hands && heroSeat.hands.length > 0
       ? heroSeat.hands[activeHandIndex ?? 0] ?? heroSeat.hands[0]
       : null;
-
-  const heroValue = useMemo(() => {
-    if (!heroHand) return null;
-    const { total, soft } = computeBlackjackValue(heroHand.cards);
-    return { total, soft };
-  }, [heroHand]);
 
   const isHeroTurn =
     phase === "player-action" &&
@@ -597,21 +639,6 @@ export default function BlackjackLive() {
     heroSeat &&
     heroSeat.hands.length < 2 &&
     heroHand.cards[0]?.[0] === heroHand.cards[1]?.[0];
-
-  useEffect(() => {
-    if (!table) return;
-    console.log("[BJ PHASE]", {
-      roundId: table.roundId,
-      phase: table.phase,
-      betDeadlineMs: table.betDeadlineMs,
-      activeSeatIndex: table.activeSeatIndex,
-    });
-  }, [
-    table?.roundId,
-    table?.phase,
-    table?.betDeadlineMs,
-    table?.activeSeatIndex,
-  ]);
 
   const autoNextRoundKeyRef = useRef<string | null>(null);
 
@@ -849,8 +876,6 @@ export default function BlackjackLive() {
       meta: meta ?? null,
     };
 
-    console.log("[BJ applyGld] request", payload);
-
     const res = await fetch("/api/chips/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -864,7 +889,6 @@ export default function BlackjackLive() {
       throw new Error(j?.error || "Chip update failed");
     }
 
-    console.log("[BJ applyGld] OK", j);
     return j;
   }
 
@@ -903,7 +927,23 @@ export default function BlackjackLive() {
 
       placeBet(heroSeatIndex, amount);
       setLastBet(amount);
+
+      const flashKey = `${derivedRoomId}:${effectivePlayerId}:${table.roundId}:${heroSeatIndex}`;
+      betFlashRef.current.set(flashKey, {
+        key: flashKey,
+        amount,
+        until: Date.now() + 650,
+      });
       forceSeatFlashRerender((x) => x + 1);
+
+      window.setTimeout(() => {
+        const cur = betFlashRef.current.get(flashKey);
+        if (cur && Date.now() > cur.until) {
+          betFlashRef.current.delete(flashKey);
+          forceSeatFlashRerender((x) => x + 1);
+        }
+      }, 700);
+
       await refreshChips?.();
     } catch (e) {
       console.error("[BJ] bet debit failed", e);
@@ -955,6 +995,22 @@ export default function BlackjackLive() {
           (optimisticExtraRef.current.get(optKey) ?? 0) + extraWager
         );
 
+        const flashKey = `${derivedRoomId}:${effectivePlayerId}:${table.roundId}:${heroSeatIndex}`;
+        betFlashRef.current.set(flashKey, {
+          key: flashKey,
+          amount: extraWager,
+          until: Date.now() + 650,
+        });
+        forceSeatFlashRerender((x) => x + 1);
+
+        window.setTimeout(() => {
+          const cur = betFlashRef.current.get(flashKey);
+          if (cur && Date.now() > cur.until) {
+            betFlashRef.current.delete(flashKey);
+            forceSeatFlashRerender((x) => x + 1);
+          }
+        }, 700);
+
         await refreshChips?.();
       } catch (e) {
         console.error("[BJ] extra wager debit failed", e);
@@ -999,16 +1055,18 @@ export default function BlackjackLive() {
       s.includes("dealer-bust") ||
       s.includes("dealer_bust") ||
       s.includes("player-win")
-    )
+    ) {
       return "win";
+    }
     if (
       s === "lose" ||
       s.includes("lost") ||
       s.includes("bust") ||
       s.includes("player-bust") ||
       s.includes("dealer-win")
-    )
+    ) {
       return "lose";
+    }
     return "pending";
   }
 
@@ -1049,18 +1107,12 @@ export default function BlackjackLive() {
     let totalReturn = 0;
     for (const hand of seat.hands) totalReturn += computeTotalReturnForHand(hand);
 
-    console.log("[BJ settle] running", {
-      settleKey,
-      totalReturn,
-      hands: seat.hands,
-    });
-
     settleInFlightRef.current = settleKey;
 
     (async () => {
       try {
         if (totalReturn > 0) {
-          const r = await applyGld(+totalReturn, PAYOUT_TXTYPE, {
+          await applyGld(+totalReturn, PAYOUT_TXTYPE, {
             ref: settleKey,
             roomId: derivedRoomId,
             roundId: table.roundId,
@@ -1068,16 +1120,10 @@ export default function BlackjackLive() {
             totalReturn,
             hands: seat.hands,
           });
-
-          console.log("[BJ settle] apply OK", r);
-        } else {
-          console.log("[BJ settle] no return (losses only)", settleKey);
         }
 
         await refreshChips?.();
-
         lastSettledKeyRef.current = settleKey;
-        console.log("[BJ settle] settled OK", settleKey);
       } catch (e) {
         console.error("[BJ settle] FAILED", e);
       } finally {
@@ -1130,12 +1176,19 @@ export default function BlackjackLive() {
 
     const seatWrapperProps = isHero ? { ref: heroSeatRef } : {};
 
-    const mobileScale = isMobile ? (isActive || isHero ? 1.0 : 0.9) : 1.0;
+    const mobileScale = isMobile
+      ? isHero
+        ? 0.92
+        : seatTaken
+        ? 0.72
+        : 0.8
+      : 1;
+
     const mobileOpacity = (() => {
       if (!isMobile) return "";
       if (isHero) return "opacity-100";
-      if (phase === "player-action") return isActive ? "opacity-100" : "opacity-80";
-      return "opacity-100";
+      if (phase === "player-action") return isActive ? "opacity-95" : "opacity-75";
+      return "opacity-90";
     })();
 
     const baseTotalBet = handsToRender.reduce(
@@ -1174,7 +1227,13 @@ export default function BlackjackLive() {
         ? `${derivedRoomId}:${occupantId}:${table.roundId}:${seat.seatIndex}`
         : null;
 
+    const betFlashKey =
+      table && seat.playerId
+        ? `${derivedRoomId}:${occupantId}:${table.roundId}:${seat.seatIndex}`
+        : null;
+
     let flashedOutcome: SeatOutcome | null = null;
+    let betFlash: BetFlash | null = null;
 
     const flashMap = seatOutcomeFlashRef.current;
 
@@ -1193,7 +1252,7 @@ export default function BlackjackLive() {
             0
           );
           const label = computeLabelForSeat(handsToRender);
-          const until = Date.now() + 550;
+          const until = Date.now() + 1600;
 
           flashMap.set(outcomeKey, { key: outcomeKey, pnl, label, until });
           forceSeatFlashRerender((x) => x + 1);
@@ -1205,11 +1264,20 @@ export default function BlackjackLive() {
               flashMap.delete(key);
               forceSeatFlashRerender((x) => x + 1);
             }
-          }, 575);
+          }, 1650);
         }
       }
 
       flashedOutcome = flashMap.get(outcomeKey) ?? null;
+    }
+
+    if (betFlashKey) {
+      const existingBetFlash = betFlashRef.current.get(betFlashKey);
+      if (existingBetFlash && Date.now() > existingBetFlash.until) {
+        betFlashRef.current.delete(betFlashKey);
+        forceSeatFlashRerender((x) => x + 1);
+      }
+      betFlash = betFlashRef.current.get(betFlashKey) ?? null;
     }
 
     const layout =
@@ -1220,9 +1288,21 @@ export default function BlackjackLive() {
         ? "side"
         : "bottom";
 
+    const hideSeatBoxOnMobile =
+      isMobile &&
+      seatTaken &&
+      !isHero &&
+      !showSitButton &&
+      !flashedOutcome;
+
+    const showWinSweep =
+      !!flashedOutcome &&
+      (flashedOutcome.label === "WIN" || flashedOutcome.label === "BJ");
+
     const SeatBox = () => {
       let mainLabel = "—";
       let mainSub: string | null = null;
+      let mainTertiary: string | null = null;
       let mainOnClick: (() => void) | null = null;
 
       let mainClass =
@@ -1236,6 +1316,7 @@ export default function BlackjackLive() {
 
         mainLabel = lbl;
         mainSub = amt;
+        mainTertiary = pnl !== 0 ? gldToUsd(Math.abs(pnl)) : gldToUsd(0);
         mainOnClick = null;
 
         mainClass =
@@ -1246,89 +1327,60 @@ export default function BlackjackLive() {
             : "bg-emerald-500 text-slate-950 shadow-[0_0_22px_rgba(16,185,129,0.55)]";
       } else if (showSitButton) {
         mainLabel = "SIT";
-        mainSub = null;
         mainOnClick = () => handleSit(seat.seatIndex);
       } else if (seatTaken && canShowBetControls) {
-        if (baseTotalBet > 0) {
-          mainLabel = "PLACED";
-          mainSub = baseTotalBet.toLocaleString();
-          mainOnClick = null;
-          mainClass =
-            "bg-emerald-500/70 text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.35)]";
-        } else {
-          mainLabel = "BET";
-          mainSub = betAmount.toLocaleString();
-          mainOnClick = () => handlePlaceBet();
-        }
-      } else if (seatTaken && showActionButtons) {
+  if (baseTotalBet > 0) {
+    mainLabel = "BET PLACED";
+    mainSub = baseTotalBet.toLocaleString();
+    mainTertiary = gldToUsd(baseTotalBet);
+    mainOnClick = null;
+    mainClass =
+      "bg-[#FFD700] text-slate-950 shadow-[0_0_20px_rgba(250,204,21,0.45)]";
+  } else {
+    mainLabel = "BET";
+    mainSub = betAmount.toLocaleString();
+    mainTertiary = gldToUsd(betAmount);
+    mainOnClick = () => handlePlaceBet();
+  }
+} else if (seatTaken && showActionButtons) {
         mainLabel = "HIT";
-        mainSub = null;
         mainOnClick = () => handleAction("hit");
       } else {
         mainLabel = seatTaken ? "IN" : "—";
-        mainSub = null;
         mainOnClick = null;
         mainClass =
           "bg-black/55 text-white/80 border border-white/15 shadow-[0_0_14px_rgba(0,0,0,0.45)]";
       }
 
-      const boxW = isMobile ? "w-[98px]" : "w-[104px]";
-      const pad = "p-[6px]";
+      const boxW = isMobile ? "w-[86px]" : "w-[108px]";
+      const pad = isMobile ? "p-[5px]" : "p-[6px]";
       const rounding = isSitOnly ? "rounded-full" : "rounded-xl";
 
       const shell = isSitOnly
         ? "bg-transparent border border-transparent shadow-none"
         : "bg-black/55 backdrop-blur-md border border-white/15 shadow-[0_0_18px_rgba(0,0,0,0.55)]";
 
-      const canTapToBump =
-        seatTaken && canShowBetControls && baseTotalBet === 0 && !flashedOutcome;
+      const showTopBetStrip =
+        !isSitOnly &&
+        !isMobile &&
+        !isMySeat &&
+        !flashedOutcome &&
+        baseTotalBet > 0;
 
       return (
         <div className={`${boxW} ${rounding} ${shell} ${pad}`}>
-          {!isSitOnly && (
-            <button
-              type="button"
-              disabled={!canTapToBump}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!canTapToBump) return;
-                bumpBet(+BET_STEP);
-              }}
-              className={[
-                "w-full text-left rounded-lg px-2 py-2",
-                "transition active:scale-[0.99]",
-                canTapToBump
-                  ? "bg-black/35 border border-white/10 hover:bg-black/45"
-                  : "bg-transparent border border-transparent cursor-default",
-              ].join(" ")}
-              aria-label="Bet amount (tap to increase)"
-              title={
-                canTapToBump
-                  ? `Tap to +${BET_STEP} (Min ${uiMinBet} / Max ${uiMaxBet})`
-                  : undefined
-              }
-            >
+          {showTopBetStrip && (
+            <div className="w-full rounded-lg px-2 py-2 bg-black/35 border border-white/10">
               <div className="text-[9px] font-extrabold tracking-[0.22em] uppercase text-emerald-300/90">
                 BET
               </div>
-
               <div className="mt-[1px] text-[13px] font-extrabold text-white leading-none">
                 {Math.max(0, baseTotalBet).toLocaleString()}
               </div>
-
               <div className="mt-[1px] text-[9px] font-bold text-white/55 leading-none">
                 {gldToUsd(Math.max(0, baseTotalBet))}
               </div>
-
-              {(phase === "waiting-bets" || phase === "round-complete") &&
-                seatTaken &&
-                baseTotalBet > 0 &&
-                (primaryHand?.cards?.length ?? 0) === 0 && (
-                  <div className="mt-[2px] text-[9px] font-extrabold tracking-[0.22em] uppercase text-emerald-300/90">
-                    BET PLACED
-                  </div>
-                )}
-            </button>
+            </div>
           )}
 
           <button
@@ -1342,16 +1394,18 @@ export default function BlackjackLive() {
             className={[
               isSitOnly
                 ? [
-                    "mt-0 w-full rounded-full px-2 py-[12px]",
+                    "mt-0 w-full rounded-full px-2 py-[10px]",
                     "bg-transparent",
                     "border-2 border-sky-300/80",
                     "text-sky-300",
                     "shadow-[0_0_18px_rgba(56,189,248,0.35)]",
                     "hover:border-sky-200 hover:shadow-[0_0_26px_rgba(56,189,248,0.55)]",
                   ].join(" ")
-                : "mt-2 w-full rounded-lg px-2 py-[7px]",
-              "text-[13px] font-extrabold tracking-[0.18em] uppercase",
-              "active:scale-[0.99] transition",
+                : `${showTopBetStrip ? "mt-2" : "mt-0"} w-full rounded-lg px-2 ${
+                    isMobile ? "py-[7px]" : "py-[8px]"
+                  }`,
+              "text-[13px] font-extrabold tracking-[0.14em] uppercase",
+"active:scale-[0.99] transition-all duration-200",
               !isSitOnly ? mainClass : "",
               !mainOnClick ? "opacity-90 cursor-default" : "",
             ].join(" ")}
@@ -1362,18 +1416,14 @@ export default function BlackjackLive() {
                 {mainSub}
               </div>
             )}
-            {!isSitOnly &&
-              seatTaken &&
-              canShowBetControls &&
-              !flashedOutcome &&
-              (
-                <div className="mt-1 text-[9px] font-bold tracking-normal leading-none opacity-80">
-                  {gldToUsd(baseTotalBet > 0 ? baseTotalBet : betAmount)}
-                </div>
-              )}
+            {mainTertiary && (
+              <div className="mt-1 text-[9px] font-bold tracking-normal leading-none opacity-80">
+                {mainTertiary}
+              </div>
+            )}
           </button>
 
-          {seatTaken && showActionButtons && !isSitOnly && (
+          {seatTaken && showActionButtons && !isSitOnly && !isMobile && (
             <div className="mt-2 grid grid-cols-2 gap-1">
               <button
                 type="button"
@@ -1418,9 +1468,23 @@ export default function BlackjackLive() {
 
     const CardsBlock = () => (
       <div className="relative z-[1] flex flex-col items-center justify-center">
+        {betFlash && (
+          <div className="pointer-events-none absolute left-1/2 -top-7 -translate-x-1/2 z-[5] animate-[bjChipSlide_650ms_ease-out_forwards]">
+            <div className="rounded-full border border-[#FFD700]/55 bg-black/80 px-2.5 py-1 text-[9px] font-extrabold tracking-[0.14em] text-[#FFE58A] shadow-[0_0_18px_rgba(250,204,21,0.35)]">
+              + BET {betFlash.amount.toLocaleString()}
+            </div>
+          </div>
+        )}
+
         {primaryHand && (primaryHand.cards?.length ?? 0) > 0 && (
           <>
-            <div className="flex flex-col items-center justify-center gap-1">
+            <div className="relative flex flex-col items-center justify-center gap-1 overflow-hidden rounded-xl">
+              {showWinSweep && (
+                <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden rounded-xl">
+                  <div className="absolute inset-y-0 -left-1/2 w-1/2 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.28),transparent)] animate-[bjWinSweep_900ms_ease-out_1]" />
+                </div>
+              )}
+
               {handsToRender.map((hand, handIndex) => (
                 <div
                   key={`seat-${seat.seatIndex}-hand-${handIndex}`}
@@ -1429,13 +1493,29 @@ export default function BlackjackLive() {
                   {(hand.cards ?? []).map((c, i) => {
                     const overlap = (hand.cards?.length ?? 0) >= 4;
                     const style: CSSProperties =
-                      overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
+                      overlap && i > 0
+                        ? { marginLeft: isMobile ? "-0.45rem" : "-0.6rem" }
+                        : {};
+
+                    const playerCardKey = `player:${table?.roundId ?? "r0"}:${seat.seatIndex}:${handIndex}:${i}:${c}`;
+                    const shouldAnimateFlip =
+                      c !== "XX" && !seenPlayerCardsRef.current.has(playerCardKey);
+
+                    if (c !== "XX") {
+                      seenPlayerCardsRef.current.add(playerCardKey);
+                    }
+
                     return (
                       <div
                         key={`seat-${seat.seatIndex}-hand-${handIndex}-card-${i}`}
                         style={style}
                       >
-                        <BJCard card={c} small />
+                        <BJCard
+                          card={c}
+                          small
+                          animateFlip={shouldAnimateFlip}
+                          animatePop={shouldAnimateFlip}
+                        />
                       </div>
                     );
                   })}
@@ -1448,7 +1528,8 @@ export default function BlackjackLive() {
                 <div
                   className={[
                     "rounded-full border px-3 py-[3px]",
-                    "text-[11px] md:text-xs font-mono font-bold",
+                    isMobile ? "text-[10px]" : "text-[11px] md:text-xs",
+                    "font-mono font-bold",
                     "shadow-[0_0_14px_rgba(16,185,129,0.25)]",
                     isHero
                       ? "bg-black/90 border-emerald-300/45 text-emerald-100"
@@ -1474,12 +1555,15 @@ export default function BlackjackLive() {
         }}
       >
         {isActive && (
-          <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-xl" />
+          <>
+            <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/20 blur-xl" />
+            <div className="pointer-events-none absolute -inset-2 rounded-[28px] border border-emerald-300/35 shadow-[0_0_24px_rgba(16,185,129,0.25)] animate-pulse" />
+          </>
         )}
 
         <div className="relative z-[1] flex flex-col items-center justify-center gap-2">
           <CardsBlock />
-          <SeatBox />
+          {!hideSeatBoxOnMobile && <SeatBox />}
         </div>
       </div>
     );
@@ -1487,19 +1571,6 @@ export default function BlackjackLive() {
     const mobileAnchorStyle: CSSProperties | undefined = isMobile
       ? { transform: "translateX(-50%)" }
       : undefined;
-
-    if (layout === "bottom") {
-      return (
-        <div
-          key={seat.seatIndex}
-          {...seatWrapperProps}
-          className="absolute"
-          style={{ ...pos, ...(mobileAnchorStyle ?? {}) }}
-        >
-          {wrap}
-        </div>
-      );
-    }
 
     return (
       <div
@@ -1512,6 +1583,8 @@ export default function BlackjackLive() {
       </div>
     );
   }
+
+  const mobileShowUtilityStrip = !heroSeat;
 
   return (
     <div className="flex flex-col gap-3 pb-6">
@@ -1556,7 +1629,7 @@ export default function BlackjackLive() {
           "flex flex-col",
           isFullscreen
             ? "fixed inset-0 z-[9999] rounded-none border-0 p-2 md:p-4"
-            : "p-3 md:p-4",
+            : "p-2 md:p-4",
           isFullscreen
             ? "h-[100dvh] w-[100vw]"
             : "h-[calc(100dvh-160px)] min-h-[540px] md:min-h-[680px]",
@@ -1573,6 +1646,70 @@ export default function BlackjackLive() {
               opacity: 1;
               transform: translateY(0px) scale(1);
               filter: blur(0px);
+            }
+          }
+
+          @keyframes bjCardFlip {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(180deg);
+  }
+}
+
+          @keyframes bjCardPop {
+            0% {
+              opacity: 0;
+              transform: translateY(8px) scale(0.94);
+            }
+            100% {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
+          }
+
+          @keyframes bjChipSlide {
+            0% {
+              opacity: 0;
+              transform: translate(-50%, 10px) scale(0.92);
+            }
+            35% {
+              opacity: 1;
+              transform: translate(-50%, 0px) scale(1);
+            }
+            100% {
+              opacity: 0;
+              transform: translate(-50%, -8px) scale(0.98);
+            }
+          }
+
+          @keyframes bjDealerPulse {
+            0% {
+              transform: scale(0.96);
+              box-shadow: 0 0 0 rgba(250, 204, 21, 0);
+            }
+            50% {
+              transform: scale(1.03);
+              box-shadow: 0 0 24px rgba(250, 204, 21, 0.55);
+            }
+            100% {
+              transform: scale(1);
+              box-shadow: 0 0 0 rgba(250, 204, 21, 0);
+            }
+          }
+
+          @keyframes bjWinSweep {
+            0% {
+              transform: translateX(0%);
+              opacity: 0;
+            }
+            20% {
+              opacity: 1;
+            }
+            100% {
+              transform: translateX(320%);
+              opacity: 0;
             }
           }
         `}</style>
@@ -1613,7 +1750,7 @@ export default function BlackjackLive() {
                   className="object-contain object-center pointer-events-none select-none"
                 />
 
-                {phase === "waiting-bets" && seatedCount > 0 && (
+                {phase === "waiting-bets" && seatedCount > 0 && !isMobile && (
                   <div className="pointer-events-none absolute right-3 top-3 z-[80]">
                     <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-black/65 px-3 py-1.5 text-[11px] font-extrabold text-emerald-200 backdrop-blur">
                       <span className="uppercase tracking-[0.18em]">BETS</span>
@@ -1624,7 +1761,7 @@ export default function BlackjackLive() {
                   </div>
                 )}
 
-                <div className="pointer-events-none absolute left-1/2 top-[26%] md:top-[18%] -translate-x-1/2 z-[40] flex flex-col items-center gap-1.5">
+                <div className="pointer-events-none absolute left-1/2 top-[23%] md:top-[18%] -translate-x-1/2 z-[40] flex flex-col items-center gap-1.5">
                   <div className="flex items-center justify-center">
                     <div className="flex scale-[1.06] md:scale-[1.10]">
                       {dealerCardsToRender.map((c: string, i: number) => {
@@ -1632,6 +1769,15 @@ export default function BlackjackLive() {
                         const style: CSSProperties =
                           overlap && i > 0 ? { marginLeft: "-0.6rem" } : {};
                         const isNewest = i === dealerNewCardIndex.current;
+
+                        const dealerCardKey = `dealer:${table?.roundId ?? "r0"}:${i}:${c}`;
+                        const shouldAnimateFlip =
+                          c !== "XX" &&
+                          !seenDealerCardsRef.current.has(dealerCardKey);
+
+                        if (c !== "XX") {
+                          seenDealerCardsRef.current.add(dealerCardKey);
+                        }
 
                         return (
                           <div
@@ -1646,7 +1792,11 @@ export default function BlackjackLive() {
                                   : ""
                               }
                             >
-                              <BJCard card={c} />
+                              <BJCard
+                                card={c}
+                                animateFlip={shouldAnimateFlip}
+                                animatePop={isNewest}
+                              />
                             </div>
                           </div>
                         );
@@ -1660,6 +1810,7 @@ export default function BlackjackLive() {
 
                   {dealerValue && (
                     <div
+                      key={`dealer-total-${dealerTotalPulseTick}`}
                       className={[
                         "rounded-full",
                         "px-3 py-1.5 md:px-5 md:py-2",
@@ -1668,6 +1819,9 @@ export default function BlackjackLive() {
                         "flex items-center gap-2",
                         "text-[#FFEFA3] font-semibold",
                         "text-[12px] md:text-[13px]",
+                        dealerTotalPulseTick > 0
+                          ? "animate-[bjDealerPulse_380ms_ease-out]"
+                          : "",
                       ].join(" ")}
                     >
                       <span className="uppercase tracking-[0.18em] text-[9px] md:text-[8px] text-white/75">
@@ -1691,11 +1845,11 @@ export default function BlackjackLive() {
                 </div>
 
                 {showBetTimerOnFelt && (
-                  <div className="pointer-events-none absolute left-1/2 top-[9%] -translate-x-1/2 z-[45] flex flex-col items-center gap-1">
+                  <div className="pointer-events-none absolute left-1/2 top-[8%] -translate-x-1/2 z-[45] flex flex-col items-center gap-1">
                     <div
                       className={[
-                        "rounded-full px-5 py-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border text-center",
-                        "font-mono text-[9px] md:text-xs tracking-[0.18em] uppercase",
+                        "rounded-full px-4 md:px-5 py-2 shadow-[0_0_25px_rgba(0,0,0,0.9)] border text-center",
+                        "font-mono text-[8px] md:text-xs tracking-[0.18em] uppercase",
                         isBetTimerCritical
                           ? "bg-red-600 border-red-300 text-black animate-pulse"
                           : "bg-black/85 border-[#FFD700]/70 text-[#FFD700]",
@@ -1705,7 +1859,7 @@ export default function BlackjackLive() {
                     </div>
                     <div
                       className={[
-                        "flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full border-2 font-mono text-lg md:text-2xl",
+                        "flex h-9 w-9 md:h-12 md:w-12 items-center justify-center rounded-full border-2 font-mono text-base md:text-2xl",
                         isBetTimerCritical
                           ? "border-red-300 bg-red-700 text-black shadow-[0_0_24px_rgba(248,113,113,0.9)]"
                           : "border-[#FFD700] bg-black/80 text-[#FFD700] shadow-[0_0_24px_rgba(250,204,21,0.8)]",
@@ -1716,7 +1870,7 @@ export default function BlackjackLive() {
                   </div>
                 )}
 
-                {showActionTimerOnFelt && (
+                {showActionTimerOnFelt && !isMobile && (
                   <div className="pointer-events-none absolute left-1/2 top-[0%] -translate-x-1/2 z-[60] flex flex-col items-center gap-1">
                     <div
                       className={[
@@ -1756,7 +1910,7 @@ export default function BlackjackLive() {
             </span>
             <span className="whitespace-nowrap">{statusMessage}</span>
 
-            {activeSeatIndex !== null && table && (
+            {!isMobile && activeSeatIndex !== null && table && (
               <span className="ml-2 text-white/65 whitespace-nowrap">
                 • Current turn: Seat {activeSeatIndex + 1}
                 {table.seats[activeSeatIndex]?.playerId === effectivePlayerId &&
@@ -1765,7 +1919,7 @@ export default function BlackjackLive() {
             )}
           </div>
 
-          {phase === "waiting-bets" && readyCount > 0 && (
+          {!isMobile && phase === "waiting-bets" && readyCount > 0 && (
             <div className="shrink-0 rounded-full border border-emerald-300/25 bg-emerald-500/10 px-3 py-1 text-[10px] md:text-[11px] font-extrabold text-emerald-200 backdrop-blur-md">
               BETS PLACED {readyCount}/{seatedCount || 7}
             </div>
@@ -1773,13 +1927,13 @@ export default function BlackjackLive() {
         </div>
       </div>
 
-      <div className="md:hidden mt-2 flex items-center justify-between gap-2">
-        <div className="rounded-full border border-[#FFD700]/30 bg-black/60 px-3 py-1 font-mono text-[10px] text-[#FFD700]">
-          GLD: {credits.toLocaleString()}
-          <span className="ml-2 text-emerald-200/90">{creditsUsd}</span>
-        </div>
+      {mobileShowUtilityStrip && (
+        <div className="md:hidden mt-2 flex items-center justify-between gap-2">
+          <div className="rounded-full border border-[#FFD700]/30 bg-black/60 px-3 py-1 font-mono text-[10px] text-[#FFD700]">
+            GLD: {credits.toLocaleString()}
+            <span className="ml-2 text-emerald-200/90">{creditsUsd}</span>
+          </div>
 
-        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleReloadDemo}
@@ -1787,18 +1941,8 @@ export default function BlackjackLive() {
           >
             Mint 10K
           </button>
-
-          {heroSeatIndex !== null && (
-            <button
-              type="button"
-              onClick={() => handleLeave(heroSeatIndex)}
-              className="rounded-full border border-slate-600 bg-black/75 px-3 py-1 text-[10px] font-extrabold text-white hover:bg-slate-800 touch-manipulation"
-            >
-              Leave
-            </button>
-          )}
         </div>
-      </div>
+      )}
 
       <div className="hidden md:block rounded-2xl border border-white/15 bg-gradient-to-b from-slate-950 to-black p-4 text-[11px] text-white/80">
         <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-white/50">
@@ -1840,7 +1984,11 @@ export default function BlackjackLive() {
           <button
             type="button"
             onClick={handlePlaceBet}
-            disabled={!canPlaceBet || credits < uiMinBet || phase !== "waiting-bets"}
+            disabled={
+              !canPlaceBet ||
+              credits < uiMinBet ||
+              !(phase === "waiting-bets" || phase === "round-complete")
+            }
             className="rounded-lg bg-[#FFD700] px-3 py-1.5 font-semibold text-black hover:bg-yellow-400 disabled:opacity-40"
           >
             Place bet
@@ -1904,8 +2052,8 @@ export default function BlackjackLive() {
           className={[
             "flex flex-col gap-2 rounded-2xl border border-white/15 backdrop-blur md:hidden",
             isFullscreen
-              ? "fixed left-2 right-2 bottom-2 z-[10001] bg-black/75 p-2 pb-[calc(env(safe-area-inset-bottom)+8px)]"
-              : "bg-black/40 p-2",
+              ? "fixed left-2 right-2 bottom-2 z-[10001] bg-black/85 p-2 pb-[calc(env(safe-area-inset-bottom)+8px)]"
+              : "bg-black/55 p-2",
           ].join(" ")}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1956,7 +2104,11 @@ export default function BlackjackLive() {
                 <button
                   type="button"
                   onClick={handlePlaceBet}
-                  disabled={!canPlaceBet || credits < uiMinBet || phase !== "waiting-bets"}
+                  disabled={
+                    !canPlaceBet ||
+                    credits < uiMinBet ||
+                    !(phase === "waiting-bets" || phase === "round-complete")
+                  }
                   className="rounded-xl bg-[#FFD700] px-3 py-2 text-[12px] font-extrabold text-black disabled:opacity-40"
                 >
                   Place Bet
@@ -2056,5 +2208,7 @@ export default function BlackjackLive() {
         </div>
       )}
     </div>
+
+    
   );
 }

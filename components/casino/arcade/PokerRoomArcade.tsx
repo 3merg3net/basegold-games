@@ -1346,26 +1346,36 @@ function handleRefillStack(amount: number) {
 
 
   useEffect(() => {
-    if (!actionDeadline || !actionPhase) return;
+  if (!actionDeadline || !actionPhase) return;
 
-    const isExpired = now >= actionDeadline;
+  const isExpired = now >= actionDeadline;
 
-    if (actionPhase === "base" && isExpired) {
-      setActionPhase("extra");
-      setActionDeadline(Date.now() + ACTION_EXTRA_MS);
-      if (isHeroTurn) pushLog(`${describeHero()} last chance to act!`);
-      return;
-    }
+  if (actionPhase === "base" && isExpired) {
+    setActionPhase("extra");
+    setActionDeadline(Date.now() + ACTION_EXTRA_MS);
+    if (isHeroTurn) pushLog(`${describeHero()} last chance to act!`);
+    return;
+  }
 
-    if (actionPhase === "extra" && isExpired) {
-      if (isHeroTurn) {
-        handleFold();
-        pushLog(`${describeHero()} auto-folded (timer).`);
-      }
-      setActionDeadline(null);
-      setActionPhase(null);
-    }
-  }, [now, actionDeadline, actionPhase, isHeroTurn, pushLog]);
+  if (actionPhase === "extra" && isExpired) {
+  if (isHeroTurn) {
+    sendMessage({ type: "timeout-fold" });
+    pushLog(`${describeHero()} auto-folded (timer).`);
+  }
+  setActionDeadline(null);
+  setActionPhase(null);
+}
+}, [
+  now,
+  actionDeadline,
+  actionPhase,
+  isHeroTurn,
+  pushLog,
+  betting,
+  heroBetting,
+  sendMessage,
+  describeHero,
+]);
 
   const actionRemainingMs = useMemo(() => {
     if (!actionDeadline) return null;
@@ -2241,7 +2251,7 @@ if (!seat || !isOccupied) {
       return (
         <div
           key={`slot-${slotIndex}`}
-          className="absolute flex flex-col items-center gap-1"
+          className="absolute flex flex-col items-center gap-[2px] md:gap-1"
           style={stylePos}
         >
           <div className="mb-0.5 flex gap-1">
@@ -2302,7 +2312,7 @@ if (!seat || !isOccupied) {
     className={[
       "pointer-events-none absolute left-1/2 z-[80] -translate-x-1/2",
       "rounded-full border backdrop-blur",
-      "shadow-[0_0_18px_rgba(0,0,0,0.92)]",
+      "shadow-[0_0_22px_rgba(0,0,0,0.98)]",
       // ✅ bigger pill sizing (mobile -> desktop)
       "px-3.5 py-[4px] sm:px-4 sm:py-[5px] md:px-5 md:py-[6px]",
       "text-[12px] sm:text-[13px] md:text-[15px]",
@@ -2312,19 +2322,19 @@ if (!seat || !isOccupied) {
       // ✅ transition for action changes
       "transition-colors duration-150",
       // ✅ ACTION COLOR MAP (no crazy neon, readable)
-      seatAction?.kind === "CHECK"
-        ? "bg-emerald-500/15 border-emerald-300/50 text-emerald-100"
+            seatAction?.kind === "CHECK"
+        ? "bg-emerald-950/92 border-emerald-300/80 text-emerald-100"
         : seatAction?.kind === "CALL"
-        ? "bg-sky-500/15 border-sky-300/50 text-sky-100"
+        ? "bg-sky-950/92 border-sky-300/80 text-sky-100"
         : seatAction?.kind === "BET"
-        ? "bg-amber-500/15 border-amber-300/55 text-amber-100"
+        ? "bg-amber-950/92 border-amber-300/85 text-amber-100"
         : seatAction?.kind === "RAISE"
-        ? "bg-fuchsia-500/15 border-fuchsia-300/50 text-fuchsia-100"
+        ? "bg-fuchsia-950/92 border-fuchsia-300/80 text-fuchsia-100"
         : seatAction?.kind === "ALL_IN"
-        ? "bg-red-500/15 border-red-300/55 text-red-100"
+        ? "bg-red-950/92 border-red-300/85 text-red-100"
         : seatAction?.kind === "FOLD"
-        ? "bg-slate-600/30 border-white/20 text-white/80"
-        : "bg-white/10 border-white/25 text-white",
+        ? "bg-slate-950/95 border-white/35 text-white"
+        : "bg-black/90 border-white/35 text-white"
     ].join(" ")}
     style={{ top: -30 }}
   >
@@ -2340,7 +2350,9 @@ if (!seat || !isOccupied) {
     <span className="absolute inset-0 rounded-full ring-1 ring-white/10" />
 
     {/* ✅ content */}
-    <span className="relative">{seatAction.label}</span>
+    <span className="relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+  {seatAction.label}
+</span>
   </div>
 )}
 
@@ -2447,111 +2459,133 @@ if (!seat || !isOccupied) {
 
 
 
-           {isOccupied && (
+          {isOccupied && (
   <div className="pointer-events-none absolute inset-0 z-20">
-    {/* HOLE CARDS + STACK PILL (single cluster so pill sits UNDER cards, not over them) */}
-<div className="absolute left-1/2 top-[6px] -translate-x-1/2 flex justify-center">
-  <div className="relative">
-    {/* Cards */}
-    {visibleCards && visibleCards.length === 2 ? (
-      <div className="relative flex -space-x-4 md:-space-x-6">
-        {visibleCards.map((c, i) => (
-          <div
-            key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
-            className="relative"
-            style={{
-              transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
-              transformOrigin: "50% 80%",
-            }}
-          >
-            <PokerCard card={c} highlight={isWinnerSeat} />
-          </div>
-        ))}
+    <div className="absolute left-1/2 top-[-4px] -translate-x-1/2 flex justify-center">
+      <div className="relative flex flex-col items-center">
+        {(() => {
+          const hasCardsVisible =
+            (visibleCards && visibleCards.length === 2) || (isInHand && handInProgress);
+
+          return (
+            <div
+              className={[
+                "relative inline-flex flex-col items-center overflow-visible",
+                "rounded-t-[18px] rounded-b-[12px] md:rounded-t-[22px] md:rounded-b-[14px]",
+                isHeroSeat
+                  ? "bg-gradient-to-b from-[#221806]/96 via-[#161109]/92 to-[#0b1220]/92 border border-[#FACC15]/55"
+                  : "bg-gradient-to-b from-[#111318]/95 via-[#0d1117]/92 to-[#0b1220]/90 border border-white/18",
+                isHeroSeat
+                  ? "shadow-[0_0_18px_rgba(250,204,21,0.22),0_0_18px_rgba(0,0,0,0.88)]"
+                  : "shadow-[0_0_14px_rgba(0,0,0,0.88)]",
+                "backdrop-blur",
+                hasCardsVisible
+                  ? "pt-[44px] md:pt-[54px] pb-2 px-2.5"
+                  : "pt-[8px] md:pt-[10px] pb-2 px-2.5",
+                "min-w-[84px] max-w-[104px]",
+                "md:min-w-[104px] md:max-w-[128px]",
+              ].join(" ")}
+            >
+              {/* top lip / slot */}
+              {hasCardsVisible && (
+                <div
+                  className={[
+                    "pointer-events-none absolute left-1/2 top-[10px] md:top-[12px] -translate-x-1/2 z-[1]",
+                    "h-[15px] w-[58px] md:h-[18px] md:w-[72px]",
+                    "rounded-full",
+                    isHeroSeat ? "bg-[#30220c]/95" : "bg-[#1a2028]/94",
+                    "border border-white/10",
+                    "shadow-[inset_0_2px_6px_rgba(0,0,0,0.55)]",
+                  ].join(" ")}
+                />
+              )}
+
+              {/* cards */}
+              {visibleCards && visibleCards.length === 2 ? (
+                <div className="absolute left-1/2 top-0 z-[4] flex -translate-x-1/2 -translate-y-[34%] md:-translate-y-[38%] -space-x-4 md:-space-x-5">
+                  {visibleCards.map((c, i) => (
+                    <div
+                      key={`${table?.handId ?? 0}-seat-${seat!.seatIndex}-card-${i}-${c}`}
+                      className="relative"
+                      style={{
+                        transform: `rotate(${i === 0 ? -8 : 8}deg)`,
+                        transformOrigin: "50% 95%",
+                      }}
+                    >
+                      <PokerCard
+                        card={c}
+                        highlight={isWinnerSeat}
+                        size={!isHeroSeat && isMobile ? "small" : "normal"}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : isInHand && handInProgress ? (
+                <div className="absolute left-1/2 top-0 z-[4] flex -translate-x-1/2 -translate-y-[34%] md:-translate-y-[38%] -space-x-4 md:-space-x-5">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={i}
+                      className="relative"
+                      style={{
+                        transform: `rotate(${i === 0 ? -8 : 8}deg)`,
+                        transformOrigin: "50% 95%",
+                      }}
+                    >
+                      <PokerCard
+                        card={"As"}
+                        isBack={true}
+                        highlight={false}
+                        size={!isHeroSeat && isMobile ? "small" : "normal"}
+                        tilt={0}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* name */}
+              <div
+                className={[
+                  "w-full truncate text-center leading-tight font-extrabold tracking-[0.01em]",
+                  "text-[10px] md:text-[11px]",
+                  isHeroSeat ? "text-[#FFF3B0]" : "text-white",
+                  "drop-shadow-[0_1px_2px_rgba(0,0,0,0.98)]",
+                ].join(" ")}
+              >
+                {displayNameForSeat({
+                  seatIndex: seat!.seatIndex,
+                  seatHandle: (seat as any)?.handle ?? null,
+                  seatName: seat?.name ?? null,
+                  isHero: isHeroSeat,
+                  profileHandle: profile?.handle ?? null,
+                })}
+              </div>
+
+              {/* pgld row */}
+              <div className="mt-[2px] flex items-center gap-1 leading-none">
+                <span
+                  className={[
+                    "inline-block h-2 w-2 rounded-full shrink-0",
+                    isHeroSeat
+                      ? "bg-[#FACC15] shadow-[0_0_10px_rgba(250,204,21,0.7)]"
+                      : "bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.45)]",
+                  ].join(" ")}
+                />
+                <span className="font-mono font-extrabold text-[#FFD54A] text-[10px] md:text-[11px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.98)]">
+                  {formatChips(stackAmount)}
+                </span>
+                <span className="text-white/80 font-bold text-[8px] md:text-[9px]">PGLD</span>
+              </div>
+
+              {/* usd */}
+              <div className="mt-[2px] font-mono font-extrabold text-[#D8FFF5] text-[9px] md:text-[10px] leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.98)]">
+                {formatUsdFromPgld(stackAmount)}
+              </div>
+            </div>
+          );
+        })()}
       </div>
-    ) : isInHand && handInProgress ? (
-      <div className="relative flex -space-x-5 md:-space-x-6">
-        {[0, 1].map((i) => (
-          <div
-            key={i}
-            className="relative"
-            style={{
-              transform: `translateY(0px) rotate(${i === 0 ? -10 : 10}deg)`,
-              transformOrigin: "50% 80%",
-            }}
-          >
-            <PokerCard
-              card={"As"}
-              isBack={true}
-              highlight={false}
-              size={!isHeroSeat && isMobile ? "small" : "normal"}
-              tilt={0}
-            />
-          </div>
-        ))}
-      </div>
-    ) : null}
-
-   {/* Pill: pinned to the card cluster bottom */}
-<div className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-1 flex justify-center">
-  <div
-    className={[
-      "pointer-events-auto inline-flex flex-col items-center",
-      "rounded-xl md:rounded-2xl",
-      isHeroSeat
-        ? "bg-gradient-to-r from-black/72 via-[#16110a]/78 to-black/72 border border-[#FACC15]/35"
-        : "bg-black/55 border border-white/12",
-      "backdrop-blur",
-      isHeroSeat
-  ? "shadow-[0_0_14px_rgba(250,204,21,0.22),0_0_10px_rgba(0,0,0,0.82)]"
-  : "shadow-[0_0_10px_rgba(0,0,0,0.82)]",,
-      "px-2 py-[4px]",
-      "max-w-[105px] md:max-w-[150px]",
-    ].join(" ")}
-  >
-    {/* PLAYER NAME */}
-    <div
-      className={[
-        "truncate leading-tight font-semibold text-center w-full",
-        "text-[10px] md:text-[11px]",
-        isHeroSeat ? "text-[#FDE68A]" : "text-white/90",
-      ].join(" ")}
-    >
-      {displayNameForSeat({
-        seatIndex: seat!.seatIndex,
-        seatHandle: (seat as any)?.handle ?? null,
-        seatName: seat?.name ?? null,
-        isHero: isHeroSeat,
-        profileHandle: profile?.handle ?? null,
-      })}
     </div>
-
-    {/* PGLD STACK */}
-    <div className="mt-[1px] flex items-center gap-1">
-      <span
-        className={[
-          "inline-block h-2 w-2 rounded-full shrink-0",
-          isHeroSeat
-            ? "bg-[#FACC15] shadow-[0_0_8px_rgba(250,204,21,0.6)]"
-            : "bg-emerald-300/90 shadow-[0_0_6px_rgba(110,231,183,0.35)]",
-        ].join(" ")}
-      />
-      <span className="text-[9px] md:text-[11px] font-mono font-extrabold text-[#FACC15]">
-        {formatChips(stackAmount)}
-      </span>
-      <span className="text-[8px] md:text-[10px] text-white/45">PGLD</span>
-    </div>
-
-    {/* USD VALUE */}
-    <div className="text-[8px] md:text-[10px] font-mono text-emerald-200/90 leading-tight">
-      {formatUsdFromPgld(stackAmount)}
-    </div>
-  </div>
-</div>
-  </div>
-</div>
-
-
-
   </div>
 )}
 
